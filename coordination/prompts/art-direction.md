@@ -44,13 +44,10 @@ You can freely edit, commit, and test here without affecting other agents.
 - Add visual polish to transitions
 - Consider day/night cycle or color palette variation per hole
 
-## Merging to Main
-When your changes are tested:
+## Submitting Your Work
+When your changes are ready:
 ```bash
 git add src/art.js
 git commit -m "Description of changes"
-# Then ask the human to merge, or:
-cd /mnt/c/Users/augus/projectss/desert-golfing
-git merge art-direction
-git push
 ```
+Then add a merge request to `coordination/requests.md` asking QA to review your branch. **Do not merge directly to main** — all merges go through QA review first.

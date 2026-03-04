@@ -77,6 +77,44 @@ See `coordination/interfaces.md` for all cross-module function signatures.
 - `main.js` calls: `ensureHolesAhead()`, `terrainYAt()`, `setHoleCamera()`, `update()`, `draw()`
 - `debug.js` patches: `draw` (wraps original), `_logBall` (replaces no-op)
 
+## Workflow
+
+There are three roles in this project:
+
+1. **You (the human)** — talk directly to individual agents for single-agent work, or talk to the coordinator for cross-agent features and merges.
+2. **Coordinator** — understands all agents' branches, orchestrates merges to main without conflicts, kicks off multi-agent features. This is the Claude Code session in the main `desert-golfing/` directory.
+3. **Individual agents** — each works in their own worktree. You interact with them directly by opening a `claude` session in their directory.
+
+### How to talk to an agent directly
+
+```bash
+cd /mnt/c/Users/augus/projectss/desert-golfing-art-direction  # or any agent's dir
+claude                                                          # interactive session
+```
+
+The agent will read `CLAUDE.md` and its prompt in `coordination/prompts/` to understand its role.
+
+### How merges work
+
+1. Agent commits changes to their branch
+2. Agent (or human) requests a merge to main
+3. **QA agent tests the branch** before it merges (the QA agent is the merge gatekeeper)
+4. Once QA approves, the coordinator merges to main and propagates to other worktrees
+
+No agent should merge directly to main without QA review.
+
+### Playtesting
+
+Each agent's dev server shows a label in the browser tab and on-screen overlay so you know which version you're looking at:
+
+| Agent | URL | Browser label |
+|-------|-----|---------------|
+| Main (stable) | http://localhost:3002 | Desert Golfing |
+| Level Design | http://localhost:3010 | LEVEL DESIGN — Desert Golfing |
+| Art Direction | http://localhost:3011 | ART DIRECTION — Desert Golfing |
+| Core Gameplay | http://localhost:3012 | GAMEPLAY — Desert Golfing |
+| QA/Testing | http://localhost:3013 | QA TESTING — Desert Golfing |
+
 ## Coordination Rules
 
 1. **Only edit files you own.** If you need a change in another agent's file, file a request in `coordination/requests.md`.
@@ -85,6 +123,7 @@ See `coordination/interfaces.md` for all cross-module function signatures.
 4. **Announce interface changes.** If you change a function signature, update `coordination/interfaces.md` and note it in `coordination/decisions.md`.
 5. **No new globals without coordination.** Adding new global variables requires agreement — add a request.
 6. **Shared files (shared.js, main.js, index.html)** require agreement from all agents before editing.
+7. **Never merge directly to main.** All merges go through QA review first.
 
 ## Testing
 
@@ -147,7 +186,7 @@ Each agent runs their own dev server on a dedicated port:
 
 Since each agent owns different files, merges to main should be conflict-free.
 
-### How to Merge Your Work to Main
+### How to Submit Your Work for Merge
 
 When your changes are tested and ready:
 
@@ -155,12 +194,9 @@ When your changes are tested and ready:
 # From your worktree directory:
 git add <your-files>
 git commit -m "Description of changes"
-
-# Merge to main (from the main directory):
-cd /mnt/c/Users/augus/projectss/desert-golfing
-git merge <your-branch>        # e.g. git merge level-design
-git push
 ```
+
+Then request a merge by adding an entry to `coordination/requests.md` asking QA to review. The QA agent will test your branch and, once approved, the coordinator merges to main.
 
 ### How to Pull Others' Changes Into Your Worktree
 
