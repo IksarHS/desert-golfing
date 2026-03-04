@@ -5,8 +5,8 @@ A Desert Golfing clone built as a browser game with procedural terrain generatio
 ## How to Run
 
 ```bash
-npm start                    # starts dev server on port 3002
-# Open http://localhost:3002/index.html
+npx serve . -l 3002 --no-clipboard    # starts dev server on port 3002
+# Open http://localhost:3002 in browser
 ```
 
 Press `` ` `` (backtick) to cycle debug panels: off -> physics settings -> ball log -> off.
@@ -110,12 +110,64 @@ npm start                              # Start dev server
 
 Terrain analysis data from 990 real Desert Golfing holes is available at `/home/august/desert-golf-analysis/`. The Level Design agent should use this to improve terrain generation fidelity.
 
-## Branch Strategy
+## Worktree Setup (Agent Isolation)
 
-- `main` — stable, working game
+Each agent works in its own **git worktree** — a separate directory with its own branch. This means agents can edit, commit, test, and iterate without affecting each other.
+
+### Directory Layout
+
+```
+projectss/
+├── desert-golfing/                  ← main branch (stable, don't work here)
+├── desert-golfing-level-design/     ← Level Design agent's workspace
+├── desert-golfing-art-direction/    ← Art Direction agent's workspace
+├── desert-golfing-gameplay/         ← Core Gameplay agent's workspace
+└── desert-golfing-qa-testing/       ← QA/Testing agent's workspace
+```
+
+### Dev Server Ports
+
+Each agent runs their own dev server on a dedicated port:
+
+| Agent | Directory | Port | URL |
+|-------|-----------|------|-----|
+| Level Design | `desert-golfing-level-design/` | 3010 | http://localhost:3010 |
+| Art Direction | `desert-golfing-art-direction/` | 3011 | http://localhost:3011 |
+| Core Gameplay | `desert-golfing-gameplay/` | 3012 | http://localhost:3012 |
+| QA/Testing | `desert-golfing-qa-testing/` | 3013 | http://localhost:3013 |
+| Main (stable) | `desert-golfing/` | 3002 | http://localhost:3002 |
+
+### Branch Strategy
+
+- `main` — stable, working game (merge target)
 - `level-design` — Level Design agent's WIP
 - `art-direction` — Art Direction agent's WIP
 - `gameplay` — Core Gameplay agent's WIP
 - `qa-testing` — QA/Testing agent's WIP
 
 Since each agent owns different files, merges to main should be conflict-free.
+
+### How to Merge Your Work to Main
+
+When your changes are tested and ready:
+
+```bash
+# From your worktree directory:
+git add <your-files>
+git commit -m "Description of changes"
+
+# Merge to main (from the main directory):
+cd /mnt/c/Users/augus/projectss/desert-golfing
+git merge <your-branch>        # e.g. git merge level-design
+git push
+```
+
+### How to Pull Others' Changes Into Your Worktree
+
+After another agent merges to main:
+
+```bash
+# From your worktree directory:
+git fetch origin
+git merge main                  # pull latest stable code
+```
