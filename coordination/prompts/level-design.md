@@ -43,13 +43,10 @@ Desert Golf terrain analysis dataset (990 holes from real gameplay) at `/home/au
 - Tune hole distances, elevation changes, and obstacle placement
 - Ensure all holes are completable (no impossible geometry)
 
-## Merging to Main
-When your changes are tested:
+## Submitting Your Work
+When your changes are ready:
 ```bash
 git add src/level-design.js
 git commit -m "Description of changes"
-# Then ask the human to merge, or:
-cd /mnt/c/Users/augus/projectss/desert-golfing
-git merge level-design
-git push
 ```
+Then add a merge request to `coordination/requests.md` asking QA to review your branch. **Do not merge directly to main** — all merges go through QA review first.
