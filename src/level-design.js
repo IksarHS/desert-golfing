@@ -1,3 +1,42 @@
+// ── Difficulty Curve ─────────────────────────────────────────
+// Logarithmic ramp matching real Desert Golfing's gradual progression.
+// Analysis of 990 real holes shows difficulty ramps over ~2000 holes:
+//   - Height range grows from 0.24 → 0.40
+//   - Flatness decreases from 0.57 → 0.40
+//   - Steepness increases from 0.03 → 0.07
+function getDifficulty(holeIndex) {
+  if (holeIndex <= 0) return 0;
+  // ~0.32 at hole 10, ~0.52 at hole 50, ~0.61 at hole 100
+  // ~0.70 at hole 200, ~0.82 at hole 500, ~0.91 at hole 1000, ~1.0 at hole 2000
+  return Math.min(1.0, Math.log(1 + holeIndex) / Math.log(1 + 2000));
+}
+
+// ── Terrain Micro-Noise ──────────────────────────────────────
+// Real Desert Golfing has subtle roughness (~0.006 normalized per sample).
+// Insert intermediate vertices on long segments with small perturbations
+// for organic, natural-looking terrain instead of perfectly straight lines.
+function addMicroNoise(verts, startX, startY, difficulty) {
+  const noiseAmp = 2 + difficulty * 4; // 2-6px of noise
+  const result = [];
+  let prevV = { x: startX, y: startY };
+
+  for (const v of verts) {
+    const gap = v.x - prevV.x;
+    if (gap > 80) {
+      const numPts = gap > 200 ? 3 : gap > 120 ? 2 : 1;
+      for (let j = 1; j <= numPts; j++) {
+        const t = j / (numPts + 1);
+        const x = lerp(prevV.x, v.x, t);
+        const baseY = lerp(prevV.y, v.y, t);
+        result.push({ x, y: clampY(baseY + (Math.random() - 0.5) * noiseAmp) });
+      }
+    }
+    result.push({ x: v.x, y: clampY(v.y) });
+    prevV = v;
+  }
+  return result;
+}
+
 // ── Archetype Library ─────────────────────────────────────
 // Each archetype returns an array of {x, y} vertices for one hole's terrain.
 // Parameters: startX, startY, dist (tee-to-cup distance), cupTargetY, difficulty (0-1)
@@ -26,6 +65,35 @@ const archetypes = {
       { x: peakX, y: peakY },
       { x: peakX + dist * 0.15, y: jitter(lerp(peakY, cupY, 0.4), 10) },
       { x: sx + dist, y: cupY }
+    ];
+  },
+
+  gradual_slope(sx, sy, dist, cupY, diff) {
+    // Long consistent slope with minor undulations
+    // Matches "moderate" category from real game (5.3%)
+    const numPoints = 3 + Math.floor(Math.random() * 2); // 3-4 intermediate points
+    const verts = [];
+    for (let i = 1; i <= numPoints; i++) {
+      const t = i / (numPoints + 1);
+      const baseY = lerp(sy, cupY, t);
+      const wobble = (Math.random() - 0.5) * (10 + diff * 15);
+      verts.push({ x: sx + dist * t, y: clampY(baseY + wobble) });
+    }
+    verts.push({ x: sx + dist, y: cupY });
+    return verts;
+  },
+
+  subtle_rise(sx, sy, dist, cupY, diff) {
+    // Nearly flat with slight upward elevation — common easy hole
+    const rise = randRange(10, 30 + diff * 15);
+    const actualCupY = clampY(sy - rise);
+    const midX = sx + dist * 0.5;
+    const midY = clampY(lerp(sy, actualCupY, 0.5) + (Math.random() - 0.5) * 8);
+    return [
+      { x: sx + dist * 0.25, y: clampY(lerp(sy, midY, 0.5) + (Math.random() - 0.5) * 6) },
+      { x: midX, y: midY },
+      { x: sx + dist * 0.75, y: clampY(lerp(midY, actualCupY, 0.5) + (Math.random() - 0.5) * 6) },
+      { x: sx + dist, y: actualCupY }
     ];
   },
 
@@ -87,7 +155,42 @@ const archetypes = {
     ];
   },
 
+  rolling_hills(sx, sy, dist, cupY, diff) {
+    // Multiple gentle undulations — matches "hilly" category (21.3%)
+    const numHills = 2 + Math.floor(Math.random() * 2); // 2-3 hills
+    const verts = [];
+    const segW = dist / (numHills + 1);
+    let y = sy;
+    for (let i = 1; i <= numHills; i++) {
+      const hx = sx + segW * i;
+      const amplitude = randRange(25, 50 + diff * 30);
+      const up = (i % 2 === 1) ? -1 : 1;
+      y = clampY(lerp(sy, cupY, i / (numHills + 1)) + up * amplitude);
+      verts.push({ x: hx, y });
+    }
+    verts.push({ x: sx + dist, y: cupY });
+    return verts;
+  },
+
   // ── MED-HARD ──────────────────────────────────────────
+  shelf(sx, sy, dist, cupY, diff) {
+    // Flat section then step transition to a different elevation
+    // Matches "cliff/step" category from real game (7.2%)
+    const shelfX = sx + dist * randRange(0.35, 0.55);
+    const stepHeight = randRange(40, 80 + diff * 50);
+    const goingDown = cupY > sy;
+    const shelfY = goingDown ? sy : clampY(sy - stepHeight * 0.3);
+    const landingY = goingDown ? clampY(sy + stepHeight) : clampY(sy - stepHeight);
+    return [
+      { x: sx + dist * 0.15, y: clampY(lerp(sy, shelfY, 0.5)) },
+      { x: shelfX - 30, y: shelfY },
+      { x: shelfX, y: shelfY },
+      { x: shelfX + 20, y: landingY },
+      { x: sx + dist * 0.8, y: jitter(lerp(landingY, cupY, 0.6), 10) },
+      { x: sx + dist, y: cupY }
+    ];
+  },
+
   peak_obstacle(sx, sy, dist, cupY, diff) {
     // Triangular peak in the middle that must be lobbed over
     const peakX = sx + dist * randRange(0.3, 0.55);
@@ -174,89 +277,53 @@ const archetypes = {
     ];
   },
 
-  rolling_hills(sx, sy, dist, cupY, diff) {
-    // Multiple gentle undulations
-    const numHills = 2 + Math.floor(Math.random() * 2); // 2-3 hills
+  stepped_descent(sx, sy, dist, cupY, diff) {
+    // Multiple step-downs like a staircase
+    const numSteps = 2 + Math.floor(diff); // 2-3 steps
     const verts = [];
-    const segW = dist / (numHills + 1);
-    let y = sy;
-    for (let i = 1; i <= numHills; i++) {
-      const hx = sx + segW * i;
-      const amplitude = randRange(25, 50 + diff * 30);
-      const up = (i % 2 === 1) ? -1 : 1;
-      y = clampY(lerp(sy, cupY, i / (numHills + 1)) + up * amplitude);
-      verts.push({ x: hx, y });
+    const stepW = dist / (numSteps + 1);
+    let currentY = sy;
+
+    for (let i = 1; i <= numSteps; i++) {
+      const stepX = sx + stepW * i;
+      // Flat section before step
+      verts.push({ x: stepX - 25, y: currentY });
+      // Drop to next level
+      currentY = clampY(lerp(sy, cupY, i / numSteps));
+      verts.push({ x: stepX, y: currentY });
     }
     verts.push({ x: sx + dist, y: cupY });
     return verts;
-  },
-
-  // ── NEW ARCHETYPES ──────────────────────────────────────
-
-  long_slope(sx, sy, dist, cupY, diff) {
-    // Consistent grade from tee to cup — very common in real Desert Golfing
-    // 3-4 evenly spaced vertices along a straight grade with minor noise
-    const numPts = 3 + Math.floor(Math.random() * 2);
-    const verts = [];
-    for (let i = 1; i <= numPts; i++) {
-      const t = i / (numPts + 1);
-      const baseY = lerp(sy, cupY, t);
-      const noise = (Math.random() - 0.5) * (8 + diff * 12);
-      verts.push({ x: sx + dist * t, y: clampY(baseY + noise) });
-    }
-    verts.push({ x: sx + dist, y: cupY });
-    return verts;
-  },
-
-  shelf_drop(sx, sy, dist, cupY, diff) {
-    // Flat shelf then abrupt step down to a lower shelf where the cup sits
-    const shelfEndX = sx + dist * randRange(0.4, 0.6);
-    const dropHeight = randRange(40, 80 + diff * 50);
-    const topY = clampY(sy);
-    const botY = clampY(topY + dropHeight);
-    return [
-      { x: sx + dist * 0.15, y: clampY(topY + (Math.random() - 0.5) * 8) },
-      { x: shelfEndX - 20,   y: topY },
-      { x: shelfEndX,        y: topY },
-      { x: shelfEndX + 20,   y: botY },   // step down
-      { x: sx + dist * 0.8,  y: clampY(botY + (Math.random() - 0.5) * 10) },
-      { x: sx + dist,        y: botY }
-    ];
-  },
-
-  subtle_rise(sx, sy, dist, cupY, diff) {
-    // Nearly flat with slight upward elevation — common easy hole
-    const rise = randRange(10, 30 + diff * 15);
-    const actualCupY = clampY(sy - rise);
-    const midX = sx + dist * 0.5;
-    const midY = clampY(lerp(sy, actualCupY, 0.5) + (Math.random() - 0.5) * 8);
-    return [
-      { x: sx + dist * 0.25, y: clampY(lerp(sy, midY, 0.5) + (Math.random() - 0.5) * 6) },
-      { x: midX, y: midY },
-      { x: sx + dist * 0.75, y: clampY(lerp(midY, actualCupY, 0.5) + (Math.random() - 0.5) * 6) },
-      { x: sx + dist, y: actualCupY }
-    ];
   }
 };
 
-// Archetype selection weights by difficulty tier
+// ── Archetype Selection ──────────────────────────────────────
+// Weights tuned to match real Desert Golfing category distribution:
+//   flat 13.6%, uphill 23.6%, downhill 23.4%, hilly 21.3%,
+//   cliff/step 7.2%, valley 5.7%, moderate 5.3%
 // Each entry: [archetypeName, minDifficulty, maxDifficulty, weight]
 const ARCHETYPE_TABLE = [
-  ['flat_run',       0.0, 0.4, 3],
-  ['gentle_hill',    0.0, 0.5, 3],
-  ['long_slope',     0.0, 1.0, 5],  // very common — matches real game's frequent gentle terrain
-  ['subtle_rise',    0.0, 0.6, 3],
-  ['downhill',       0.0, 0.7, 2],
-  ['uphill',         0.0, 0.8, 2],
-  ['valley',         0.0, 0.8, 2],
-  ['rolling_hills',  0.0, 1.0, 2],
-  ['shelf_drop',     0.1, 1.0, 2],
-  ['mesa',           0.15, 1.0, 2],
-  ['peak_obstacle',  0.2, 1.0, 3],
-  ['cliff_drop',     0.2, 1.0, 2],
-  ['twin_peaks',     0.4, 1.0, 2],
-  ['step_up',        0.3, 1.0, 2],
-  ['wall_shot',      0.3, 1.0, 2],
+  // Easy — available from the start
+  ['flat_run',         0.0, 1.0, 3],   // flat holes appear throughout (13.6% of real game)
+  ['gentle_hill',      0.0, 0.7, 3],
+  ['gradual_slope',    0.0, 0.8, 3],
+  ['subtle_rise',      0.0, 0.6, 2],
+  // Easy-Med — common throughout
+  ['downhill',         0.0, 1.0, 4],   // downhill very common in real game
+  ['uphill',           0.05, 1.0, 3],
+  // Medium
+  ['valley',           0.1, 0.9, 2],
+  ['rolling_hills',    0.1, 1.0, 3],   // hilly is 21.3% of real game
+  ['mesa',             0.2, 1.0, 2],
+  // Med-Hard
+  ['shelf',            0.25, 1.0, 2],   // cliff/step category (7.2%)
+  ['peak_obstacle',    0.3, 1.0, 3],
+  ['cliff_drop',       0.3, 1.0, 2],
+  // Hard
+  ['twin_peaks',       0.45, 1.0, 2],
+  ['step_up',          0.35, 1.0, 2],
+  ['wall_shot',        0.4, 1.0, 2],
+  ['stepped_descent',  0.45, 1.0, 2],
 ];
 
 // Anti-repetition: track last 3 archetypes to halve their selection weight
@@ -286,8 +353,7 @@ function pickArchetype(difficulty) {
 
 // ── Main Terrain Generation ──────────────────────────────
 function generateHoleTerrain(holeIndex) {
-  // Logarithmic curve: ramps 0→1 over ~200 holes (log(1)/log(201)=0, log(201)/log(201)=1)
-  const difficulty = Math.min(1.0, Math.log(holeIndex + 1) / Math.log(201));
+  const difficulty = getDifficulty(holeIndex);
 
   // Determine tee position
   let teeX, teeY;
@@ -312,51 +378,38 @@ function generateHoleTerrain(holeIndex) {
              + difficulty * 100;
   const dist = Math.min(rawDist, maxDist);
 
-  // Determine cup target elevation — matches real game: 70% downhill, 25% uphill, 5% flat
+  // Determine cup target elevation
+  // Real Desert Golfing: 74% ball higher than hole (downhill to cup)
+  // (analysis of 509 ball-hole pairs from real game footage)
   const elevRoll = Math.random();
   let cupTargetY;
-  if (elevRoll < 0.05) {
-    // Flat (5%)
-    cupTargetY = clampY(teeY + (Math.random() - 0.5) * 30);
-  } else if (elevRoll < 0.75) {
-    // Cup lower / downhill (70%) — ball higher than hole
-    cupTargetY = clampY(teeY + randRange(30, 60 + difficulty * 80));
-  } else {
-    // Cup higher / uphill (25%)
+  if (elevRoll < 0.10) {
+    // Same level (10%)
+    cupTargetY = clampY(teeY + (Math.random() - 0.5) * 20);
+  } else if (elevRoll < 0.25) {
+    // Cup higher = uphill shot (15%)
     cupTargetY = clampY(teeY - randRange(30, 60 + difficulty * 80));
+  } else {
+    // Cup lower = downhill shot (75%)
+    cupTargetY = clampY(teeY + randRange(30, 60 + difficulty * 80));
   }
 
   // Pick archetype and generate vertices
   const archName = pickArchetype(difficulty);
   const archFunc = archetypes[archName];
   const startX = teeX + 40; // small gap after tee
-  const holeVerts = archFunc(startX, teeY, dist, cupTargetY, difficulty);
+  const rawVerts = archFunc(startX, teeY, dist, cupTargetY, difficulty);
 
-  // Terrain smoothing: insert extra vertices between gaps >120px with subtle noise
-  const smoothed = [];
-  let prevV = { x: startX, y: teeY };
+  // Add micro-noise: subdivide long segments with subtle perturbations
+  const holeVerts = addMicroNoise(rawVerts, startX, teeY, difficulty);
+
+  // Append hole vertices to global array
   for (const v of holeVerts) {
-    const gap = v.x - prevV.x;
-    if (gap > 120) {
-      const subdivisions = Math.ceil(gap / 120);
-      for (let s = 1; s < subdivisions; s++) {
-        const t = s / subdivisions;
-        const midX = lerp(prevV.x, v.x, t);
-        const midY = lerp(prevV.y, v.y, t) + (Math.random() - 0.5) * 8;
-        smoothed.push({ x: midX, y: clampY(midY) });
-      }
-    }
-    smoothed.push({ x: v.x, y: clampY(v.y) });
-    prevV = v;
-  }
-
-  // Append smoothed hole vertices to global array
-  for (const v of smoothed) {
     vertices.push(v);
   }
 
   // The cup X is at the last feature vertex (end of hole)
-  const lastVert = smoothed[smoothed.length - 1];
+  const lastVert = holeVerts[holeVerts.length - 1];
   const cupX = lastVert.x;
   const cupSurfaceY = lastVert.y;
 

@@ -8,7 +8,7 @@ Update your section when starting/finishing tasks. Check other agents' status be
 **Owner:** `src/level-design.js`
 **Status:** Complete
 **Current task:** —
-**Last completed:** Terrain generation overhaul: logarithmic difficulty curve (~200 holes), 3 new archetypes (long_slope, shelf_drop, subtle_rise), terrain smoothing pass, 70/25/5 elevation distribution, anti-repetition system
+**Last completed:** Data-driven terrain overhaul v2: logarithmic difficulty curve (2000 holes, not 200), 4 new archetypes (gradual_slope, subtle_rise, shelf, stepped_descent), micro-noise terrain subdivision, 75/15/10 elevation distribution matching real data (74% downhill), archetype weights tuned to real Desert Golfing category frequencies, anti-repetition system
 **Blocked on:** —
 
 ---
