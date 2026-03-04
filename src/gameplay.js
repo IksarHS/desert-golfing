@@ -49,6 +49,7 @@ canvas.addEventListener('mouseup', (e) => {
   ball.vy = Math.sin(angle) * power;
   ball.atRest = false;
   ball.onGround = false;
+  ball.slowFrames = 0;
   state = STATE_FLIGHT;
   strokes++;
   _logBall('shot');
@@ -91,6 +92,7 @@ canvas.addEventListener('touchend', (e) => {
   ball.vy = Math.sin(angle) * power;
   ball.atRest = false;
   ball.onGround = false;
+  ball.slowFrames = 0;
   state = STATE_FLIGHT;
   strokes++;
   _logBall('shot');
@@ -194,8 +196,8 @@ function isBallInCup() {
   if (!hole || hole.cupFilled) return false;
 
   const inCupX = Math.abs(ball.x - hole.cupX) < CUP_WIDTH / 2;
-  const inCupY = ball.y + BALL_RADIUS >= hole.cupY - 4; // 4px tolerance for cup lip
-  return inCupX && inCupY;
+  const belowRim = ball.y > hole.cupY;  // ball center is below the rim surface
+  return inCupX && belowRim;
 }
 
 // ── Out of Bounds Check ────────────────────────────────────
@@ -231,30 +233,33 @@ function updatePhysics() {
       ball.vy -= (ball.vy / speed) * SURFACE_FRICTION;
     }
 
+    // Slow-roll failsafe: track how long ball has been rolling slowly on ground
+    if (speed < 0.5) {
+      ball.slowFrames = (ball.slowFrames || 0) + 1;
+    } else {
+      ball.slowFrames = 0;
+    }
+
     // Rest check — use threshold higher than SURFACE_FRICTION to catch
     // micro-bounce loops where gravity+collision keep speed at ~0.006
     const REST_SPEED = 0.05;
-    if (speed < REST_SPEED) {
+    const forceRest = ball.slowFrames > 120; // ~2 seconds of slow rolling -> force stop
+    if (speed < REST_SPEED || forceRest) {
       // Check if slope is too steep to rest (static friction check)
       const seg = findSegment(ball.x);
       const n = segmentNormal(seg);
       const slopeGravity = Math.abs(GRAVITY * n.x); // gravity component along surface
-      if (slopeGravity > SURFACE_FRICTION) {
-        // Too steep — slide along surface tangent so collision won't absorb it
-        const a = vertices[seg], b = vertices[seg + 1];
-        const sdx = b.x - a.x, sdy = b.y - a.y;
-        const slen = Math.sqrt(sdx * sdx + sdy * sdy);
-        // Tangent direction along surface, pointing downhill
-        let tx = sdx / slen, ty = sdy / slen;
-        if (ty < 0) { tx = -tx; ty = -ty; } // ensure downhill
-        const slideSpeed = 0.3; // enough to overcome friction + collision absorption
-        ball.vx = tx * slideSpeed;
-        ball.vy = ty * slideSpeed;
+      if (slopeGravity > SURFACE_FRICTION && !forceRest) {
+        // Steep slope — let gravity + friction handle it naturally.
+        // Don't hard-reset speed (that causes infinite oscillation).
+        // Just skip rest — ball will keep rolling until it finds flat ground
+        // or the slow-frames failsafe kicks in.
       } else {
-        // Gentle enough slope — ball naturally reaches zero
+        // Gentle enough slope or failsafe triggered — ball comes to rest
         ball.vx = 0;
         ball.vy = 0;
         ball.atRest = true;
+        ball.slowFrames = 0;
         ball.y = terrainYAt(ball.x) - BALL_RADIUS;
         _logBall(isBallInCup() ? 'rest-in-cup' : 'rest-on-terrain');
       }
@@ -276,20 +281,6 @@ function update() {
         state = STATE_OOB;
         transitionTimer = 0;
         break;
-      }
-
-      // Cup capture: ball rolling over cup at moderate speed gets pulled in
-      if (ball.onGround && !ball.atRest) {
-        const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-        if (speed < 3.0 && isBallInCup()) {
-          ball.vx = 0;
-          ball.vy = 0;
-          ball.atRest = true;
-          _logBall('rest-in-cup');
-          state = STATE_PAUSE;
-          transitionTimer = 0;
-          break;
-        }
       }
 
       // Ball came to rest naturally via physics
@@ -370,8 +361,9 @@ function update() {
           prevHole.flagOpacity = Math.max(0, 1 - (t - fadeStart) / (fadeEnd - fadeStart));
         }
 
-        // Ball + tee rise with the cup fill
-        const surfaceY = prevHole.cupY - BALL_RADIUS;
+        // Ball rises with the sand fill — use actual rim height (not average)
+        const topRim = Math.min(prevHole.cupLeftY, prevHole.cupRightY);
+        const surfaceY = topRim - BALL_RADIUS;
         ball.y = transitionBallStartY + (surfaceY - transitionBallStartY) * prevHole.cupFillProgress;
       }
 
@@ -387,11 +379,13 @@ function update() {
           flattenCup(prevHole);
         }
 
-        // Snap ball to the now-flat terrain surface (minimal ball handling)
+        // Place ball at the new hole's tee, snapped to actual terrain
+        const newHole = holes[currentHole];
+        ball.x = newHole.teeX;
+        ball.y = terrainYAt(newHole.teeX) - BALL_RADIUS;
         ball.atRest = true;
         ball.vx = 0;
         ball.vy = 0;
-        ball.y = terrainYAt(ball.x) - BALL_RADIUS;
         state = STATE_AIM;
         _logBall('transition-end-tee');
 

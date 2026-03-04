@@ -306,13 +306,13 @@ function placeCup(holeIndex, cupX, teeX, teeY) {
   // Remove existing vertices inside the cup range
   vertices = vertices.filter(v => v.x < leftX || v.x > rightX);
 
-  // Insert cup as terrain vertices: uniform rectangular notch with FLAT bottom
-  const wallInset = 3;
+  // Insert cup as V-shaped notch — gentle slopes the ball can physically roll into
+  const wallInset = halfW - 2;  // leaves a 4px flat bottom; ~51 degree slopes
   const bottomY = Math.max(leftY, rightY) + CUP_DEPTH;
   const cupVerts = [
     { x: leftX,                y: leftY },      // left rim
-    { x: leftX + wallInset,    y: bottomY },     // bottom-left (flat)
-    { x: rightX - wallInset,   y: bottomY },     // bottom-right (flat)
+    { x: leftX + wallInset,    y: bottomY },     // bottom-left
+    { x: rightX - wallInset,   y: bottomY },     // bottom-right
     { x: rightX,               y: rightY },      // right rim
   ];
 
@@ -323,6 +323,10 @@ function placeCup(holeIndex, cupX, teeX, teeY) {
 
   holes.push({
     cupX, cupY,
+    cupLeftX: leftX, cupLeftY: leftY,
+    cupRightX: rightX, cupRightY: rightY,
+    cupBottomY: bottomY,
+    cupWallInset: wallInset,
     cupFilled: false,
     cupFillProgress: 0,
     flagHole: holeIndex + 1,
@@ -343,14 +347,12 @@ function flattenCup(hole) {
   // Remove all vertices inside the cup range
   vertices = vertices.filter(v => v.x < leftX || v.x > rightX);
 
-  // Insert two flat vertices at the rim heights (matches surrounding terrain)
-  const leftY = terrainYAt(leftX - 1); // sample just outside the cup
-  const rightY = terrainYAt(rightX + 1);
+  // Insert two flat vertices at the original rim heights (stored at placement time)
   let insertIdx = vertices.findIndex(v => v.x >= leftX);
   if (insertIdx === -1) insertIdx = vertices.length;
   vertices.splice(insertIdx, 0,
-    { x: leftX, y: leftY },
-    { x: rightX, y: rightY }
+    { x: leftX, y: hole.cupLeftY },
+    { x: rightX, y: hole.cupRightY }
   );
 }
 
