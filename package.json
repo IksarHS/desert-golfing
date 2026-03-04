@@ -1,0 +1,9 @@
+{
+  "name": "desert-golfing",
+  "version": "0.1.0",
+  "description": "Desert Golfing clone — multi-agent development project",
+  "scripts": {
+    "start": "npx serve . -l 3002 --no-clipboard",
+    "build": "bash build.sh"
+  }
+}
