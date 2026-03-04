@@ -21,4 +21,15 @@ Optional: specific code or approach suggestion.
 
 ---
 
-*No requests yet.*
+### REQ-001: Apply camera shake offset in draw()
+**From:** Core Gameplay
+**To:** Art Direction
+**File:** `src/art.js`
+**Priority:** medium
+**Status:** open
+
+**Description:**
+Gameplay now exposes `_cameraShakeX` and `_cameraShakeY` globals (small pixel offsets that decay after hard impacts). Art.js should apply these as a translate offset in `draw()` so the screen shakes visually on hard ball impacts.
+
+**Suggested implementation:**
+At the top of `draw()`, add `ctx.save(); ctx.translate(_cameraShakeX, _cameraShakeY);` and `ctx.restore();` at the end (or offset `camera.x` temporarily).

@@ -24,10 +24,10 @@ Update your section when starting/finishing tasks. Check other agents' status be
 
 ## Core Gameplay Agent
 **Owner:** `src/gameplay.js`
-**Status:** Not started
+**Status:** Complete
 **Current task:** —
-**Last completed:** —
-**Blocked on:** —
+**Last completed:** Physics & polish improvements: camera shake infrastructure, multi-iteration collision, velocity cap, cubic transition easing, faster OOB respawn
+**Blocked on:** Art Direction agent needs to apply `_cameraShakeX`/`_cameraShakeY` offsets in `draw()` for camera shake to be visible
 
 ---
 

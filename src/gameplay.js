@@ -1,16 +1,35 @@
 // ── Camera ─────────────────────────────────────────────────
+let _cameraShakeX = 0, _cameraShakeY = 0;
+let _cameraShakeIntensity = 0;
+
 function setHoleCamera(hole) {
-  // Frame the hole: tee on left, flag on right, both visible
   const margin = 120;
-  const teeScreenX = margin;  // tee sits near left edge
+  const teeScreenX = margin;
   camera.x = hole.teeX - teeScreenX;
 
-  // Verify flag is on-screen; if not, shrink margins
   const cupScreenX = hole.cupX - camera.x;
   if (cupScreenX > W - margin) {
-    // Flag is off-screen — center between tee and cup
     const center = (hole.teeX + hole.cupX) / 2;
     camera.x = center - W / 2;
+  }
+}
+
+function updateCameraShake() {
+  if (_cameraShakeIntensity > 0.1) {
+    _cameraShakeX = (Math.random() - 0.5) * _cameraShakeIntensity;
+    _cameraShakeY = (Math.random() - 0.5) * _cameraShakeIntensity;
+    _cameraShakeIntensity *= 0.85; // decay
+  } else {
+    _cameraShakeX = 0;
+    _cameraShakeY = 0;
+    _cameraShakeIntensity = 0;
+  }
+}
+
+function triggerCameraShake(impactSpeed) {
+  // Only shake on hard impacts
+  if (impactSpeed > 2.0) {
+    _cameraShakeIntensity = Math.min(impactSpeed * 1.5, 8);
   }
 }
 
@@ -114,73 +133,89 @@ function segmentNormal(i) {
   return { x: dy / len, y: -dx / len };
 }
 
+// Velocity cap — prevent tunneling through thin terrain
+const MAX_VELOCITY = 12;
+
 function collideWithTerrain() {
-  // Circle-vs-line-segment collision for pixel-accurate contact
   let collided = false;
+  let maxImpactSpeed = 0;
 
-  for (let i = 0; i < vertices.length - 1; i++) {
-    const a = vertices[i], b = vertices[i + 1];
+  // Multiple collision iterations to handle tight crevices
+  for (let iter = 0; iter < 3; iter++) {
+    let iterCollided = false;
 
-    // Skip segments far from ball
-    if (b.x < ball.x - BALL_RADIUS * 2 && a.x < ball.x - BALL_RADIUS * 2) continue;
-    if (a.x > ball.x + BALL_RADIUS * 2 && b.x > ball.x + BALL_RADIUS * 2) break;
+    for (let i = 0; i < vertices.length - 1; i++) {
+      const a = vertices[i], b = vertices[i + 1];
 
-    // Find closest point on segment AB to ball center
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const lenSq = dx * dx + dy * dy;
-    if (lenSq < 0.001) continue; // skip degenerate segments
+      if (b.x < ball.x - BALL_RADIUS * 2 && a.x < ball.x - BALL_RADIUS * 2) continue;
+      if (a.x > ball.x + BALL_RADIUS * 2 && b.x > ball.x + BALL_RADIUS * 2) break;
 
-    let t = ((ball.x - a.x) * dx + (ball.y - a.y) * dy) / lenSq;
-    t = Math.max(0, Math.min(1, t));
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const lenSq = dx * dx + dy * dy;
+      if (lenSq < 0.001) continue;
 
-    const closestX = a.x + t * dx;
-    const closestY = a.y + t * dy;
+      let t = ((ball.x - a.x) * dx + (ball.y - a.y) * dy) / lenSq;
+      t = Math.max(0, Math.min(1, t));
 
-    const distX = ball.x - closestX;
-    const distY = ball.y - closestY;
-    const distSq = distX * distX + distY * distY;
+      const closestX = a.x + t * dx;
+      const closestY = a.y + t * dy;
 
-    if (distSq < BALL_RADIUS * BALL_RADIUS && distSq > 0.0001) {
-      const dist = Math.sqrt(distSq);
+      const distX = ball.x - closestX;
+      const distY = ball.y - closestY;
+      const distSq = distX * distX + distY * distY;
 
-      // Normal: from closest point toward ball center (pushes ball out)
-      const nx = distX / dist;
-      const ny = distY / dist;
+      if (distSq < BALL_RADIUS * BALL_RADIUS && distSq > 0.0001) {
+        const dist = Math.sqrt(distSq);
 
-      // Only resolve if ball is on the "above" side of terrain
-      // (normal should have a component pointing toward sky, i.e. ny < 0)
-      // For walls, nx matters more — allow those too
-      const segNormX = dy / Math.sqrt(lenSq);
-      const segNormY = -dx / Math.sqrt(lenSq);
-      // Ensure segment normal points upward (into sky)
-      const upNx = segNormY < 0 ? segNormX : -segNormX;
-      const upNy = segNormY < 0 ? segNormY : -segNormY;
-      // Ball should be on the "above" side: dot(ball-a, upNorm) > -BALL_RADIUS
-      const sideCheck = (ball.x - a.x) * upNx + (ball.y - a.y) * upNy;
-      if (sideCheck < -BALL_RADIUS * 2) continue; // ball is deep below, skip
+        const nx = distX / dist;
+        const ny = distY / dist;
 
-      // Push ball out of terrain
-      const overlap = BALL_RADIUS - dist;
-      ball.x += nx * overlap;
-      ball.y += ny * overlap;
+        const segNormX = dy / Math.sqrt(lenSq);
+        const segNormY = -dx / Math.sqrt(lenSq);
+        const upNx = segNormY < 0 ? segNormX : -segNormX;
+        const upNy = segNormY < 0 ? segNormY : -segNormY;
+        const sideCheck = (ball.x - a.x) * upNx + (ball.y - a.y) * upNy;
+        if (sideCheck < -BALL_RADIUS * 2) continue;
 
-      // Velocity response
-      const dot = ball.vx * nx + ball.vy * ny;
-      if (dot < 0) {
-        const isGround = Math.abs(ny) > Math.abs(nx);
-        if (isGround && -dot < BOUNCE_THRESHOLD) {
-          // Small impact on ground: absorb (sand feel)
-          ball.vx -= dot * nx;
-          ball.vy -= dot * ny;
-        } else {
-          // Wall or large impact: bounce with restitution
-          ball.vx -= (1 + RESTITUTION) * dot * nx;
-          ball.vy -= (1 + RESTITUTION) * dot * ny;
+        // Push ball out
+        const overlap = BALL_RADIUS - dist;
+        ball.x += nx * overlap;
+        ball.y += ny * overlap;
+
+        // Velocity response (only on first iteration to avoid double-bounce)
+        if (iter === 0) {
+          const dot = ball.vx * nx + ball.vy * ny;
+          if (dot < 0) {
+            const impactSpeed = -dot;
+            if (impactSpeed > maxImpactSpeed) maxImpactSpeed = impactSpeed;
+
+            const isGround = Math.abs(ny) > Math.abs(nx);
+            if (isGround && impactSpeed < BOUNCE_THRESHOLD) {
+              ball.vx -= dot * nx;
+              ball.vy -= dot * ny;
+            } else {
+              ball.vx -= (1 + RESTITUTION) * dot * nx;
+              ball.vy -= (1 + RESTITUTION) * dot * ny;
+            }
+          }
         }
-      }
 
-      collided = true;
+        iterCollided = true;
+        collided = true;
+      }
+    }
+
+    // Stop iterating if no collision in this pass
+    if (!iterCollided) break;
+  }
+
+  // Trigger camera shake and sand particles on hard impacts
+  if (maxImpactSpeed > 1.5) {
+    triggerCameraShake(maxImpactSpeed);
+    // Spawn sand particles if the function exists (defined in art.js)
+    if (typeof spawnSandParticles === 'function') {
+      spawnSandParticles(ball.x, ball.y, maxImpactSpeed);
     }
   }
 
@@ -194,7 +229,7 @@ function isBallInCup() {
   if (!hole || hole.cupFilled) return false;
 
   const inCupX = Math.abs(ball.x - hole.cupX) < CUP_WIDTH / 2;
-  const inCupY = ball.y + BALL_RADIUS >= hole.cupY - 4; // 4px tolerance for cup lip
+  const inCupY = ball.y + BALL_RADIUS >= hole.cupY - 4;
   return inCupX && inCupY;
 }
 
@@ -206,52 +241,59 @@ function isBallOffScreen() {
   return sx < -margin || sx > W + margin || sy < -margin || sy > H + margin;
 }
 
+// Way off screen — ball is extremely far away, respawn faster
+function isBallWayOff() {
+  const sx = ball.x - camera.x;
+  const sy = ball.y;
+  return sx < -200 || sx > W + 200 || sy < -200 || sy > H + 200;
+}
+
 // ── Physics Update ─────────────────────────────────────────
 function updatePhysics() {
   if (ball.atRest) return;
 
   ball.vy += GRAVITY;
+
+  // Velocity cap to prevent tunneling
+  const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+  if (speed > MAX_VELOCITY) {
+    const scale = MAX_VELOCITY / speed;
+    ball.vx *= scale;
+    ball.vy *= scale;
+  }
+
   ball.x += ball.vx;
   ball.y += ball.vy;
   _logBall('physics');
 
   collideWithTerrain();
-  // Log if collision changed position
   if (ball.onGround) {
     _logBall('collision');
 
-    // Proportional friction (gentle drag — handles high-speed deceleration)
     ball.vx *= ROLLING_FRICTION;
     ball.vy *= ROLLING_FRICTION;
 
-    // Constant surface friction (smooth natural stop at low speed)
-    const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-    if (speed > SURFACE_FRICTION) {
-      ball.vx -= (ball.vx / speed) * SURFACE_FRICTION;
-      ball.vy -= (ball.vy / speed) * SURFACE_FRICTION;
+    const groundSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+    if (groundSpeed > SURFACE_FRICTION) {
+      ball.vx -= (ball.vx / groundSpeed) * SURFACE_FRICTION;
+      ball.vy -= (ball.vy / groundSpeed) * SURFACE_FRICTION;
     }
 
-    // Rest check — use threshold higher than SURFACE_FRICTION to catch
-    // micro-bounce loops where gravity+collision keep speed at ~0.006
     const REST_SPEED = 0.05;
-    if (speed < REST_SPEED) {
-      // Check if slope is too steep to rest (static friction check)
+    if (groundSpeed < REST_SPEED) {
       const seg = findSegment(ball.x);
       const n = segmentNormal(seg);
-      const slopeGravity = Math.abs(GRAVITY * n.x); // gravity component along surface
+      const slopeGravity = Math.abs(GRAVITY * n.x);
       if (slopeGravity > SURFACE_FRICTION) {
-        // Too steep — slide along surface tangent so collision won't absorb it
         const a = vertices[seg], b = vertices[seg + 1];
         const sdx = b.x - a.x, sdy = b.y - a.y;
         const slen = Math.sqrt(sdx * sdx + sdy * sdy);
-        // Tangent direction along surface, pointing downhill
         let tx = sdx / slen, ty = sdy / slen;
-        if (ty < 0) { tx = -tx; ty = -ty; } // ensure downhill
-        const slideSpeed = 0.3; // enough to overcome friction + collision absorption
+        if (ty < 0) { tx = -tx; ty = -ty; }
+        const slideSpeed = 0.3;
         ball.vx = tx * slideSpeed;
         ball.vy = ty * slideSpeed;
       } else {
-        // Gentle enough slope — ball naturally reaches zero
         ball.vx = 0;
         ball.vy = 0;
         ball.atRest = true;
@@ -264,6 +306,8 @@ function updatePhysics() {
 
 // ── Game State Machine ────────────────────────────────────
 function update() {
+  updateCameraShake();
+
   switch (state) {
     case STATE_AIM:
       break;
@@ -271,14 +315,12 @@ function update() {
     case STATE_FLIGHT:
       updatePhysics();
 
-      // Check out of bounds (ball off screen)
       if (isBallOffScreen()) {
         state = STATE_OOB;
         transitionTimer = 0;
         break;
       }
 
-      // Cup capture: ball rolling over cup at moderate speed gets pulled in
       if (ball.onGround && !ball.atRest) {
         const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
         if (speed < 3.0 && isBallInCup()) {
@@ -292,7 +334,6 @@ function update() {
         }
       }
 
-      // Ball came to rest naturally via physics
       if (ball.atRest) {
         if (isBallInCup()) {
           state = STATE_PAUSE;
@@ -306,10 +347,11 @@ function update() {
       }
       break;
 
-    case STATE_OOB:
-      // Ball went off screen — wait then respawn at tee
+    case STATE_OOB: {
       transitionTimer++;
-      if (transitionTimer >= OOB_PAUSE) {
+      // Faster respawn if ball is way off screen
+      const oobLimit = isBallWayOff() ? Math.floor(OOB_PAUSE / 2) : OOB_PAUSE;
+      if (transitionTimer >= oobLimit) {
         const hole = holes[currentHole];
         ball.x = hole.teeX;
         ball.y = terrainYAt(hole.teeX) - BALL_RADIUS;
@@ -320,23 +362,22 @@ function update() {
         _logBall('oob-respawn');
       }
       break;
+    }
 
     case STATE_PAUSE:
-      // Ball in cup — wait before starting transition
       transitionTimer++;
       if (transitionTimer >= TRANSITION_PAUSE) {
         totalStrokes += strokes;
         transitionStartCamX = camera.x;
-        transitionBallStartY = ball.y; // save ball Y for rise animation
+        transitionBallStartY = ball.y;
 
         currentHole++;
 
-        // Use setHoleCamera to compute proper framing for new hole
         const newHole = holes[currentHole];
         const savedCamX = camera.x;
         setHoleCamera(newHole);
         transitionEndCamX = camera.x;
-        camera.x = savedCamX; // restore — we'll animate to target
+        camera.x = savedCamX;
 
         if (currentHole === 1) showTitle = false;
 
@@ -349,14 +390,13 @@ function update() {
     case STATE_TRANSITION: {
       transitionTimer++;
       const t = Math.min(transitionTimer / TRANSITION_PAN, 1);
+      // Smoother ease-in-out-cubic
       const ease = t < 0.5
-        ? 2 * t * t
-        : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        ? 4 * t * t * t
+        : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-      // Camera pan
       camera.x = transitionStartCamX + (transitionEndCamX - transitionStartCamX) * ease;
 
-      // Gradual cup fill during pan (starts at 30%, completes at 90%)
       const prevHole = holes[currentHole - 1];
       if (prevHole) {
         const fillStart = 0.3, fillEnd = 0.9;
@@ -364,30 +404,24 @@ function update() {
           prevHole.cupFillProgress = Math.min(1, (t - fillStart) / (fillEnd - fillStart));
         }
 
-        // Flag fades during pan (starts at 30%, gone by 70%)
         const fadeStart = 0.3, fadeEnd = 0.7;
         if (t >= fadeStart) {
           prevHole.flagOpacity = Math.max(0, 1 - (t - fadeStart) / (fadeEnd - fadeStart));
         }
 
-        // Ball + tee rise with the cup fill
         const surfaceY = prevHole.cupY - BALL_RADIUS;
         ball.y = transitionBallStartY + (surfaceY - transitionBallStartY) * prevHole.cupFillProgress;
       }
 
-      // Done — pan complete
       if (transitionTimer >= TRANSITION_PAN) {
         if (prevHole) {
           prevHole.cupFilled = true;
           prevHole.cupFillProgress = 1;
           prevHole.flagVisible = false;
           prevHole.flagOpacity = 0;
-
-          // Flatten the cup: replace notch vertices with flat terrain at rim height
           flattenCup(prevHole);
         }
 
-        // Snap ball to the now-flat terrain surface (minimal ball handling)
         ball.atRest = true;
         ball.vx = 0;
         ball.vy = 0;
@@ -400,6 +434,4 @@ function update() {
       break;
     }
   }
-
-  // Camera is FIXED during play — no updateCamera needed
 }
