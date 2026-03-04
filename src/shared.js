@@ -15,8 +15,8 @@ let POWER_SCALE    = 0.04;
 let MAX_POWER      = 8;
 let BOUNCE_THRESHOLD = 1.0;
 let BALL_RADIUS    = 4;
-const CUP_WIDTH      = 28;
-const CUP_DEPTH      = 16;
+const CUP_WIDTH      = 36;
+const CUP_DEPTH      = 20;
 const TEE_WIDTH      = 16;
 const TEE_HEIGHT     = 6;
 
@@ -48,7 +48,7 @@ let currentHole = 0;
 let totalStrokes = 0;
 
 // ── Ball ───────────────────────────────────────────────────
-let ball = { x: 0, y: 0, vx: 0, vy: 0, onGround: false, atRest: true };
+let ball = { x: 0, y: 0, vx: 0, vy: 0, onGround: false, atRest: true, slowFrames: 0 };
 let strokes = 0;
 
 // ── Camera ─────────────────────────────────────────────────

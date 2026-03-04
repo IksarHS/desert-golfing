@@ -58,22 +58,48 @@ function drawCup(hole) {
   // During transition: draw terrain-colored fill rising from cup bottom
   if (!hole.cupFillProgress || hole.cupFillProgress <= 0) return;
 
-  const halfW = CUP_WIDTH / 2;
-  const leftX = hole.cupX - halfW;
-  const rightX = hole.cupX + halfW;
-  const rimY = hole.cupY; // approximate rim height
+  const leftX = hole.cupLeftX;
+  const rightX = hole.cupRightX;
+  const leftY = hole.cupLeftY;
+  const rightY = hole.cupRightY;
+  const bottomY = hole.cupBottomY;
+  const wallInset = hole.cupWallInset;
+  const blX = leftX + wallInset;   // bottom-left x
+  const brX = rightX - wallInset;  // bottom-right x
 
-  // Find cup bottom Y from terrain vertices
-  let bottomY = rimY + CUP_DEPTH;
+  // Fill level: rises from bottomY (empty) up to the higher rim (full)
+  const topRim = Math.min(leftY, rightY); // highest rim point (smallest Y)
+  const fillTopY = bottomY + (topRim - bottomY) * hole.cupFillProgress;
 
-  // Fill rises from bottom to rim based on progress
-  const fillTopY = bottomY + (rimY - bottomY) * hole.cupFillProgress;
+  if (fillTopY >= bottomY) return; // nothing to fill yet
 
-  const sx1 = leftX - camera.x;
-  const sx2 = rightX - camera.x;
+  // Find where fillTopY intersects the left wall: (leftX,leftY) -> (blX,bottomY)
+  let flx;
+  if (fillTopY <= leftY) {
+    flx = leftX; // fill is above left rim
+  } else {
+    const t = (bottomY - fillTopY) / (bottomY - leftY);
+    flx = blX + (leftX - blX) * t;
+  }
 
+  // Find where fillTopY intersects the right wall: (rightX,rightY) -> (brX,bottomY)
+  let frx;
+  if (fillTopY <= rightY) {
+    frx = rightX; // fill is above right rim
+  } else {
+    const t = (bottomY - fillTopY) / (bottomY - rightY);
+    frx = brX + (rightX - brX) * t;
+  }
+
+  // Draw V-shaped fill polygon matching the cup geometry
   ctx.fillStyle = GROUND;
-  ctx.fillRect(sx1, fillTopY, sx2 - sx1, bottomY - fillTopY + 2);
+  ctx.beginPath();
+  ctx.moveTo(flx - camera.x, fillTopY);
+  ctx.lineTo(blX - camera.x, bottomY);
+  ctx.lineTo(brX - camera.x, bottomY);
+  ctx.lineTo(frx - camera.x, fillTopY);
+  ctx.closePath();
+  ctx.fill();
 }
 
 function drawFlag(hole) {
@@ -124,15 +150,15 @@ function drawFlag(hole) {
 }
 
 function drawTeeMarker(hole) {
-  const sx = hole.teeX - camera.x;
-  // During transition, tee rises with the ball; otherwise use fixed teeY
-  const sy = (state === STATE_TRANSITION || state === STATE_PAUSE)
-    ? ball.y + BALL_RADIUS  // bottom of ball
-    : hole.teeY;
+  // Only draw the tee during active play (not during pause or transition)
+  if (state === STATE_PAUSE || state === STATE_TRANSITION) return;
 
-  // Tee sits at ground level — small rectangle centered on the surface
+  const sx = hole.teeX - camera.x;
+  const sy = terrainYAt(hole.teeX);
+
+  // Tee is a thin strip sitting flush on the ground surface
   ctx.fillStyle = TEE_COLOR;
-  ctx.fillRect(sx - TEE_WIDTH / 2, sy - TEE_HEIGHT / 2, TEE_WIDTH, TEE_HEIGHT);
+  ctx.fillRect(sx - TEE_WIDTH / 2, sy - 2, TEE_WIDTH, 2);
 }
 
 function drawBall() {
