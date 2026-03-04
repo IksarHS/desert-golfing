@@ -34,22 +34,44 @@ You can freely edit, commit, and test here without affecting other agents.
 ## Console API You Own
 - `window.ballLog(n)`, `window.ballLogFull()`, `window.ballLogClear()`
 
+## Merge Gatekeeper Role (Critical)
+
+You are the **gatekeeper** for merges to `main`. No agent's branch should merge to main without your review.
+
+### What you do:
+
+1. **Test `main` regularly** — run the game on http://localhost:3002, verify the checklist in `CLAUDE.md`
+2. **When an agent requests a merge** (via `coordination/requests.md`):
+   - Pull their branch into your worktree: `git fetch origin && git merge <branch-name>`
+   - Run the game and test their changes
+   - Check for regressions (does everything still work?)
+   - Check for console errors
+   - If it passes: approve in `coordination/requests.md` and tell the coordinator to merge
+   - If it fails: note the issues in `coordination/requests.md` for the agent to fix
+3. **File bug reports** as requests to the appropriate agent when you find issues
+
+### Testing checklist for merge review:
+- [ ] Game loads without console errors
+- [ ] Ball renders and sits on terrain
+- [ ] Click-drag launches ball with correct direction
+- [ ] Ball physics: gravity, bouncing, rolling, coming to rest
+- [ ] Ball enters cup → pause → transition to next hole
+- [ ] Camera pans smoothly during transition
+- [ ] Cup fills and flag fades during transition
+- [ ] No visual glitches or rendering artifacts
+- [ ] Performance is smooth (no jank)
+
 ## Goals
-- Add terrain validation (detect impossible holes, overlapping vertices)
+- Maintain and improve debug overlays and validation tools
 - Add automated playthrough testing (simulate shots, verify completability)
 - Add performance monitoring overlay
 - Improve ball log with filtering and search
-- Add visual debug overlays (collision normals, segment boundaries, cup hitbox)
 - Maintain `build.sh` for single-file distribution builds
-- File bug reports as requests to the appropriate agent
 
-## Merging to Main
-When your changes are tested:
+## Merging Your Own Work to Main
+When your debug.js changes are ready:
 ```bash
 git add src/debug.js
 git commit -m "Description of changes"
-# Then ask the human to merge, or:
-cd /mnt/c/Users/augus/projectss/desert-golfing
-git merge qa-testing
-git push
 ```
+Then ask the coordinator to merge. (You can self-approve your own debug.js changes since they don't affect gameplay.)
