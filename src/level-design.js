@@ -189,6 +189,53 @@ const archetypes = {
     }
     verts.push({ x: sx + dist, y: cupY });
     return verts;
+  },
+
+  // ── NEW ARCHETYPES ──────────────────────────────────────
+
+  long_slope(sx, sy, dist, cupY, diff) {
+    // Consistent grade from tee to cup — very common in real Desert Golfing
+    // 3-4 evenly spaced vertices along a straight grade with minor noise
+    const numPts = 3 + Math.floor(Math.random() * 2);
+    const verts = [];
+    for (let i = 1; i <= numPts; i++) {
+      const t = i / (numPts + 1);
+      const baseY = lerp(sy, cupY, t);
+      const noise = (Math.random() - 0.5) * (8 + diff * 12);
+      verts.push({ x: sx + dist * t, y: clampY(baseY + noise) });
+    }
+    verts.push({ x: sx + dist, y: cupY });
+    return verts;
+  },
+
+  shelf_drop(sx, sy, dist, cupY, diff) {
+    // Flat shelf then abrupt step down to a lower shelf where the cup sits
+    const shelfEndX = sx + dist * randRange(0.4, 0.6);
+    const dropHeight = randRange(40, 80 + diff * 50);
+    const topY = clampY(sy);
+    const botY = clampY(topY + dropHeight);
+    return [
+      { x: sx + dist * 0.15, y: clampY(topY + (Math.random() - 0.5) * 8) },
+      { x: shelfEndX - 20,   y: topY },
+      { x: shelfEndX,        y: topY },
+      { x: shelfEndX + 20,   y: botY },   // step down
+      { x: sx + dist * 0.8,  y: clampY(botY + (Math.random() - 0.5) * 10) },
+      { x: sx + dist,        y: botY }
+    ];
+  },
+
+  subtle_rise(sx, sy, dist, cupY, diff) {
+    // Nearly flat with slight upward elevation — common easy hole
+    const rise = randRange(10, 30 + diff * 15);
+    const actualCupY = clampY(sy - rise);
+    const midX = sx + dist * 0.5;
+    const midY = clampY(lerp(sy, actualCupY, 0.5) + (Math.random() - 0.5) * 8);
+    return [
+      { x: sx + dist * 0.25, y: clampY(lerp(sy, midY, 0.5) + (Math.random() - 0.5) * 6) },
+      { x: midX, y: midY },
+      { x: sx + dist * 0.75, y: clampY(lerp(midY, actualCupY, 0.5) + (Math.random() - 0.5) * 6) },
+      { x: sx + dist, y: actualCupY }
+    ];
   }
 };
 
@@ -197,10 +244,13 @@ const archetypes = {
 const ARCHETYPE_TABLE = [
   ['flat_run',       0.0, 0.4, 3],
   ['gentle_hill',    0.0, 0.5, 3],
+  ['long_slope',     0.0, 1.0, 5],  // very common — matches real game's frequent gentle terrain
+  ['subtle_rise',    0.0, 0.6, 3],
   ['downhill',       0.0, 0.7, 2],
   ['uphill',         0.0, 0.8, 2],
   ['valley',         0.0, 0.8, 2],
   ['rolling_hills',  0.0, 1.0, 2],
+  ['shelf_drop',     0.1, 1.0, 2],
   ['mesa',           0.15, 1.0, 2],
   ['peak_obstacle',  0.2, 1.0, 3],
   ['cliff_drop',     0.2, 1.0, 2],
@@ -209,23 +259,35 @@ const ARCHETYPE_TABLE = [
   ['wall_shot',      0.3, 1.0, 2],
 ];
 
+// Anti-repetition: track last 3 archetypes to halve their selection weight
+const _recentArchetypes = [];
+
 function pickArchetype(difficulty) {
   // Filter to archetypes available at this difficulty, then weighted random
   const available = ARCHETYPE_TABLE.filter(
     ([name, minD, maxD]) => difficulty >= minD && difficulty <= maxD
   );
-  const totalWeight = available.reduce((sum, a) => sum + a[3], 0);
+  // Apply anti-repetition: halve weight if archetype was used in last 3 holes
+  const weights = available.map(([name, , , w]) =>
+    _recentArchetypes.includes(name) ? w * 0.5 : w
+  );
+  const totalWeight = weights.reduce((sum, w) => sum + w, 0);
   let roll = Math.random() * totalWeight;
-  for (const [name, , , w] of available) {
-    roll -= w;
-    if (roll <= 0) return name;
+  let picked = available[available.length - 1][0];
+  for (let i = 0; i < available.length; i++) {
+    roll -= weights[i];
+    if (roll <= 0) { picked = available[i][0]; break; }
   }
-  return available[available.length - 1][0];
+  // Update recent history
+  _recentArchetypes.push(picked);
+  if (_recentArchetypes.length > 3) _recentArchetypes.shift();
+  return picked;
 }
 
 // ── Main Terrain Generation ──────────────────────────────
 function generateHoleTerrain(holeIndex) {
-  const difficulty = Math.min(1.0, holeIndex * 0.05);
+  // Logarithmic curve: ramps 0→1 over ~200 holes (log(1)/log(201)=0, log(201)/log(201)=1)
+  const difficulty = Math.min(1.0, Math.log(holeIndex + 1) / Math.log(201));
 
   // Determine tee position
   let teeX, teeY;
@@ -250,18 +312,18 @@ function generateHoleTerrain(holeIndex) {
              + difficulty * 100;
   const dist = Math.min(rawDist, maxDist);
 
-  // Determine cup target elevation
+  // Determine cup target elevation — matches real game: 70% downhill, 25% uphill, 5% flat
   const elevRoll = Math.random();
   let cupTargetY;
-  if (elevRoll < 0.30) {
-    // Same level
+  if (elevRoll < 0.05) {
+    // Flat (5%)
     cupTargetY = clampY(teeY + (Math.random() - 0.5) * 30);
-  } else if (elevRoll < 0.65) {
-    // Cup higher (lower Y)
-    cupTargetY = clampY(teeY - randRange(30, 60 + difficulty * 80));
-  } else {
-    // Cup lower (higher Y)
+  } else if (elevRoll < 0.75) {
+    // Cup lower / downhill (70%) — ball higher than hole
     cupTargetY = clampY(teeY + randRange(30, 60 + difficulty * 80));
+  } else {
+    // Cup higher / uphill (25%)
+    cupTargetY = clampY(teeY - randRange(30, 60 + difficulty * 80));
   }
 
   // Pick archetype and generate vertices
@@ -270,13 +332,31 @@ function generateHoleTerrain(holeIndex) {
   const startX = teeX + 40; // small gap after tee
   const holeVerts = archFunc(startX, teeY, dist, cupTargetY, difficulty);
 
-  // Append hole vertices to global array
+  // Terrain smoothing: insert extra vertices between gaps >120px with subtle noise
+  const smoothed = [];
+  let prevV = { x: startX, y: teeY };
   for (const v of holeVerts) {
-    vertices.push({ x: v.x, y: clampY(v.y) });
+    const gap = v.x - prevV.x;
+    if (gap > 120) {
+      const subdivisions = Math.ceil(gap / 120);
+      for (let s = 1; s < subdivisions; s++) {
+        const t = s / subdivisions;
+        const midX = lerp(prevV.x, v.x, t);
+        const midY = lerp(prevV.y, v.y, t) + (Math.random() - 0.5) * 8;
+        smoothed.push({ x: midX, y: clampY(midY) });
+      }
+    }
+    smoothed.push({ x: v.x, y: clampY(v.y) });
+    prevV = v;
+  }
+
+  // Append smoothed hole vertices to global array
+  for (const v of smoothed) {
+    vertices.push(v);
   }
 
   // The cup X is at the last feature vertex (end of hole)
-  const lastVert = holeVerts[holeVerts.length - 1];
+  const lastVert = smoothed[smoothed.length - 1];
   const cupX = lastVert.x;
   const cupSurfaceY = lastVert.y;
 
