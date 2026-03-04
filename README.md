@@ -5,7 +5,7 @@ A Desert Golfing clone built as a browser game with procedural terrain generatio
 ## Quick Start
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/desert-golfing.git
+git clone https://github.com/IksarHS/desert-golfing.git
 cd desert-golfing
 npm start
 ```
