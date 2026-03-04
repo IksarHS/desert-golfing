@@ -63,6 +63,13 @@ function drawTeeMarker(hole: HoleObject) → void
 function drawBall() → void
 function drawAimUI() → void
 function drawHUD() → void
+
+function spawnSandParticles(x: number, y: number, impactSpeed: number) → void
+// Spawn sand particles at (x, y) with velocity scaled by impactSpeed.
+// Called by gameplay.js on ball-terrain collision (see REQ-001).
+
+function getHolePalette(holeNum: number) → {sky: string, skyTop: string, ground: string}
+// Returns palette colors for a given hole number. Colors shift subtly over a 40-hole cycle.
 ```
 
 ## `gameplay.js` — Physics & State

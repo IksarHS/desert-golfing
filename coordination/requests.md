@@ -21,4 +21,22 @@ Optional: specific code or approach suggestion.
 
 ---
 
-*No requests yet.*
+### REQ-001: Call spawnSandParticles on ball terrain impact
+**From:** Art Direction
+**To:** Core Gameplay
+**File:** `src/gameplay.js`
+**Priority:** medium
+**Status:** open
+
+**Description:**
+Art Direction added a sand particle system (`spawnSandParticles(x, y, impactSpeed)` in `src/art.js`). It needs to be called from `collideWithTerrain()` when the ball first contacts the ground, so particles spray on impact.
+
+**Suggested implementation:**
+In `collideWithTerrain()`, after setting `ball.onGround = collided`, add:
+```js
+if (collided && !wasOnGround) {
+  const impactSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+  if (impactSpeed > 0.5) spawnSandParticles(ball.x, ball.y, impactSpeed);
+}
+```
+Where `wasOnGround` is captured at the top of the function: `const wasOnGround = ball.onGround;`
