@@ -43,10 +43,16 @@ Desert Golf terrain analysis dataset (990 holes from real gameplay) at `/home/au
 - Tune hole distances, elevation changes, and obstacle placement
 - Ensure all holes are completable (no impossible geometry)
 
-## Submitting Your Work
-When your changes are ready:
-```bash
-git add src/level-design.js
-git commit -m "Description of changes"
-```
-Then add a merge request to `coordination/requests.md` asking QA to review your branch. **Do not merge directly to main** — all merges go through QA review first.
+## Check-in Rules (IMPORTANT)
+
+**Always commit before reporting your work is done.** Every time you finish a task or the human asks for status:
+
+1. `git add src/level-design.js coordination/` — stage your files and any coordination updates
+2. `git commit -m "Short description of what changed"` — commit with a clear message
+3. Then tell the human what you did
+
+**Never leave uncommitted changes.** If you edited files, commit them. The orchestrator and QA agent can only see committed work.
+
+**Never commit files you don't own.** Only stage `src/level-design.js` and files in `coordination/`. Never stage `.claude/`, `src/art.js`, `src/gameplay.js`, `src/debug.js`, or `src/shared.js`.
+
+**Do not merge directly to main** — all merges go through QA review via the orchestrator.
