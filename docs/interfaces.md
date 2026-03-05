@@ -59,7 +59,6 @@ function drawSky() → void
 function drawTerrain() → void
 function drawCup(hole: HoleObject) → void
 function drawFlag(hole: HoleObject) → void
-function drawTeeMarker(hole: HoleObject) → void
 function drawBall() → void
 function drawAimUI() → void
 function drawHUD() → void
@@ -135,7 +134,10 @@ function init() → void
   flagVisible: boolean,  // false after transition
   flagOpacity: number,   // 0-1 for fade animation
   teeX: number,          // world X of tee
-  teeY: number           // world Y of tee
+  teeY: number,          // world Y of tee
+  cupLeftY: number,      // Y of left rim vertex
+  cupRightY: number,     // Y of right rim vertex
+  cupBottomY: number     // Y of cup bottom
 }
 
 // Vertex (elements of `vertices` array):

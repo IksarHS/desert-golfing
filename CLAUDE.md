@@ -89,7 +89,7 @@ When an experiment is ready, merge to main. Before merging, run through the test
 - `main.js` calls: `ensureHolesAhead()`, `terrainYAt()`, `setHoleCamera()`, `update()`, `draw()`
 - `debug.js` patches: `draw` (wraps original), `_logBall` (replaces no-op)
 
-See `coordination/interfaces.md` for full function signatures.
+See `docs/interfaces.md` for full function signatures.
 
 ## Testing
 
