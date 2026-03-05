@@ -91,13 +91,15 @@ function drawCup(hole) {
     frx = brX + (rightX - brX) * t;
   }
 
-  // Draw V-shaped fill polygon matching the cup geometry
+  // Draw fill polygon matching the cup geometry — overdraw by 1px on each side
+  // to cover any sub-pixel gaps between this fill and the terrain path
+  const overdraw = 1;
   ctx.fillStyle = GROUND;
   ctx.beginPath();
-  ctx.moveTo(flx - camera.x, fillTopY);
-  ctx.lineTo(blX - camera.x, bottomY);
-  ctx.lineTo(brX - camera.x, bottomY);
-  ctx.lineTo(frx - camera.x, fillTopY);
+  ctx.moveTo(flx - camera.x - overdraw, fillTopY);
+  ctx.lineTo(blX - camera.x - overdraw, bottomY + overdraw);
+  ctx.lineTo(brX - camera.x + overdraw, bottomY + overdraw);
+  ctx.lineTo(frx - camera.x + overdraw, fillTopY);
   ctx.closePath();
   ctx.fill();
 }
@@ -147,18 +149,6 @@ function drawFlag(hole) {
   ctx.fillText(String(hole.flagHole), sx + bodyW / 2, pMid + 4);
 
   ctx.globalAlpha = 1;
-}
-
-function drawTeeMarker(hole) {
-  // Only draw the tee during active play (not during pause or transition)
-  if (state === STATE_PAUSE || state === STATE_TRANSITION) return;
-
-  const sx = hole.teeX - camera.x;
-  const sy = terrainYAt(hole.teeX);
-
-  // Tee is a thin strip sitting flush on the ground surface
-  ctx.fillStyle = TEE_COLOR;
-  ctx.fillRect(sx - TEE_WIDTH / 2, sy - 2, TEE_WIDTH, 2);
 }
 
 function drawBall() {
@@ -276,7 +266,6 @@ function draw() {
   if (curHole) {
     drawCup(curHole);
     drawFlag(curHole);
-    drawTeeMarker(curHole);
   }
 
   drawBall();

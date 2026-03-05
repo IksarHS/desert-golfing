@@ -361,10 +361,10 @@ function update() {
           prevHole.flagOpacity = Math.max(0, 1 - (t - fadeStart) / (fadeEnd - fadeStart));
         }
 
-        // Ball rises with the sand fill — use actual rim height (not average)
+        // Ball sits on top of sand fill — track the exact fill surface
         const topRim = Math.min(prevHole.cupLeftY, prevHole.cupRightY);
-        const surfaceY = topRim - BALL_RADIUS;
-        ball.y = transitionBallStartY + (surfaceY - transitionBallStartY) * prevHole.cupFillProgress;
+        const fillTopY = prevHole.cupBottomY + (topRim - prevHole.cupBottomY) * prevHole.cupFillProgress;
+        ball.y = fillTopY - BALL_RADIUS;
       }
 
       // Done — pan complete
@@ -379,10 +379,8 @@ function update() {
           flattenCup(prevHole);
         }
 
-        // Place ball at the new hole's tee, snapped to actual terrain
-        const newHole = holes[currentHole];
-        ball.x = newHole.teeX;
-        ball.y = terrainYAt(newHole.teeX) - BALL_RADIUS;
+        // Ball stays where it is (old cup = new tee) — just snap Y to flattened terrain
+        ball.y = terrainYAt(ball.x) - BALL_RADIUS;
         ball.atRest = true;
         ball.vx = 0;
         ball.vy = 0;
