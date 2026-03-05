@@ -340,12 +340,14 @@ function flattenCup(hole) {
   const leftX = hole.cupX - halfW;
   const rightX = hole.cupX + halfW;
 
+  // Sample rim heights BEFORE removing cup vertices to avoid wrong interpolation
+  const leftY = terrainYAt(leftX - 1);
+  const rightY = terrainYAt(rightX + 1);
+
   // Remove all vertices inside the cup range
   vertices = vertices.filter(v => v.x < leftX || v.x > rightX);
 
-  // Insert two flat vertices at the rim heights (matches surrounding terrain)
-  const leftY = terrainYAt(leftX - 1); // sample just outside the cup
-  const rightY = terrainYAt(rightX + 1);
+  // Insert two flat vertices at the rim heights
   let insertIdx = vertices.findIndex(v => v.x >= leftX);
   if (insertIdx === -1) insertIdx = vertices.length;
   vertices.splice(insertIdx, 0,

@@ -68,6 +68,7 @@ canvas.addEventListener('mouseup', (e) => {
   ball.vy = Math.sin(angle) * power;
   ball.atRest = false;
   ball.onGround = false;
+  slowFrames = 0;
   state = STATE_FLIGHT;
   strokes++;
   _logBall('shot');
@@ -110,6 +111,7 @@ canvas.addEventListener('touchend', (e) => {
   ball.vy = Math.sin(angle) * power;
   ball.atRest = false;
   ball.onGround = false;
+  slowFrames = 0;
   state = STATE_FLIGHT;
   strokes++;
   _logBall('shot');
@@ -249,6 +251,8 @@ function isBallWayOff() {
 }
 
 // ── Physics Update ─────────────────────────────────────────
+let slowFrames = 0;
+
 function updatePhysics() {
   if (ball.atRest) return;
 
@@ -279,12 +283,19 @@ function updatePhysics() {
       ball.vy -= (ball.vy / groundSpeed) * SURFACE_FRICTION;
     }
 
+    // Track how long the ball has been moving slowly
+    if (groundSpeed < 1.0) {
+      slowFrames++;
+    } else {
+      slowFrames = 0;
+    }
+
     const REST_SPEED = 0.05;
     if (groundSpeed < REST_SPEED) {
       const seg = findSegment(ball.x);
       const n = segmentNormal(seg);
       const slopeGravity = Math.abs(GRAVITY * n.x);
-      if (slopeGravity > SURFACE_FRICTION) {
+      if (slopeGravity > SURFACE_FRICTION && slowFrames < 60) {
         const a = vertices[seg], b = vertices[seg + 1];
         const sdx = b.x - a.x, sdy = b.y - a.y;
         const slen = Math.sqrt(sdx * sdx + sdy * sdy);
@@ -297,6 +308,7 @@ function updatePhysics() {
         ball.vx = 0;
         ball.vy = 0;
         ball.atRest = true;
+        slowFrames = 0;
         ball.y = terrainYAt(ball.x) - BALL_RADIUS;
         _logBall(isBallInCup() ? 'rest-in-cup' : 'rest-on-terrain');
       }
@@ -319,19 +331,6 @@ function update() {
         state = STATE_OOB;
         transitionTimer = 0;
         break;
-      }
-
-      if (ball.onGround && !ball.atRest) {
-        const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-        if (speed < 3.0 && isBallInCup()) {
-          ball.vx = 0;
-          ball.vy = 0;
-          ball.atRest = true;
-          _logBall('rest-in-cup');
-          state = STATE_PAUSE;
-          transitionTimer = 0;
-          break;
-        }
       }
 
       if (ball.atRest) {
