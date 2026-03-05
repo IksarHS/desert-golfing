@@ -6,9 +6,9 @@ Update your section when starting/finishing tasks. Check other agents' status be
 
 ## Level Design Agent
 **Owner:** `src/level-design.js`
-**Status:** Complete
-**Current task:** —
-**Last completed:** Data-driven terrain overhaul v2: logarithmic difficulty curve (2000 holes, not 200), 4 new archetypes (gradual_slope, subtle_rise, shelf, stepped_descent), micro-noise terrain subdivision, 75/15/10 elevation distribution matching real data (74% downhill), archetype weights tuned to real Desert Golfing category frequencies, anti-repetition system
+**Status:** In progress
+**Current task:** Researching real Desert Golfing terrain features to improve hole complexity and variety
+**Last completed:** Added seeded PRNG system (mulberry32) + level testing sandbox (sandbox.html) with hole jumping, seed control, archetype override, difficulty slider, filmstrip mode. Added _archetypeOverride and _difficultyOverride hooks.
 **Blocked on:** —
 
 ---
