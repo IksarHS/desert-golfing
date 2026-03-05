@@ -68,10 +68,16 @@ You are the **gatekeeper** for merges to `main`. No agent's branch should merge 
 - Improve ball log with filtering and search
 - Maintain `build.sh` for single-file distribution builds
 
-## Merging Your Own Work to Main
-When your debug.js changes are ready:
-```bash
-git add src/debug.js
-git commit -m "Description of changes"
-```
-Then ask the coordinator to merge. (You can self-approve your own debug.js changes since they don't affect gameplay.)
+## Check-in Rules (IMPORTANT)
+
+**Always commit before reporting your work is done.** Every time you finish a task or the human asks for status:
+
+1. `git add src/debug.js coordination/` — stage your files and any coordination updates
+2. `git commit -m "Short description of what changed"` — commit with a clear message
+3. Then tell the human what you did
+
+**Never leave uncommitted changes.** If you edited files, commit them. The orchestrator and QA agent can only see committed work.
+
+**Never commit files you don't own.** Only stage `src/debug.js` and files in `coordination/`. Never stage `.claude/`, `src/art.js`, `src/level-design.js`, `src/gameplay.js`, or `src/shared.js`.
+
+You can self-approve your own debug.js changes since they don't affect gameplay. Ask the orchestrator to merge to main.

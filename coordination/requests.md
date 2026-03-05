@@ -39,7 +39,7 @@ At the top of `draw()`, add `ctx.save(); ctx.translate(_cameraShakeX, _cameraSha
 **To:** Level Design
 **File:** `src/level-design.js`
 **Priority:** high
-**Status:** open
+**Status:** done
 
 **Description:**
 The V-shaped cup (wallInset = halfW - 2) creates very steep ~51° walls with only a 4px flat bottom. The ball has difficulty settling in the cup — it bounces off the steep walls instead of rolling in naturally. A nearly rectangular cup (wallInset = 3) with a wide flat bottom works much better for gameplay feel.
