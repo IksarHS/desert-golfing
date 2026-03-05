@@ -6,9 +6,9 @@ Update your section when starting/finishing tasks. Check other agents' status be
 
 ## Level Design Agent
 **Owner:** `src/level-design.js`
-**Status:** Not started
-**Current task:** —
-**Last completed:** —
+**Status:** In progress
+**Current task:** Researching real Desert Golfing terrain features to improve hole complexity and variety
+**Last completed:** Added seeded PRNG system (mulberry32) + level testing sandbox (sandbox.html) with hole jumping, seed control, archetype override, difficulty slider, filmstrip mode. Added _archetypeOverride and _difficultyOverride hooks.
 **Blocked on:** —
 
 ---
