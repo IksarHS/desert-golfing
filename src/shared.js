@@ -4,7 +4,6 @@ const SKY    = '#d5ad72';
 const GROUND = '#d68841';
 const GROUND_LIGHT = '#dea050'; // cup indent color
 const BALL_COLOR = '#ffffff';
-const TEE_COLOR = '#8a9aaa'; // blue-gray tee marker
 
 // Physics — tunable at runtime (press ~ to open settings panel)
 let GRAVITY        = 0.04;
@@ -17,8 +16,6 @@ let BOUNCE_THRESHOLD = 1.0;
 let BALL_RADIUS    = 4;
 const CUP_WIDTH      = 36;
 const CUP_DEPTH      = 20;
-const TEE_WIDTH      = 16;
-const TEE_HEIGHT     = 6;
 
 const TRANSITION_PAUSE = 60;   // frames: ball sits in cup
 const TRANSITION_PAN   = 90;   // frames: camera pans to next hole
@@ -53,7 +50,12 @@ let strokes = 0;
 
 // ── Camera ─────────────────────────────────────────────────
 // Camera is FIXED for the entire hole. Only moves during transition.
-let camera = { x: 0 };
+let camera = { x: 0, y: 0 };
+
+// ── Mode System ───────────────────────────────────────────
+// MODE is set by the mode file (e.g. modes/desert-golfing.js or modes/only-up.js)
+// before art.js, gameplay.js, and main.js load.
+let MODE = null;
 
 // ── Game State ─────────────────────────────────────────────
 const STATE_AIM       = 0;
@@ -64,8 +66,8 @@ const STATE_OOB        = 4;  // ball out of bounds, waiting to respawn
 
 let state = STATE_AIM;
 let transitionTimer = 0;
-let transitionStartCamX = 0;
-let transitionEndCamX   = 0;
+let transitionCamStart = 0;   // camera position at start of transition (axis-agnostic)
+let transitionCamEnd   = 0;   // camera position at end of transition
 let transitionBallStartY = 0; // ball's Y when it rested in cup
 let showTitle = true;
 

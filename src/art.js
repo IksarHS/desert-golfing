@@ -17,113 +17,81 @@ function resizeDisplay() {
 window.addEventListener('resize', resizeDisplay);
 resizeDisplay();
 
-// ── Drawing ────────────────────────────────────────────────
-function drawSky() {
-  ctx.fillStyle = SKY;
-  ctx.fillRect(0, 0, W, H);
-}
+// ── Shared Drawing Utilities ──────────────────────────────
+// These work on any object with the cup data interface:
+//   cupLeftX, cupRightX, cupLeftY, cupRightY, cupBottomY,
+//   cupWallInset, cupFillProgress, flagVisible, flagOpacity, flagHole/index
 
-function drawTerrain() {
-  ctx.fillStyle = GROUND;
-  ctx.beginPath();
+function drawCupFill(cupData) {
+  // Draw sand filling a cup — works in world coords (camera transform already applied)
+  if (!cupData.cupFillProgress || cupData.cupFillProgress <= 0) return;
 
-  const startX = camera.x - 50;
-  const endX   = camera.x + W + 50;
-
-  let started = false;
-  for (let i = 0; i < vertices.length; i++) {
-    const v = vertices[i];
-    if (v.x < startX - 100 && i < vertices.length - 1 && vertices[i + 1].x < startX - 100) continue;
-    if (v.x > endX + 100) {
-      const sx = v.x - camera.x;
-      const sy = v.y;
-      if (!started) { ctx.moveTo(sx, sy); started = true; }
-      else ctx.lineTo(sx, sy);
-      break;
-    }
-
-    const sx = v.x - camera.x;
-    const sy = v.y;
-    if (!started) { ctx.moveTo(sx, sy); started = true; }
-    else ctx.lineTo(sx, sy);
-  }
-
-  ctx.lineTo(endX - camera.x + 100, H + 10);
-  ctx.lineTo(startX - camera.x - 100, H + 10);
-  ctx.closePath();
-  ctx.fill();
-}
-
-function drawCup(hole) {
-  // During transition: draw terrain-colored fill rising from cup bottom
-  if (!hole.cupFillProgress || hole.cupFillProgress <= 0) return;
-
-  const leftX = hole.cupLeftX;
-  const rightX = hole.cupRightX;
-  const leftY = hole.cupLeftY;
-  const rightY = hole.cupRightY;
-  const bottomY = hole.cupBottomY;
-  const wallInset = hole.cupWallInset;
+  const leftX = cupData.cupLeftX;
+  const rightX = cupData.cupRightX;
+  const leftY = cupData.cupLeftY;
+  const rightY = cupData.cupRightY;
+  const bottomY = cupData.cupBottomY;
+  const wallInset = cupData.cupWallInset;
   const blX = leftX + wallInset;   // bottom-left x
   const brX = rightX - wallInset;  // bottom-right x
 
   // Fill level: rises from bottomY (empty) up to the higher rim (full)
-  const topRim = Math.min(leftY, rightY); // highest rim point (smallest Y)
-  const fillTopY = bottomY + (topRim - bottomY) * hole.cupFillProgress;
+  const topRim = Math.min(leftY, rightY);
+  const fillTopY = bottomY + (topRim - bottomY) * cupData.cupFillProgress;
 
-  if (fillTopY >= bottomY) return; // nothing to fill yet
+  if (fillTopY >= bottomY) return;
 
-  // Find where fillTopY intersects the left wall: (leftX,leftY) -> (blX,bottomY)
+  // Find where fillTopY intersects the left wall
   let flx;
   if (fillTopY <= leftY) {
-    flx = leftX; // fill is above left rim
+    flx = leftX;
   } else {
     const t = (bottomY - fillTopY) / (bottomY - leftY);
     flx = blX + (leftX - blX) * t;
   }
 
-  // Find where fillTopY intersects the right wall: (rightX,rightY) -> (brX,bottomY)
+  // Find where fillTopY intersects the right wall
   let frx;
   if (fillTopY <= rightY) {
-    frx = rightX; // fill is above right rim
+    frx = rightX;
   } else {
     const t = (bottomY - fillTopY) / (bottomY - rightY);
     frx = brX + (rightX - brX) * t;
   }
 
-  // Draw fill polygon matching the cup geometry — overdraw by 1px on each side
-  // to cover any sub-pixel gaps between this fill and the terrain path
+  // Draw fill polygon — overdraw by 1px to cover sub-pixel gaps
   const overdraw = 1;
   ctx.fillStyle = GROUND;
   ctx.beginPath();
-  ctx.moveTo(flx - camera.x - overdraw, fillTopY);
-  ctx.lineTo(blX - camera.x - overdraw, bottomY + overdraw);
-  ctx.lineTo(brX - camera.x + overdraw, bottomY + overdraw);
-  ctx.lineTo(frx - camera.x + overdraw, fillTopY);
+  ctx.moveTo(flx - overdraw, fillTopY);
+  ctx.lineTo(blX - overdraw, bottomY + overdraw);
+  ctx.lineTo(brX + overdraw, bottomY + overdraw);
+  ctx.lineTo(frx + overdraw, fillTopY);
   ctx.closePath();
   ctx.fill();
 }
 
-function drawFlag(hole) {
-  if (!hole.flagVisible) return;
+function drawFlag(cupData, surfaceYFn) {
+  // Draw flag pole + pennant — works in world coords
+  // surfaceYFn(x): returns terrain/platform Y at world x (for pole base)
+  if (!cupData.flagVisible) return;
 
-  const opacity = hole.flagOpacity !== undefined ? hole.flagOpacity : 1;
+  const opacity = cupData.flagOpacity !== undefined ? cupData.flagOpacity : 1;
   if (opacity <= 0) return;
 
-  // Flag pole planted just barely to the right of the cup, flush with ground
-  const poleWorldX = hole.cupX + CUP_WIDTH / 2 + 2;
-  const sx = poleWorldX - camera.x;
-  const sy = terrainYAt(poleWorldX);
+  const cupW = cupData.cupRightX - cupData.cupLeftX;
+  const poleWorldX = cupData.cupLeftX + cupW + 2;
+  const sy = surfaceYFn ? surfaceYFn(poleWorldX) : cupData.cupY;
 
   ctx.globalAlpha = opacity;
 
-  // Pole — tall enough to be clearly visible
+  // Pole
   const poleH = 55;
   ctx.strokeStyle = '#7888a0';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(sx, sy);
-  ctx.lineTo(sx, sy - poleH);
+  ctx.moveTo(poleWorldX, sy);
+  ctx.lineTo(poleWorldX, sy - poleH);
   ctx.stroke();
 
   // Pennant (pentagon — rectangle body + triangular point right)
@@ -134,36 +102,34 @@ function drawFlag(hole) {
   const pointW = 10;
   ctx.fillStyle = '#e8c840';
   ctx.beginPath();
-  ctx.moveTo(sx, pTop);
-  ctx.lineTo(sx + bodyW, pTop);
-  ctx.lineTo(sx + bodyW + pointW, pMid);
-  ctx.lineTo(sx + bodyW, pBot);
-  ctx.lineTo(sx, pBot);
+  ctx.moveTo(poleWorldX, pTop);
+  ctx.lineTo(poleWorldX + bodyW, pTop);
+  ctx.lineTo(poleWorldX + bodyW + pointW, pMid);
+  ctx.lineTo(poleWorldX + bodyW, pBot);
+  ctx.lineTo(poleWorldX, pBot);
   ctx.closePath();
   ctx.fill();
 
   // Hole number on pennant body
+  const holeNum = cupData.flagHole !== undefined ? cupData.flagHole : (cupData.index !== undefined ? cupData.index + 1 : '');
   ctx.fillStyle = '#4a3520';
   ctx.font = '10px Silkscreen, monospace';
   ctx.textAlign = 'center';
-  ctx.fillText(String(hole.flagHole), sx + bodyW / 2, pMid + 4);
+  ctx.fillText(String(holeNum), poleWorldX + bodyW / 2, pMid + 4);
 
   ctx.globalAlpha = 1;
 }
 
 function drawBall() {
-  // Don't draw ball if it's off-screen (out of bounds)
-  const sx = ball.x - camera.x;
-  const sy = ball.y;
-  if (sx < -50 || sx > W + 50 || sy < -50 || sy > H + 50) return;
-
+  // Draw ball in world coords (camera transform already applied)
   ctx.fillStyle = BALL_COLOR;
   ctx.beginPath();
-  ctx.arc(sx, sy, BALL_RADIUS, 0, Math.PI * 2);
+  ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
   ctx.fill();
 }
 
 function drawAimUI() {
+  // Draw aim indicator in screen space (no camera transform)
   if (!aiming || state !== STATE_AIM) return;
 
   const dx = aimCurrentX - aimStartX;
@@ -221,29 +187,18 @@ function drawAimUI() {
   }
 }
 
-function drawHUD() {
-  const hole = holes[currentHole];
-  if (!hole) return;
-
+function drawStrokeCounter() {
+  // Shared stroke HUD — screen space
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'center';
   ctx.font = '26px VT323, Silkscreen, monospace';
 
-  // Total strokes (from previous holes) — shown centered-left
   if (totalStrokes > 0) {
     ctx.fillText(String(totalStrokes), W / 2 - 40, 30);
   }
 
-  // Current hole strokes — shown centered-right (only when > 0)
   if (strokes > 0) {
     ctx.fillText('+' + strokes, W / 2 + 40, 30);
-  }
-
-  // Title on first hole — pixel font
-  if (showTitle && currentHole === 0) {
-    ctx.font = '32px VT323, Silkscreen, monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText('Desert\u2014Golfing', 20, 38);
   }
 }
 
@@ -252,25 +207,20 @@ function draw() {
   ctx.save();
   ctx.scale(displayScale, displayScale);
 
-  drawSky();
-  drawTerrain();
+  // Sky (screen space)
+  MODE.drawSky(ctx);
 
-  // Draw only current hole elements (+ previous during transition)
-  if (state === STATE_TRANSITION && currentHole > 0) {
-    const prevHole = holes[currentHole - 1];
-    drawCup(prevHole);
-    drawFlag(prevHole); // fading out during transition
-  }
-
-  const curHole = holes[currentHole];
-  if (curHole) {
-    drawCup(curHole);
-    drawFlag(curHole);
-  }
-
+  // World space
+  ctx.save();
+  MODE.applyCameraTransform(ctx);
+  MODE.drawWorld(ctx);
   drawBall();
+  ctx.restore();
+
+  // Screen space: aim UI + HUD
   drawAimUI();
-  drawHUD();
+  drawStrokeCounter();
+  MODE.drawHUD(ctx);
 
   ctx.restore();
 }
