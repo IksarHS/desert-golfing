@@ -25,7 +25,7 @@ cat > "$OUTPUT" << 'HTMLHEAD'
 HTMLHEAD
 
 # Concatenate JS files in load order
-for f in src/shared.js src/level-design.js src/art.js src/gameplay.js src/debug.js src/main.js; do
+for f in src/shared.js src/level-design.js src/modes/desert-golfing.js src/art.js src/gameplay.js src/debug.js src/main.js; do
   echo "// ── $(basename "$f") ──" >> "$OUTPUT"
   cat "$f" >> "$OUTPUT"
   echo "" >> "$OUTPUT"

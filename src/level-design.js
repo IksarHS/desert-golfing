@@ -40,6 +40,104 @@ jitter = function(y, amount) { return clampY(y + (random() - 0.5) * amount); };
 let _archetypeOverride = null;
 let _difficultyOverride = null;
 
+// ── Hand-Defined Holes (1-10) ──────────────────────────────
+// Override procedural generation for the first 10 holes to ensure
+// a polished, curated intro sequence. Each entry defines:
+//   teeY:    tee elevation (game units, 0=top, 540=bottom)
+//   dist:    horizontal distance from tee to cup
+//   cupY:    cup elevation
+//   verts:   terrain vertices as [{dx, y}] where dx = offset from tee
+//            (only the mid-hole shape — tee/cup ends are added automatically)
+//
+// After hole 10, procedural generation takes over.
+const HAND_DEFINED_HOLES = [
+  // Hole 1: Dead flat — tutorial putt
+  {
+    teeY: 350, dist: 400, cupY: 350,
+    verts: [
+      { dx: 200, y: 350 },
+    ]
+  },
+  // Hole 2: Gentle downhill slope
+  {
+    teeY: 320, dist: 500, cupY: 380,
+    verts: [
+      { dx: 250, y: 350 },
+    ]
+  },
+  // Hole 3: Gentle uphill
+  {
+    teeY: 380, dist: 450, cupY: 330,
+    verts: [
+      { dx: 220, y: 355 },
+    ]
+  },
+  // Hole 4: Small hill in the middle
+  {
+    teeY: 360, dist: 550, cupY: 360,
+    verts: [
+      { dx: 200, y: 360 },
+      { dx: 300, y: 310 },
+      { dx: 400, y: 360 },
+    ]
+  },
+  // Hole 5: Downhill with a kink
+  {
+    teeY: 300, dist: 600, cupY: 400,
+    verts: [
+      { dx: 200, y: 310 },
+      { dx: 400, y: 370 },
+    ]
+  },
+  // Hole 6: Small dip/valley
+  {
+    teeY: 340, dist: 500, cupY: 340,
+    verts: [
+      { dx: 150, y: 340 },
+      { dx: 280, y: 400 },
+      { dx: 380, y: 340 },
+    ]
+  },
+  // Hole 7: Step down — flat shelf then drop
+  {
+    teeY: 300, dist: 550, cupY: 400,
+    verts: [
+      { dx: 250, y: 300 },
+      { dx: 280, y: 300 },
+      { dx: 300, y: 400 },
+    ]
+  },
+  // Hole 8: Rolling hills — two bumps
+  {
+    teeY: 360, dist: 650, cupY: 370,
+    verts: [
+      { dx: 150, y: 360 },
+      { dx: 250, y: 310 },
+      { dx: 350, y: 370 },
+      { dx: 480, y: 320 },
+      { dx: 570, y: 370 },
+    ]
+  },
+  // Hole 9: Uphill with a plateau
+  {
+    teeY: 400, dist: 550, cupY: 300,
+    verts: [
+      { dx: 180, y: 380 },
+      { dx: 300, y: 320 },
+      { dx: 420, y: 310 },
+    ]
+  },
+  // Hole 10: Cliff drop — dramatic finish to the intro
+  {
+    teeY: 290, dist: 600, cupY: 420,
+    verts: [
+      { dx: 250, y: 290 },
+      { dx: 280, y: 290 },
+      { dx: 300, y: 420 },
+    ]
+  },
+];
+
 // ── Difficulty Curve ─────────────────────────────────────────
 // Logarithmic ramp matching real Desert Golfing's gradual progression.
 // Analysis of 990 real holes shows difficulty ramps over ~2000 holes:
@@ -530,6 +628,11 @@ function pickArchetype(difficulty) {
 
 // ── Main Terrain Generation ──────────────────────────────
 function generateHoleTerrain(holeIndex) {
+  // Use hand-defined hole if available
+  if (holeIndex < HAND_DEFINED_HOLES.length) {
+    return generateHandDefinedHole(holeIndex);
+  }
+
   const difficulty = getDifficulty(holeIndex);
 
   // Determine tee position
@@ -604,31 +707,84 @@ function generateHoleTerrain(holeIndex) {
   holes[holeIndex].archetype = archName;
 }
 
+function generateHandDefinedHole(holeIndex) {
+  const def = HAND_DEFINED_HOLES[holeIndex];
+  const teeY = def.teeY;
+
+  // Determine tee position
+  let teeX;
+  if (holeIndex === 0) {
+    teeX = 100;
+    // Seed initial terrain: flat run up to tee area
+    if (vertices.length === 0) {
+      vertices.push({ x: -100, y: teeY });
+      vertices.push({ x: teeX - 20, y: teeY });
+    }
+  } else {
+    teeX = holes[holeIndex - 1].cupX;
+    // If previous cup Y differs from this tee Y, the flattenCup + background
+    // vertices already handle the connection — teeY is embedded in the verts
+  }
+
+  // Convert relative dx vertices to absolute world positions
+  const startX = teeX + 40;
+  const holeVerts = def.verts.map(v => ({ x: startX + v.dx, y: v.y }));
+  // Add the cup endpoint
+  holeVerts.push({ x: teeX + def.dist, y: def.cupY });
+
+  // Append hole vertices to global array
+  for (const v of holeVerts) {
+    vertices.push(v);
+  }
+
+  const cupX = teeX + def.dist;
+
+  // Add background terrain past the cup
+  const bg1X = cupX + 120;
+  const bg1Y = clampY(def.cupY + (random() - 0.5) * 30);
+  const bg2X = bg1X + 150;
+  const bg2Y = clampY(bg1Y + (random() - 0.5) * 30);
+  vertices.push({ x: bg1X, y: bg1Y });
+  vertices.push({ x: bg2X, y: bg2Y });
+
+  // Place the cup
+  placeCup(holeIndex, cupX, teeX, teeY);
+  holes[holeIndex].archetype = 'hand_defined';
+}
+
 function placeCup(holeIndex, cupX, teeX, teeY) {
   const halfW = CUP_WIDTH / 2;
   const leftX = cupX - halfW;
   const rightX = cupX + halfW;
 
-  // Sample rim heights BEFORE modifying vertices
-  const leftY = terrainYAt(leftX);
-  const rightY = terrainYAt(rightX);
-  const cupY = (leftY + rightY) / 2; // rim height at center
+  // Sample rim heights BEFORE modifying vertices, then FLATTEN to a single Y.
+  // This ensures the cup sits on perfectly flat ground, which makes the
+  // sand-fill transition animation trivial (no asymmetric rim heights).
+  const sampledLeftY = terrainYAt(leftX);
+  const sampledRightY = terrainYAt(rightX);
+  const rimY = (sampledLeftY + sampledRightY) / 2; // flat rim height
+  const leftY = rimY;
+  const rightY = rimY;
+  const cupY = rimY;
 
-  // Remove existing vertices inside the cup range
-  vertices = vertices.filter(v => v.x < leftX || v.x > rightX);
+  // Remove existing vertices inside the cup range (+ small margin for flat approach)
+  const flatMargin = 20;
+  vertices = vertices.filter(v => v.x < leftX - flatMargin || v.x > rightX + flatMargin);
 
-  // Insert cup as rectangular notch — wide flat bottom for natural ball settling
+  // Insert flat approach vertices + cup notch
   const wallInset = 3;  // nearly vertical walls with wide flat bottom
-  const bottomY = Math.max(leftY, rightY) + CUP_DEPTH;
+  const bottomY = rimY + CUP_DEPTH;
   const cupVerts = [
-    { x: leftX,                y: leftY },      // left rim
-    { x: leftX + wallInset,    y: bottomY },     // bottom-left
-    { x: rightX - wallInset,   y: bottomY },     // bottom-right
-    { x: rightX,               y: rightY },      // right rim
+    { x: leftX - flatMargin,   y: rimY },        // flat approach left
+    { x: leftX,                y: rimY },         // left rim
+    { x: leftX + wallInset,    y: bottomY },      // bottom-left
+    { x: rightX - wallInset,   y: bottomY },      // bottom-right
+    { x: rightX,               y: rimY },         // right rim
+    { x: rightX + flatMargin,  y: rimY },         // flat approach right
   ];
 
   // Insert into vertex array maintaining x-sort order
-  let insertIdx = vertices.findIndex(v => v.x >= leftX);
+  let insertIdx = vertices.findIndex(v => v.x >= leftX - flatMargin);
   if (insertIdx === -1) insertIdx = vertices.length;
   vertices.splice(insertIdx, 0, ...cupVerts);
 
@@ -650,20 +806,21 @@ function placeCup(holeIndex, cupX, teeX, teeY) {
 }
 
 function flattenCup(hole) {
-  // Replace the cup notch vertices with flat terrain at rim height
+  // Replace the cup notch + flat approach vertices with just two flat points
   const halfW = CUP_WIDTH / 2;
+  const flatMargin = 20;
   const leftX = hole.cupX - halfW;
   const rightX = hole.cupX + halfW;
 
-  // Remove all vertices inside the cup range
-  vertices = vertices.filter(v => v.x < leftX || v.x > rightX);
+  // Remove all vertices in the cup zone (including flat approach margins)
+  vertices = vertices.filter(v => v.x < leftX - flatMargin || v.x > rightX + flatMargin);
 
-  // Insert two flat vertices at the original rim heights (stored at placement time)
-  let insertIdx = vertices.findIndex(v => v.x >= leftX);
+  // Insert two flat vertices at the rim height
+  let insertIdx = vertices.findIndex(v => v.x >= leftX - flatMargin);
   if (insertIdx === -1) insertIdx = vertices.length;
   vertices.splice(insertIdx, 0,
-    { x: leftX, y: hole.cupLeftY },
-    { x: rightX, y: hole.cupRightY }
+    { x: leftX - flatMargin, y: hole.cupLeftY },
+    { x: rightX + flatMargin, y: hole.cupRightY }
   );
 }
 

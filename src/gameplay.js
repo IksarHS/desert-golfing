@@ -1,19 +1,3 @@
-// ── Camera ─────────────────────────────────────────────────
-function setHoleCamera(hole) {
-  // Frame the hole: tee on left, flag on right, both visible
-  const margin = 120;
-  const teeScreenX = margin;  // tee sits near left edge
-  camera.x = hole.teeX - teeScreenX;
-
-  // Verify flag is on-screen; if not, shrink margins
-  const cupScreenX = hole.cupX - camera.x;
-  if (cupScreenX > W - margin) {
-    // Flag is off-screen — center between tee and cup
-    const center = (hole.teeX + hole.cupX) / 2;
-    camera.x = center - W / 2;
-  }
-}
-
 // ── Input System ──────────────────────────────────────────
 canvas.addEventListener('mousedown', (e) => {
   if (state !== STATE_AIM) return;
@@ -35,6 +19,7 @@ canvas.addEventListener('mousemove', (e) => {
 canvas.addEventListener('mouseup', (e) => {
   if (!aiming) return;
   aiming = false;
+  if (showTitle) showTitle = false;
 
   const pos = toGameCoords(e.clientX, e.clientY);
   const dx = aimStartX - pos.x;
@@ -79,6 +64,7 @@ canvas.addEventListener('touchend', (e) => {
   e.preventDefault();
   if (!aiming) return;
   aiming = false;
+  if (showTitle) showTitle = false;
 
   const dx = aimStartX - aimCurrentX;
   const dy = aimStartY - aimCurrentY;
@@ -98,130 +84,24 @@ canvas.addEventListener('touchend', (e) => {
   _logBall('shot');
 });
 
-// ── Terrain Collision ──────────────────────────────────────
-function findSegment(worldX) {
-  for (let i = 0; i < vertices.length - 1; i++) {
-    if (worldX >= vertices[i].x && worldX <= vertices[i + 1].x) {
-      return i;
-    }
-  }
-  return vertices.length - 2;
-}
-
-function segmentNormal(i) {
-  const a = vertices[i], b = vertices[i + 1];
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.sqrt(dx * dx + dy * dy);
-  return { x: dy / len, y: -dx / len };
-}
-
-function collideWithTerrain() {
-  // Circle-vs-line-segment collision for pixel-accurate contact
-  let collided = false;
-
-  for (let i = 0; i < vertices.length - 1; i++) {
-    const a = vertices[i], b = vertices[i + 1];
-
-    // Skip segments far from ball
-    if (b.x < ball.x - BALL_RADIUS * 2 && a.x < ball.x - BALL_RADIUS * 2) continue;
-    if (a.x > ball.x + BALL_RADIUS * 2 && b.x > ball.x + BALL_RADIUS * 2) break;
-
-    // Find closest point on segment AB to ball center
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const lenSq = dx * dx + dy * dy;
-    if (lenSq < 0.001) continue; // skip degenerate segments
-
-    let t = ((ball.x - a.x) * dx + (ball.y - a.y) * dy) / lenSq;
-    t = Math.max(0, Math.min(1, t));
-
-    const closestX = a.x + t * dx;
-    const closestY = a.y + t * dy;
-
-    const distX = ball.x - closestX;
-    const distY = ball.y - closestY;
-    const distSq = distX * distX + distY * distY;
-
-    if (distSq < BALL_RADIUS * BALL_RADIUS && distSq > 0.0001) {
-      const dist = Math.sqrt(distSq);
-
-      // Normal: from closest point toward ball center (pushes ball out)
-      const nx = distX / dist;
-      const ny = distY / dist;
-
-      // Only resolve if ball is on the "above" side of terrain
-      // (normal should have a component pointing toward sky, i.e. ny < 0)
-      // For walls, nx matters more — allow those too
-      const segNormX = dy / Math.sqrt(lenSq);
-      const segNormY = -dx / Math.sqrt(lenSq);
-      // Ensure segment normal points upward (into sky)
-      const upNx = segNormY < 0 ? segNormX : -segNormX;
-      const upNy = segNormY < 0 ? segNormY : -segNormY;
-      // Ball should be on the "above" side: dot(ball-a, upNorm) > -BALL_RADIUS
-      const sideCheck = (ball.x - a.x) * upNx + (ball.y - a.y) * upNy;
-      if (sideCheck < -BALL_RADIUS * 2) continue; // ball is deep below, skip
-
-      // Push ball out of terrain
-      const overlap = BALL_RADIUS - dist;
-      ball.x += nx * overlap;
-      ball.y += ny * overlap;
-
-      // Velocity response
-      const dot = ball.vx * nx + ball.vy * ny;
-      if (dot < 0) {
-        const isGround = Math.abs(ny) > Math.abs(nx);
-        if (isGround && -dot < BOUNCE_THRESHOLD) {
-          // Small impact on ground: absorb (sand feel)
-          ball.vx -= dot * nx;
-          ball.vy -= dot * ny;
-        } else {
-          // Wall or large impact: bounce with restitution
-          ball.vx -= (1 + RESTITUTION) * dot * nx;
-          ball.vy -= (1 + RESTITUTION) * dot * ny;
-        }
-      }
-
-      collided = true;
-    }
-  }
-
-  ball.onGround = collided;
-  return collided;
-}
-
-// ── Check if ball is resting inside the cup ─────────────────
-function isBallInCup() {
-  const hole = holes[currentHole];
-  if (!hole || hole.cupFilled) return false;
-
-  const inCupX = Math.abs(ball.x - hole.cupX) < CUP_WIDTH / 2;
-  const belowRim = ball.y > hole.cupY;  // ball center is below the rim surface
-  return inCupX && belowRim;
-}
-
-// ── Out of Bounds Check ────────────────────────────────────
-function isBallOffScreen() {
-  const sx = ball.x - camera.x;
-  const sy = ball.y;
-  const margin = BALL_RADIUS + 10;
-  return sx < -margin || sx > W + margin || sy < -margin || sy > H + margin;
-}
-
 // ── Physics Update ─────────────────────────────────────────
 function updatePhysics() {
   if (ball.atRest) return;
 
-  ball.vy += GRAVITY;
-  ball.x += ball.vx;
-  ball.y += ball.vy;
-  _logBall('physics');
+  // 2 substeps for thin-surface safety
+  const substeps = 2;
+  for (let s = 0; s < substeps; s++) {
+    ball.vy += GRAVITY / substeps;
+    ball.x += ball.vx / substeps;
+    ball.y += ball.vy / substeps;
+    if (s === 0) _logBall('physics');
 
-  collideWithTerrain();
-  // Log if collision changed position
+    MODE.collide();
+    if (ball.onGround && s === 0) _logBall('collision');
+  }
+
+  // Friction applied once per frame (outside substeps)
   if (ball.onGround) {
-    _logBall('collision');
-
     // Proportional friction (gentle drag — handles high-speed deceleration)
     ball.vx *= ROLLING_FRICTION;
     ball.vy *= ROLLING_FRICTION;
@@ -240,28 +120,18 @@ function updatePhysics() {
       ball.slowFrames = 0;
     }
 
-    // Rest check — use threshold higher than SURFACE_FRICTION to catch
-    // micro-bounce loops where gravity+collision keep speed at ~0.006
+    // Rest check
     const REST_SPEED = 0.05;
     const forceRest = ball.slowFrames > 120; // ~2 seconds of slow rolling -> force stop
     if (speed < REST_SPEED || forceRest) {
-      // Check if slope is too steep to rest (static friction check)
-      const seg = findSegment(ball.x);
-      const n = segmentNormal(seg);
-      const slopeGravity = Math.abs(GRAVITY * n.x); // gravity component along surface
-      if (slopeGravity > SURFACE_FRICTION && !forceRest) {
-        // Steep slope — let gravity + friction handle it naturally.
-        // Don't hard-reset speed (that causes infinite oscillation).
-        // Just skip rest — ball will keep rolling until it finds flat ground
-        // or the slow-frames failsafe kicks in.
-      } else {
-        // Gentle enough slope or failsafe triggered — ball comes to rest
+      // Let mode decide if rest is allowed (e.g. slope check)
+      if (MODE.canRest ? MODE.canRest(forceRest) : true) {
         ball.vx = 0;
         ball.vy = 0;
         ball.atRest = true;
         ball.slowFrames = 0;
-        ball.y = terrainYAt(ball.x) - BALL_RADIUS;
-        _logBall(isBallInCup() ? 'rest-in-cup' : 'rest-on-terrain');
+        if (MODE.onRest) MODE.onRest();
+        _logBall('rest');
       }
     }
   }
@@ -276,8 +146,8 @@ function update() {
     case STATE_FLIGHT:
       updatePhysics();
 
-      // Check out of bounds (ball off screen)
-      if (isBallOffScreen()) {
+      // Check out of bounds
+      if (MODE.isOOB()) {
         state = STATE_OOB;
         transitionTimer = 0;
         break;
@@ -285,31 +155,31 @@ function update() {
 
       // Ball came to rest naturally via physics
       if (ball.atRest) {
-        if (isBallInCup()) {
+        const goal = MODE.isGoalReached();
+        if (goal) {
+          MODE.onGoalReached(goal);
           state = STATE_PAUSE;
           transitionTimer = 0;
-        } else if (isBallOffScreen()) {
+        } else if (MODE.isOOB()) {
           state = STATE_OOB;
           transitionTimer = 0;
         } else {
           state = STATE_AIM;
         }
       }
+
+      if (MODE.updateCamera) MODE.updateCamera();
       break;
 
     case STATE_OOB:
-      // Ball went off screen — wait then respawn at tee
+      // Ball went off screen — wait then respawn
       transitionTimer++;
       if (transitionTimer >= OOB_PAUSE) {
-        const hole = holes[currentHole];
-        ball.x = hole.teeX;
-        ball.y = terrainYAt(hole.teeX) - BALL_RADIUS;
-        ball.vx = 0;
-        ball.vy = 0;
-        ball.atRest = true;
+        MODE.onOOB();
         state = STATE_AIM;
         _logBall('oob-respawn');
       }
+      if (MODE.updateCamera) MODE.updateCamera();
       break;
 
     case STATE_PAUSE:
@@ -317,19 +187,7 @@ function update() {
       transitionTimer++;
       if (transitionTimer >= TRANSITION_PAUSE) {
         totalStrokes += strokes;
-        transitionStartCamX = camera.x;
-        transitionBallStartY = ball.y; // save ball Y for rise animation
-
-        currentHole++;
-
-        // Use setHoleCamera to compute proper framing for new hole
-        const newHole = holes[currentHole];
-        const savedCamX = camera.x;
-        setHoleCamera(newHole);
-        transitionEndCamX = camera.x;
-        camera.x = savedCamX; // restore — we'll animate to target
-
-        if (currentHole === 1) showTitle = false;
+        MODE.onTransitionStart();
 
         transitionTimer = 0;
         strokes = 0;
@@ -344,56 +202,40 @@ function update() {
         ? 2 * t * t
         : 1 - Math.pow(-2 * t + 2, 2) / 2;
 
-      // Camera pan
-      camera.x = transitionStartCamX + (transitionEndCamX - transitionStartCamX) * ease;
+      // Camera pan (axis-agnostic)
+      MODE.setCameraPos(transitionCamStart + (transitionCamEnd - transitionCamStart) * ease);
 
-      // Gradual cup fill during pan (starts at 30%, completes at 90%)
-      const prevHole = holes[currentHole - 1];
-      if (prevHole) {
+      // Cup fill + flag fade during pan (shared timing, mode provides cup data)
+      const cupData = MODE.getTransitionCupData ? MODE.getTransitionCupData() : null;
+      if (cupData) {
         const fillStart = 0.3, fillEnd = 0.9;
         if (t >= fillStart) {
-          prevHole.cupFillProgress = Math.min(1, (t - fillStart) / (fillEnd - fillStart));
+          cupData.cupFillProgress = Math.min(1, (t - fillStart) / (fillEnd - fillStart));
         }
 
-        // Flag fades during pan (starts at 30%, gone by 70%)
         const fadeStart = 0.3, fadeEnd = 0.7;
         if (t >= fadeStart) {
-          prevHole.flagOpacity = Math.max(0, 1 - (t - fadeStart) / (fadeEnd - fadeStart));
+          cupData.flagOpacity = Math.max(0, 1 - (t - fadeStart) / (fadeEnd - fadeStart));
         }
 
-        // Ball rises with the sand fill — use actual rim height (not average)
-        const topRim = Math.min(prevHole.cupLeftY, prevHole.cupRightY);
-        const surfaceY = topRim - BALL_RADIUS;
-        ball.y = transitionBallStartY + (surfaceY - transitionBallStartY) * prevHole.cupFillProgress;
+        // Ball rises with sand fill
+        const topRim = Math.min(cupData.cupLeftY, cupData.cupRightY);
+        const fillTopY = cupData.cupBottomY + (topRim - cupData.cupBottomY) * cupData.cupFillProgress;
+        ball.y = fillTopY - BALL_RADIUS;
       }
+
+      if (MODE.onTransitionUpdate) MODE.onTransitionUpdate(ease, t);
 
       // Done — pan complete
       if (transitionTimer >= TRANSITION_PAN) {
-        if (prevHole) {
-          prevHole.cupFilled = true;
-          prevHole.cupFillProgress = 1;
-          prevHole.flagVisible = false;
-          prevHole.flagOpacity = 0;
-
-          // Flatten the cup: replace notch vertices with flat terrain at rim height
-          flattenCup(prevHole);
-        }
-
-        // Place ball at the new hole's tee, snapped to actual terrain
-        const newHole = holes[currentHole];
-        ball.x = newHole.teeX;
-        ball.y = terrainYAt(newHole.teeX) - BALL_RADIUS;
+        MODE.onTransitionEnd();
         ball.atRest = true;
         ball.vx = 0;
         ball.vy = 0;
         state = STATE_AIM;
         _logBall('transition-end-tee');
-
-        ensureHolesAhead(currentHole + 2);
       }
       break;
     }
   }
-
-  // Camera is FIXED during play — no updateCamera needed
 }

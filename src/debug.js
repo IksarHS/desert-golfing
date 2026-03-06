@@ -16,7 +16,7 @@ _logBall = function(reason) {
     vy: +ball.vy.toFixed(3),
     rest: ball.atRest,
     ground: ball.onGround,
-    state: ['AIM','FLIGHT','ROLLING','PAUSE','TRANSITION','OOB'][state]
+    state: ['AIM','FLIGHT','PAUSE','TRANSITION','OOB'][state]
   });
   if (_ballLog.length > _BALL_LOG_MAX) _ballLog.splice(0, _ballLog.length - _BALL_LOG_MAX);
 };
