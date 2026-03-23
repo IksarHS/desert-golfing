@@ -7,7 +7,11 @@ function gameLoop() {
 }
 
 // ── Init ───────────────────────────────────────────────────
-function init() {
+async function init() {
+  // Preload course data from server JSON before game init
+  if (typeof preloadCourseData === 'function') {
+    await preloadCourseData();
+  }
   MODE.init();
   gameLoop();
 }

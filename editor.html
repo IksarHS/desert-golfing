@@ -675,6 +675,10 @@ function switchCourse(worldId, courseId) {
 }
 
 function loadCourseData() {
+  // _applyCourseData (called by MODE.init) already loaded course data
+  // including objects from the server JSON file. This function just
+  // returns the metadata so the editor can set up hole count, custom indices, etc.
+  // Try localStorage for metadata (kept in sync by save)
   try {
     const raw = localStorage.getItem(courseStorageKey());
     if (raw) return JSON.parse(raw);
@@ -720,11 +724,14 @@ function updateMaterialPicker() {
 }
 
 // ── Editor Init ───────────────────────────────────────────
-function editorInit() {
+async function editorInit() {
   // Load editor-created courses before anything reads WORLDS
   loadCustomCourses();
 
-  // Init the real game (sets currentWorld/currentCourse)
+  // Preload course data from server JSON, then init the game
+  if (typeof preloadCourseData === 'function') {
+    await preloadCourseData();
+  }
   MODE.init();
 
   // Patch camera transform for editor zoom & pan
@@ -2418,6 +2425,7 @@ function drawEditorObjects() {
   for (let i = range.start; i <= range.end; i++) {
     if (cupVerts.includes(i)) continue; // cup vertices hidden — use cup marker instead
     const v = vertices[i];
+    if (!v) continue;
     const isSelected = i === ed.selectedVert;
     const isHover = i === ed.hoverVert;
 
@@ -2612,26 +2620,47 @@ function serializeAllCustomHoles() {
 
 function saveCustomHoles() {
   const holeData = serializeAllCustomHoles();
-  // Save to course-scoped key (includes metadata)
-  const courseData = {
-    holeCount: editorHoleCount,
-    holes: holeData,
-    courseName: document.getElementById('course-name')?.value || '',
-  };
-  localStorage.setItem(courseStorageKey(), JSON.stringify(courseData));
-  // Also sync to the legacy key so level-design.js can read it
-  localStorage.setItem('desert-golfing-custom-holes', JSON.stringify(holeData));
-  // Save active world/course so the game loads the same one
   const wId = document.getElementById('world-picker')?.value || 'desert-planet';
   const cId = document.getElementById('course-picker')?.value || 'barren-flats';
+
+  // Build course data object
+  const courseData = {
+    worldId: wId,
+    courseId: cId,
+    holeCount: editorHoleCount,
+    courseName: document.getElementById('course-name')?.value || '',
+    holes: holeData,
+    objects: objects.filter(o => customHoleIndices.has(o.holeIndex)).map(o => ({ verts: o.verts, mat: o.mat, sprite: o.sprite, rotation: o.rotation, holeIndex: o.holeIndex })),
+  };
+
+  // Save to server (source of truth — file on disk, committable to git)
+  const filename = `data/courses/${wId}--${cId}.json`;
+  fetch('/api/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file: filename, data: courseData }),
+  }).then(r => r.json()).then(result => {
+    if (result.ok) {
+      console.log(`Saved to ${result.path}`);
+    } else {
+      console.error('Server save failed:', result.error);
+    }
+  }).catch(err => {
+    console.error('Server save failed (is server.js running?):', err.message);
+  });
+
+  // Also save to localStorage as a fast cache
+  localStorage.setItem(courseStorageKey(), JSON.stringify(courseData));
+  localStorage.setItem('desert-golfing-custom-holes', JSON.stringify(holeData));
   localStorage.setItem('dg-active-course', JSON.stringify({ worldId: wId, courseId: cId }));
   invalidateCustomHolesCache();
+
   // Visual feedback
   const btn = document.getElementById('btn-save');
   btn.textContent = 'Saved!';
   btn.style.background = '#4a4';
   setTimeout(() => { btn.textContent = 'Save'; btn.style.background = ''; }, 1200);
-  console.log('Saved', Object.keys(holeData).length, 'custom holes to', courseStorageKey());
+  console.log('Saved', Object.keys(holeData).length, 'custom holes');
 }
 
 function clearCustomHoles() {
