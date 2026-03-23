@@ -21,7 +21,7 @@ async function preloadCourseData() {
     }
   } catch (e) {}
 
-  const filename = `/data/courses/${worldId}--${courseId}.json`;
+  const filename = `data/courses/${worldId}--${courseId}.json`;
   try {
     const resp = await fetch(filename);
     if (resp.ok) {
