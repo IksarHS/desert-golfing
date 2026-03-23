@@ -15,6 +15,25 @@ Press `` ` `` (backtick) to cycle debug panels: off -> physics settings -> ball 
 
 Do not ask for confirmation before running commands, editing files, or making git operations (except force-push to main). CLI agents should be launched with `--dangerously-skip-permissions`.
 
+## Safety Rules
+
+These rules exist because we lost days of work to preventable mistakes. Follow them strictly.
+
+### Never delete files without asking
+- **Always ask the user before deleting any file**, even if it seems unused.
+- Before deleting, **grep the codebase for references** (imports, script tags, function calls) and warn the user if anything depends on it.
+- If the file is **untracked** (never been committed to git), explicitly warn: "This file has never been committed — deleting it is permanent and unrecoverable."
+
+### Commit and push regularly
+- Work that only exists as uncommitted changes can be lost instantly. **Commit early and often.**
+- Always **push to GitHub** after committing. Local-only commits are still vulnerable. Pushing to a non-main branch (like `level-design`) does not affect main or GitHub Pages.
+- At the end of a working session, suggest committing and pushing any uncommitted work.
+- Before starting large refactors or multi-file edits, check `git status` — if there's significant uncommitted work, **commit it first** as a safety checkpoint.
+
+### Be careful with file edits
+- Before editing any file, consider: does this file have uncommitted changes from a previous session? Run `git diff <file>` if unsure.
+- Never overwrite a file from scratch when you only need targeted edits. Use the Edit tool for surgical changes, not Write for full rewrites.
+
 ## Screenshots
 
 The user shares screenshots by saving them to `screenshots/` in the project root. When they say "check screenshots" or "look at my screenshot", read the latest file in that directory:
@@ -44,7 +63,7 @@ Single-page browser game using `<script>` tags (not ES modules). All files share
 ### Load Order (critical!)
 
 ```
-shared.js → level-design.js → art.js → gameplay.js → debug.js → main.js
+shared.js → worlds/desert-planet.js → level-design.js → modes/desert-golfing.js → art.js → gameplay.js → debug.js → main.js
 ```
 
 Each file depends on all files loaded before it. `debug.js` patches `draw()` from `art.js`. `main.js` calls `init()` which uses functions from all other files.
