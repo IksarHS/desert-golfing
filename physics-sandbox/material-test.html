@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Material Test — Desert Golfing (Custom Physics)</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=VT323&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #d5ad72; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; cursor: crosshair; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script src="src/shared.js"></script>
+<script src="src/worlds/desert-planet.js"></script>
+<script src="src/level-design.js"></script>
+<script src="src/modes/desert-golfing.js"></script>
+<script src="src/art.js"></script>
+<script src="src/gameplay.js"></script>
+<script src="src/debug.js"></script>
+<script>
+// ── Swap hole 1 with material test hole ─────────────────
+HAND_DEFINED_HOLES[0] = {
+  teeY: 350, dist: 900, cupY: 350,
+  verts: [
+    { dx: 75, y: 350, mat: 'sand' },
+    { dx: 150, y: 350, mat: 'sand' },
+    { dx: 225, y: 350, mat: 'grass' },
+    { dx: 300, y: 350, mat: 'grass' },
+    { dx: 375, y: 350, mat: 'ice' },
+    { dx: 450, y: 350, mat: 'ice' },
+    { dx: 500, y: 342, mat: 'rock' },
+    { dx: 525, y: 335, mat: 'rock' },
+    { dx: 550, y: 342, mat: 'rock' },
+    { dx: 600, y: 350, mat: 'rock' },
+    { dx: 675, y: 350, mat: 'mud' },
+    { dx: 750, y: 350, mat: 'mud' },
+    { dx: 825, y: 350, mat: 'sand' },
+  ]
+};
+
+// ── Zone labels ─────────────────────────────────────────
+const _MAT_ZONES = [
+  { name: 'SAND',  color: '#d68841', startDx: 0,    endDx: 150 },
+  { name: 'GRASS', color: '#5a8f3c', startDx: 150,  endDx: 300 },
+  { name: 'ICE',   color: '#8bb8d4', startDx: 300,  endDx: 450 },
+  { name: 'ROCK',  color: '#8a8278', startDx: 450,  endDx: 600 },
+  { name: 'MUD',   color: '#6b4c2a', startDx: 600,  endDx: 750 },
+];
+
+let _testHoleTeeX = 0;
+
+// ── Patch init to capture tee position ──────────────────
+const _origInit = MODE.init;
+MODE.init = function() {
+  if (_origInit) _origInit();
+  _testHoleTeeX = holes[0] ? holes[0].teeX : 0;
+};
+
+// ── Patch HUD to draw labels + indicator ────────────────
+const _origDrawHUD = MODE.drawHUD;
+MODE.drawHUD = function() {
+  if (_origDrawHUD) _origDrawHUD();
+
+  // Physics indicator
+  ctx.fillStyle = '#ff8844';
+  ctx.font = '14px VT323, Silkscreen, monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('CUSTOM PHYSICS', 20, H - 16);
+
+  // Zone labels on hole 1
+  if (currentHole === 0 && _testHoleTeeX) {
+    ctx.font = '16px VT323, Silkscreen, monospace';
+    ctx.textAlign = 'center';
+    for (const zone of _MAT_ZONES) {
+      const worldMidX = _testHoleTeeX + (zone.startDx + zone.endDx) / 2;
+      const screenX = worldMidX - camera.x;
+      if (screenX < -100 || screenX > W + 100) continue;
+      ctx.fillStyle = zone.color;
+      ctx.fillText(zone.name, screenX, 350 - 30);
+    }
+  }
+};
+</script>
+<script src="src/main.js"></script>
+</body>
+</html>

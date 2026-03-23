@@ -493,7 +493,7 @@ MODE = {
   drawHUD() {
     // Cups reached (left side)
     ctx.fillStyle = '#ffffff';
-    ctx.font = '18px VT323, Silkscreen, monospace';
+    ctx.font = "18px 'Departure Mono', monospace";
     ctx.textAlign = 'left';
     ctx.fillText(cupsReached + '/' + NUM_PLATFORMS, 12, 28);
 
@@ -528,18 +528,18 @@ MODE = {
 
     // Title
     if (showTitle) {
-      ctx.font = '32px VT323, Silkscreen, monospace';
+      ctx.font = "32px 'Departure Mono', monospace";
       ctx.textAlign = 'center';
       ctx.fillStyle = '#ffffff';
       ctx.fillText('Only Up', W / 2, H / 2 - 60);
-      ctx.font = '16px VT323, Silkscreen, monospace';
+      ctx.font = "16px 'Departure Mono', monospace";
       ctx.fillStyle = 'rgba(255,255,255,0.6)';
       ctx.fillText('drag to aim \u2022 R to respawn', W / 2, H / 2 - 35);
     }
 
     // Respawn indicator
     if (state === STATE_OOB) {
-      ctx.font = '20px VT323, Silkscreen, monospace';
+      ctx.font = "20px 'Departure Mono', monospace";
       ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(255,255,255,0.6)';
       ctx.fillText('respawning...', W / 2, H / 2);

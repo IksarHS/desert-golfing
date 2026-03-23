@@ -35,6 +35,7 @@ canvas.addEventListener('mouseup', (e) => {
   ball.atRest = false;
   ball.onGround = false;
   ball.slowFrames = 0;
+  ball.spinRate = 0;  // No forced spin on launch — ground contact drives rotation
   state = STATE_FLIGHT;
   strokes++;
   _logBall('shot');
@@ -79,6 +80,7 @@ canvas.addEventListener('touchend', (e) => {
   ball.atRest = false;
   ball.onGround = false;
   ball.slowFrames = 0;
+  ball.spinRate = 0;  // No forced spin on launch — ground contact drives rotation
   state = STATE_FLIGHT;
   strokes++;
   _logBall('shot');
@@ -102,16 +104,25 @@ function updatePhysics() {
 
   // Friction applied once per frame (outside substeps)
   if (ball.onGround) {
+    // Get material at ball position for material-specific physics
+    const matName = (ball.lastCollidedMat) || getMaterialAt(ball.x);
+    const mat = MATERIALS[matName] || MATERIALS[DEFAULT_MAT];
+
     // Proportional friction (gentle drag — handles high-speed deceleration)
-    ball.vx *= ROLLING_FRICTION;
-    ball.vy *= ROLLING_FRICTION;
+    ball.vx *= mat.rollingFriction;
+    ball.vy *= mat.rollingFriction;
 
     // Constant surface friction (smooth natural stop at low speed)
     const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-    if (speed > SURFACE_FRICTION) {
-      ball.vx -= (ball.vx / speed) * SURFACE_FRICTION;
-      ball.vy -= (ball.vy / speed) * SURFACE_FRICTION;
+    if (speed > mat.surfaceFriction) {
+      ball.vx -= (ball.vx / speed) * mat.surfaceFriction;
+      ball.vy -= (ball.vy / speed) * mat.surfaceFriction;
     }
+
+    // Spin: on ground, rotate proportional to horizontal speed.
+    // On bounce/liftoff, carry that spin into the air.
+    ball.spinRate = ball.vx / BALL_RADIUS;
+    ball.rotation += ball.spinRate;
 
     // Slow-roll failsafe: track how long ball has been rolling slowly on ground
     if (speed < 0.5) {
@@ -134,6 +145,9 @@ function updatePhysics() {
         _logBall('rest');
       }
     }
+  } else {
+    // In the air: maintain spin from last ground contact
+    ball.rotation += ball.spinRate || 0;
   }
 }
 
@@ -232,7 +246,10 @@ function update() {
         ball.atRest = true;
         ball.vx = 0;
         ball.vy = 0;
-        state = STATE_AIM;
+        // Don't overwrite STATE_COMPLETE if onTransitionEnd set it
+        if (state !== STATE_COMPLETE) {
+          state = STATE_AIM;
+        }
         _logBall('transition-end-tee');
       }
       break;

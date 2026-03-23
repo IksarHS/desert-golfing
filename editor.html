@@ -1,0 +1,2856 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Desert Golfing — Editor</title>
+<style>
+  @font-face {
+    font-family: 'Departure Mono';
+    src: url('assets/fonts/DepartureMono-Regular.woff2') format('woff2'),
+         url('assets/fonts/DepartureMono-Regular.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
+</style>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #d5ad72; }
+  canvas { display: block; cursor: crosshair; }
+
+  /* ── Editor chrome — one connected L-shaped frame ── */
+  #editor-chrome {
+    position: fixed; top: 0; left: 0; z-index: 10;
+    color: #eee; font: 13px 'Departure Mono', monospace;
+    pointer-events: none;
+  }
+
+  /* Top bar row */
+  #top-bar {
+    display: flex; align-items: center; padding: 4px 8px; gap: 4px;
+    width: 100vw;
+    background: rgba(30,25,20,0.7); backdrop-filter: blur(4px);
+    pointer-events: auto;
+  }
+
+  /* Bottom section: hole list sits below the top bar, flush with course group */
+  #hole-nav {
+    display: flex; flex-direction: column;
+    padding: 2px 0 4px;
+    background: rgba(30,25,20,0.7); backdrop-filter: blur(4px);
+    border-radius: 0 0 8px 0;
+    pointer-events: auto;
+  }
+  #hole-list {
+    display: flex; flex-direction: column;
+  }
+  .hole-item {
+    padding: 3px 10px; cursor: pointer; font-size: 12px;
+    display: flex; justify-content: space-between; align-items: center;
+    border-left: 3px solid transparent;
+  }
+  .hole-item:hover { background: rgba(255,255,255,0.1); }
+  .hole-item.active { border-left-color: #e8a030; background: rgba(232,160,48,0.2); }
+  .hole-item .type { font-size: 9px; color: #777; }
+  .hole-item.custom .type { color: #e8a030; }
+  .hole-item.active.custom .type { color: #fff; }
+
+  .tb-group {
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 8px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 4px;
+  }
+  .tb-group + .tb-group { margin-left: 2px; }
+  .tb-label { color: #e8a030; font-size: 9px; letter-spacing: 0.5px; margin-right: 2px; }
+  .tb-sep { width: 1px; height: 20px; background: rgba(255,255,255,0.1); margin: 0 2px; }
+
+  .ed-btn {
+    background: rgba(255,255,255,0.08); color: #ccc; border: 1px solid rgba(255,255,255,0.12);
+    padding: 4px 8px; border-radius: 3px;
+    font: 11px 'Departure Mono', monospace; cursor: pointer; text-align: center;
+    white-space: nowrap; transition: background 0.1s;
+  }
+  .ed-btn:hover { background: rgba(255,255,255,0.16); color: #fff; }
+  .ed-btn.active { background: #e8a030; color: #222; border-color: #e8a030; }
+  .ed-btn.danger { background: rgba(180,50,50,0.5); border-color: rgba(200,70,70,0.5); }
+  .ed-btn.danger:hover { background: rgba(200,70,70,0.7); }
+  .ed-btn.sm { padding: 2px 6px; font-size: 10px; }
+
+  /* Edit/Play mode toggle — prominent segmented pill */
+  .mode-toggle {
+    display: flex; border-radius: 5px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.15);
+    margin: 0 4px;
+  }
+  .mode-toggle .ed-btn {
+    border: none; border-radius: 0; padding: 6px 16px;
+    font-size: 13px; letter-spacing: 0.5px;
+    background: rgba(255,255,255,0.06); color: #888;
+  }
+  .mode-toggle .ed-btn:hover { background: rgba(255,255,255,0.12); color: #ccc; }
+  .mode-toggle .ed-btn.active {
+    background: #e8a030; color: #1a1510; font-weight: bold;
+    box-shadow: 0 0 8px rgba(232,160,48,0.3);
+  }
+  .mode-toggle .ed-btn + .ed-btn { border-left: 1px solid rgba(255,255,255,0.1); }
+
+  .ed-select {
+    background: rgba(255,255,255,0.08); color: #ddd; border: 1px solid rgba(255,255,255,0.12);
+    padding: 3px 4px; border-radius: 3px;
+    font: 10px 'Departure Mono', monospace;
+  }
+  .ed-input {
+    background: rgba(255,255,255,0.06); color: #ddd; border: 1px solid rgba(255,255,255,0.1);
+    padding: 3px 6px; border-radius: 3px;
+    font: 10px 'Departure Mono', monospace;
+  }
+  .ed-input:focus, .ed-select:focus { outline: none; border-color: #e8a030; }
+
+  #preset-bar {
+    display: none; align-items: center; gap: 2px;
+  }
+  #preset-bar.visible { display: flex; }
+  #preset-bar .preset-name {
+    font-size: 9px; color: #ccc; min-width: 50px; text-align: center;
+  }
+
+  #props-group { display: none; }
+  #props-group.visible { display: flex; }
+
+  #asset-picker optgroup { font-style: normal; font-weight: bold; color: #e8a030; background: #333; }
+  #asset-picker option { color: #ddd; background: #444; padding: 2px 8px; }
+
+  #mode-badge {
+    position: fixed; top: 38px; right: 10px;
+    font: 11px 'Departure Mono', monospace; color: #e8a030;
+    z-index: 10; pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<!-- One connected L-shaped editor chrome -->
+<div id="editor-chrome">
+  <!-- Top bar row -->
+  <div id="top-bar">
+    <!-- Course: selection + name + hole count — one cohesive section -->
+    <div class="tb-group">
+      <span class="tb-label">COURSE</span>
+      <select class="ed-select" id="course-picker" onchange="onCoursePick()" style="min-width:80px"></select>
+      <button class="ed-btn sm" onclick="createNewCourse()" title="New course">+</button>
+      <button class="ed-btn sm" onclick="deleteCourse()" title="Delete course" style="color:#e55">✕</button>
+      <div class="tb-sep"></div>
+      <input class="ed-input" id="course-name" type="text" value="" style="width:90px" onchange="onMetadataChange()" title="Display name" />
+      <div class="tb-sep"></div>
+      <button class="ed-btn sm" onclick="adjustHoleCount(-1)">◀</button>
+      <span id="hole-count-label" style="font-size:10px; color:#999; min-width:40px; text-align:center">10</span>
+      <button class="ed-btn sm" onclick="adjustHoleCount(1)">▶</button>
+    </div>
+
+    <!-- World -->
+    <div class="tb-group">
+      <span class="tb-label">WORLD</span>
+      <select class="ed-select" id="world-picker" onchange="onWorldPick()" style="min-width:90px"></select>
+    </div>
+
+    <!-- Mode toggle — primary interaction -->
+    <div class="mode-toggle">
+      <button class="ed-btn active" id="btn-edit" onclick="switchMode('edit')">Edit</button>
+      <button class="ed-btn" id="btn-play" onclick="switchMode('play')">Play</button>
+    </div>
+
+    <!-- Hole type + preset -->
+    <div class="tb-group">
+      <span class="tb-label">HOLE</span>
+      <button class="ed-btn" id="btn-toggle-type" onclick="toggleHoleType()"></button>
+      <div id="preset-bar">
+        <button class="ed-btn sm" onclick="cyclePreset(-1)">◀</button>
+        <span class="preset-name" id="preset-name">Flat</span>
+        <button class="ed-btn sm" onclick="cyclePreset(1)">▶</button>
+      </div>
+    </div>
+
+    <!-- Add objects -->
+    <div class="tb-group">
+      <span class="tb-label">ADD</span>
+      <button class="ed-btn" onclick="addObject('square')">Sq</button>
+      <button class="ed-btn" onclick="addObject('rect')">Rect</button>
+      <button class="ed-btn" onclick="addObject('tri')">Tri</button>
+      <button class="ed-btn" onclick="addObject('circle')">Cir</button>
+      <div class="tb-sep"></div>
+      <select class="ed-select" id="asset-picker" style="min-width:80px"></select>
+      <button class="ed-btn" onclick="placeSelectedAsset()">Place</button>
+    </div>
+
+    <!-- Tools + selection props -->
+    <div class="tb-group">
+      <button class="ed-btn" id="btn-knife" onclick="toggleKnifeTool()">Knife</button>
+      <button class="ed-btn" onclick="editorUndo()">Undo</button>
+    </div>
+    <div class="tb-group" id="props-group">
+      <span class="tb-label">MAT</span>
+      <select class="ed-select" id="mat-picker" onchange="onMaterialChange()">
+        <option value="sand">Sand</option>
+        <option value="grass">Grass</option>
+        <option value="ice">Ice</option>
+        <option value="rock">Rock</option>
+        <option value="mud">Mud</option>
+      </select>
+      <button class="ed-btn danger" id="btn-delete" onclick="deleteSelected()">Del</button>
+    </div>
+
+    <!-- File ops — pushed right -->
+    <div class="tb-group" style="margin-left:auto">
+      <button class="ed-btn" onclick="resetBallToTee()">Reset</button>
+      <button class="ed-btn" id="btn-save" onclick="saveCustomHoles()">Save</button>
+      <button class="ed-btn danger" id="btn-clear" onclick="clearCustomHoles()">Clear</button>
+    </div>
+  </div>
+  <!-- Hole list below top bar -->
+  <div id="hole-nav">
+    <div id="hole-list" style="overflow-y:auto; max-height:calc(100vh - 60px)"></div>
+  </div>
+</div>
+
+<div id="mode-badge"></div>
+
+<!-- Load the REAL game scripts (same repo, same branch) -->
+<script src="src/shared.js"></script>
+<script src="src/worlds/desert-planet.js"></script>
+<script src="src/level-design.js"></script>
+<script src="src/modes/desert-golfing.js"></script>
+<script src="src/art.js"></script>
+<script src="src/gameplay.js"></script>
+<!-- Skip debug.js and main.js — we provide our own loop -->
+
+<script>
+// ── Editor State ──────────────────────────────────────────
+const STATE_EDIT = 99; // Custom state — game input listeners ignore this
+
+// Course-aware hole count (set from currentCourse config)
+let editorHoleCount = 9;
+
+// Track which holes are hand-designed (vs procedural)
+let customHoleIndices = new Set();
+let currentPresetIndex = 0;
+
+const TERRAIN_PRESETS = [
+  { name: 'Flat', verts: (dist) => [{ dx: Math.round(dist / 2), y: 350 }] },
+  { name: 'Hill', verts: (dist) => [
+    { dx: Math.round(dist * 0.3), y: 350 }, { dx: Math.round(dist * 0.5), y: 280 }, { dx: Math.round(dist * 0.7), y: 350 }
+  ]},
+  { name: 'Valley', verts: (dist) => [
+    { dx: Math.round(dist * 0.3), y: 330 }, { dx: Math.round(dist * 0.5), y: 410 }, { dx: Math.round(dist * 0.7), y: 330 }
+  ]},
+  { name: 'Step Down', verts: (dist) => [
+    { dx: Math.round(dist * 0.4), y: 300 }, { dx: Math.round(dist * 0.45), y: 300 }, { dx: Math.round(dist * 0.5), y: 400 }
+  ]},
+  { name: 'Step Up', verts: (dist) => [
+    { dx: Math.round(dist * 0.4), y: 400 }, { dx: Math.round(dist * 0.45), y: 400 }, { dx: Math.round(dist * 0.5), y: 300 }
+  ]},
+  { name: 'Rolling', verts: (dist) => [
+    { dx: Math.round(dist * 0.2), y: 350 }, { dx: Math.round(dist * 0.3), y: 310 },
+    { dx: Math.round(dist * 0.5), y: 370 }, { dx: Math.round(dist * 0.65), y: 320 },
+    { dx: Math.round(dist * 0.8), y: 350 }
+  ]},
+];
+
+// Preload sprite assets — SPRITES & SPRITE_CATALOG declared in shared.js
+// Editor adds hull generation on top
+const SPRITE_HULLS = {}; // cached normalized hull verts per sprite key
+
+// Wait for all sprites to load, then generate hulls
+(function waitForSprites() {
+  const keys = Object.keys(SPRITE_CATALOG);
+  let allLoaded = true;
+  for (const key of keys) {
+    if (SPRITES[key]) {
+      if (!SPRITE_HULLS[key]) SPRITE_HULLS[key] = generateHullFromImage(SPRITES[key]);
+    } else {
+      allLoaded = false;
+    }
+  }
+  if (!allLoaded) setTimeout(waitForSprites, 50);
+})();
+
+// ── Auto-generate collision hull from image alpha channel ──
+function generateHullFromImage(img, resolution, alphaThreshold, simplifyTolerance) {
+  resolution = resolution || 80;           // sample height in pixels
+  alphaThreshold = alphaThreshold || 30;   // alpha > this = solid
+  simplifyTolerance = simplifyTolerance || 0.008; // Douglas-Peucker tolerance (0-1 normalized)
+
+  // Draw image to offscreen canvas at reduced resolution
+  const aspect = img.naturalWidth / img.naturalHeight;
+  const sh = resolution;
+  const sw = Math.round(sh * aspect);
+  const offscreen = document.createElement('canvas');
+  offscreen.width = sw;
+  offscreen.height = sh;
+  const octx = offscreen.getContext('2d');
+  octx.drawImage(img, 0, 0, sw, sh);
+  const data = octx.getImageData(0, 0, sw, sh).data;
+
+  // Build alpha grid
+  const alpha = (x, y) => {
+    if (x < 0 || x >= sw || y < 0 || y >= sh) return 0;
+    return data[(y * sw + x) * 4 + 3];
+  };
+  const solid = (x, y) => alpha(x, y) > alphaThreshold;
+
+  // Find starting edge pixel (first solid pixel with a transparent neighbor)
+  let startX = -1, startY = -1;
+  outer: for (let y = 0; y < sh; y++) {
+    for (let x = 0; x < sw; x++) {
+      if (solid(x, y) && (!solid(x-1, y) || !solid(x, y-1) || !solid(x+1, y) || !solid(x, y+1))) {
+        startX = x; startY = y;
+        break outer;
+      }
+    }
+  }
+  if (startX < 0) return []; // no solid pixels
+
+  // Moore neighborhood contour tracing
+  const dx8 = [1, 1, 0, -1, -1, -1, 0, 1];
+  const dy8 = [0, 1, 1, 1, 0, -1, -1, -1];
+  const contour = [];
+  let cx = startX, cy = startY;
+  let dir = 7; // start looking up-right
+  const maxSteps = sw * sh * 2;
+
+  for (let step = 0; step < maxSteps; step++) {
+    contour.push({x: cx / sw, y: cy / sh}); // normalized 0-1
+    // Search neighbors starting from (dir+5)%8 (backtrack direction + 1)
+    let searchDir = (dir + 5) % 8;
+    let found = false;
+    for (let i = 0; i < 8; i++) {
+      const nd = (searchDir + i) % 8;
+      const nx = cx + dx8[nd], ny = cy + dy8[nd];
+      if (solid(nx, ny)) {
+        dir = nd;
+        cx = nx; cy = ny;
+        found = true;
+        break;
+      }
+    }
+    if (!found) break;
+    if (cx === startX && cy === startY && contour.length > 2) break; // closed loop
+  }
+
+  // Douglas-Peucker simplification
+  function dpSimplify(pts, tol) {
+    if (pts.length <= 2) return pts;
+    let maxDist = 0, maxIdx = 0;
+    const first = pts[0], last = pts[pts.length - 1];
+    for (let i = 1; i < pts.length - 1; i++) {
+      const d = pointToLineDist(pts[i], first, last);
+      if (d > maxDist) { maxDist = d; maxIdx = i; }
+    }
+    if (maxDist > tol) {
+      const left = dpSimplify(pts.slice(0, maxIdx + 1), tol);
+      const right = dpSimplify(pts.slice(maxIdx), tol);
+      return left.slice(0, -1).concat(right);
+    }
+    return [first, last];
+  }
+
+  function pointToLineDist(p, a, b) {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq === 0) return Math.sqrt((p.x - a.x) ** 2 + (p.y - a.y) ** 2);
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq));
+    const projX = a.x + t * dx, projY = a.y + t * dy;
+    return Math.sqrt((p.x - projX) ** 2 + (p.y - projY) ** 2);
+  }
+
+  // Remove duplicate consecutive points before simplifying
+  const unique = [contour[0]];
+  for (let i = 1; i < contour.length; i++) {
+    if (contour[i].x !== contour[i-1].x || contour[i].y !== contour[i-1].y) {
+      unique.push(contour[i]);
+    }
+  }
+
+  return dpSimplify(unique, simplifyTolerance);
+}
+
+const ed = {
+  mode: 'edit',         // 'edit' or 'play'
+  // Terrain vertex selection
+  selectedVert: -1,     // index into vertices[]
+  hoverVert: -1,
+  // Object selection
+  selectedObject: -1,  // index into objects[]
+  selectedObjectVert: -1, // vertex index within selected object
+  objectVertexMode: false, // false = resize/move mode, true = vertex edit mode (double-click to enter)
+  hoverObject: -1,
+  hoverObjectVert: -1,
+  // Drag state
+  dragging: false,
+  dragType: null,       // 'terrain-vert' | 'object-move' | 'object-vert' | 'cup' | 'object-resize' | 'object-rotate'
+  dragStartX: 0,
+  dragStartY: 0,
+  dragObjectOffsets: [], // for whole-object drag
+  // Resize state
+  dragResizeHandle: null,
+  dragOrigBB: null,
+  dragOrigVerts: null,
+  hoverResizeHandle: null,
+  // Rotation state
+  dragRotStartAngle: 0,
+  dragRotCenter: null,
+  hoverRotHandle: false,
+  // Undo
+  undoStack: [],
+  maxUndo: 50,
+  // Knife tool
+  knifeActive: false,
+  knifeStart: null,         // {x, y} first click world coords
+  knifePreviewEnd: null,    // {x, y} current mouse pos
+  knifeTargetObject: -1,    // object index the first click landed on
+  // Editor zoom & pan
+  zoom: 1.0,
+  camY: 0,                  // vertical camera offset (positive = panned down)
+  // Right-click pan
+  panning: false,
+  panStartX: 0,
+  panStartY: 0,
+  panStartCamX: 0,
+  panStartCamY: 0,
+  panMoved: false,          // true if mouse moved enough to count as pan (not a click)
+  // Debug visualization
+  showCollision: false,        // toggle collision overlay with 'C'
+  // Shot loop — continuous replay for reverse hole design
+  shotLoop: {
+    active: false,
+    vx: 0, vy: 0,            // saved shot velocity
+    spin: 0,                  // saved spin
+    balls: [],                // array of ghost ball states
+    spawnTimer: 0,
+    spawnInterval: 40,        // frames between new ball spawns (~0.67s)
+    maxBalls: 20,             // max simultaneous ghost balls
+    hasShot: false,           // true once a shot has been recorded
+  },
+};
+
+const HANDLE_RADIUS = 6;
+const HANDLE_HIT = 10; // click target radius
+const EDGE_HIT_DIST = 12; // distance to detect edge clicks
+
+// ── Course Management ─────────────────────────────────────
+
+function courseStorageKey() {
+  if (!currentWorld || !currentCourse) return 'dg-course-default';
+  // Find world and course IDs from WORLDS registry
+  for (const [wId, world] of Object.entries(WORLDS)) {
+    if (world === currentWorld) {
+      for (const [cId, course] of Object.entries(world.courses)) {
+        if (course === currentCourse) return `dg-course-${wId}-${cId}`;
+      }
+    }
+  }
+  return 'dg-course-default';
+}
+
+// holeCount can be a number or {min, max} — normalize to a number
+function getCourseHoleCount(course) {
+  if (!course) return 9;
+  const hc = course.holeCount;
+  if (typeof hc === 'number') return hc;
+  if (hc && typeof hc === 'object') return hc.min || 9;
+  return 9;
+}
+
+function populateWorldPicker() {
+  const picker = document.getElementById('world-picker');
+  picker.innerHTML = '';
+  for (const [wId, world] of Object.entries(WORLDS)) {
+    const opt = document.createElement('option');
+    opt.value = wId;
+    opt.textContent = world.name;
+    if (world === currentWorld) opt.selected = true;
+    picker.appendChild(opt);
+  }
+}
+
+function populateCoursePicker() {
+  const picker = document.getElementById('course-picker');
+  picker.innerHTML = '';
+  if (!currentWorld) return;
+  for (const [cId, course] of Object.entries(currentWorld.courses)) {
+    const opt = document.createElement('option');
+    opt.value = cId;
+    opt.textContent = course.name;
+    if (course === currentCourse) opt.selected = true;
+    picker.appendChild(opt);
+  }
+}
+
+function populateMetadataFields() {
+  populateWorldPicker();
+  populateCoursePicker();
+  const saved = loadCourseData();
+  document.getElementById('course-name').value = saved?.courseName || currentCourse?.name || '';
+}
+
+function onWorldPick() {
+  const worldId = document.getElementById('world-picker').value;
+  currentWorld = WORLDS[worldId];
+  // Switch to first course in this world
+  const courseIds = Object.keys(currentWorld.courses);
+  if (courseIds.length > 0) {
+    switchCourse(worldId, courseIds[0]);
+  }
+}
+
+function onCoursePick() {
+  const worldId = document.getElementById('world-picker').value;
+  const courseId = document.getElementById('course-picker').value;
+  switchCourse(worldId, courseId);
+}
+
+function onMetadataChange() {
+  // Auto-save when metadata fields change
+  saveCustomHoles();
+}
+
+function createNewCourse() {
+  const worldId = document.getElementById('world-picker').value;
+  const world = WORLDS[worldId];
+  if (!world) return;
+
+  // Generate unique course ID
+  const existing = Object.keys(world.courses);
+  let num = existing.length + 1;
+  let courseId = `course-${num}`;
+  while (world.courses[courseId]) { num++; courseId = `course-${num}`; }
+
+  // Create course with defaults inherited from world
+  const newCourse = {
+    name: `New Course ${num}`,
+    materials: [...(world.materials || ['sand'])],
+    defaultMaterial: world.defaultMaterial || 'sand',
+    archetypes: ['flat_run', 'gentle_slope', 'gentle_hill'],
+    difficultyRange: [0.0, 0.5],
+    holeCount: 5,
+    _custom: true, // flag: created in editor, not from JS config
+  };
+
+  // Add to runtime WORLDS
+  world.courses[courseId] = newCourse;
+
+  // Persist custom course list
+  saveCustomCoursesRegistry();
+
+  // Switch to new course
+  switchCourse(worldId, courseId);
+}
+
+function deleteCourse() {
+  const worldId = document.getElementById('world-picker').value;
+  const courseId = document.getElementById('course-picker').value;
+  const world = WORLDS[worldId];
+  if (!world) return;
+
+  const course = world.courses[courseId];
+  if (!course) return;
+
+  // Don't allow deleting the last course
+  const courseIds = Object.keys(world.courses);
+  if (courseIds.length <= 1) {
+    alert('Cannot delete the only course in this world.');
+    return;
+  }
+
+  if (!confirm('Delete course "' + (course.name || courseId) + '"? This cannot be undone.')) return;
+
+  // Remove course data from localStorage
+  const key = 'dg-course-' + worldId + '-' + courseId;
+  localStorage.removeItem(key);
+
+  // Remove from WORLDS
+  delete world.courses[courseId];
+
+  // Update custom courses registry
+  saveCustomCoursesRegistry();
+
+  // Switch to another course
+  const remaining = Object.keys(world.courses);
+  switchCourse(worldId, remaining[0]);
+}
+
+// Save/load registry of editor-created courses so they persist across reloads
+function saveCustomCoursesRegistry() {
+  const registry = {};
+  for (const [wId, world] of Object.entries(WORLDS)) {
+    for (const [cId, course] of Object.entries(world.courses)) {
+      if (course._custom) {
+        if (!registry[wId]) registry[wId] = {};
+        registry[wId][cId] = {
+          name: course.name,
+          materials: course.materials,
+          defaultMaterial: course.defaultMaterial,
+          archetypes: course.archetypes,
+          difficultyRange: course.difficultyRange,
+          holeCount: course.holeCount,
+        };
+      }
+    }
+  }
+  localStorage.setItem('dg-custom-courses', JSON.stringify(registry));
+}
+
+function loadCustomCourses() {
+  try {
+    const raw = localStorage.getItem('dg-custom-courses');
+    if (!raw) return;
+    const registry = JSON.parse(raw);
+    for (const [wId, courses] of Object.entries(registry)) {
+      if (!WORLDS[wId]) continue;
+      for (const [cId, courseDef] of Object.entries(courses)) {
+        if (!WORLDS[wId].courses[cId]) {
+          WORLDS[wId].courses[cId] = { ...courseDef, _custom: true };
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to load custom courses:', e);
+  }
+}
+
+function switchCourse(worldId, courseId) {
+  currentWorld = WORLDS[worldId];
+  currentCourse = currentWorld.courses[courseId];
+
+  // Reset terrain state
+  vertices.length = 0;
+  holes.length = 0;
+  objects.length = 0;
+
+  // Load saved course data
+  customHoleIndices.clear();
+  const saved = loadCourseData();
+  if (saved) {
+    editorHoleCount = saved.holeCount || getCourseHoleCount(currentCourse);
+    if (saved.holes) {
+      for (const key of Object.keys(saved.holes)) {
+        customHoleIndices.add(Number(key));
+      }
+    }
+  } else {
+    editorHoleCount = getCourseHoleCount(currentCourse);
+  }
+
+  // Ensure at least 1 hole
+  if (editorHoleCount < 1) editorHoleCount = getCourseHoleCount(currentCourse) || 9;
+
+  // Feed saved custom holes into level-design.js's cache
+  invalidateCustomHolesCache();
+  if (saved && saved.holes) {
+    localStorage.setItem('desert-golfing-custom-holes', JSON.stringify(saved.holes));
+  } else {
+    localStorage.removeItem('desert-golfing-custom-holes');
+  }
+  invalidateCustomHolesCache();
+
+  // Generate holes and go to first
+  ensureHolesAhead(editorHoleCount - 1);
+  currentHole = 0;
+  setHoleCamera(holes[0]);
+  resetBallToTee();
+  deselectAll();
+
+  // Update UI
+  populateMetadataFields();
+  updateMaterialPicker();
+  buildHoleList();
+  updateHoleCountLabel();
+}
+
+function loadCourseData() {
+  try {
+    const raw = localStorage.getItem(courseStorageKey());
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    console.warn('Failed to load course data:', e);
+  }
+  return null;
+}
+
+function adjustHoleCount(dir) {
+  const newCount = editorHoleCount + dir;
+  if (newCount < 1) return;
+
+  // Warn if shrinking removes a custom hole
+  if (dir < 0 && customHoleIndices.has(editorHoleCount - 1)) {
+    if (!confirm(`Hole ${editorHoleCount} is hand-designed. Remove it?`)) return;
+    customHoleIndices.delete(editorHoleCount - 1);
+  }
+
+  editorHoleCount = newCount;
+  // Keep course holeCount in sync so ensureHolesAhead isn't capped
+  if (currentCourse) currentCourse.holeCount = editorHoleCount;
+  if (dir > 0) ensureHolesAhead(editorHoleCount - 1);
+  if (currentHole >= editorHoleCount) goToHole(editorHoleCount - 1);
+  buildHoleList();
+}
+
+function updateHoleCountLabel() {
+  const label = document.getElementById('hole-count-label');
+  if (label) label.textContent = `${editorHoleCount}h`;
+}
+
+function updateMaterialPicker() {
+  const picker = document.getElementById('mat-picker');
+  const mats = currentCourse?.materials || ['sand', 'rock', 'mud', 'grass', 'ice'];
+  picker.innerHTML = '';
+  for (const mat of mats) {
+    const opt = document.createElement('option');
+    opt.value = mat;
+    opt.textContent = mat.charAt(0).toUpperCase() + mat.slice(1);
+    picker.appendChild(opt);
+  }
+}
+
+// ── Editor Init ───────────────────────────────────────────
+function editorInit() {
+  // Load editor-created courses before anything reads WORLDS
+  loadCustomCourses();
+
+  // Init the real game (sets currentWorld/currentCourse)
+  MODE.init();
+
+  // Patch camera transform for editor zoom & pan
+  const _origApplyCamera = MODE.applyCameraTransform.bind(MODE);
+  MODE.applyCameraTransform = function(ctx) {
+    if (ed.mode === 'edit') {
+      ctx.scale(ed.zoom, ed.zoom);
+      ctx.translate(-camera.x, -ed.camY);
+    } else {
+      _origApplyCamera(ctx);
+    }
+  };
+  // Patch drawSky to fill larger area when zoomed out
+  const _origDrawSky = MODE.drawSky.bind(MODE);
+  MODE.drawSky = function() {
+    if (ed.mode === 'edit') {
+      ctx.fillStyle = currentWorld?.sky || (typeof SKY !== 'undefined' ? SKY : '#d4b483');
+      ctx.fillRect(0, 0, W / ed.zoom + 10, H / ed.zoom + 10);
+    } else {
+      _origDrawSky();
+    }
+  };
+
+  // Patch onTransitionEnd — same as real game but editor can restore cups later
+  MODE.onTransitionEnd = function() {
+    const prevHole = holes[currentHole - 1];
+    if (prevHole) {
+      prevHole.cupFilled = true;
+      prevHole.cupFillProgress = 1;
+      prevHole.flagVisible = false;
+      prevHole.flagOpacity = 0;
+      flattenCup(prevHole);
+    }
+
+    // If we've passed the last hole in the course, stop — don't generate a new hole
+    if (currentHole >= editorHoleCount) {
+      // Stay on the last hole, ball at rest where cup was
+      currentHole = editorHoleCount - 1;
+      state = STATE_AIM; // stop, but don't switch to edit mode — let the moment breathe
+      return;
+    }
+
+    ball.y = terrainYAt(ball.x) - BALL_RADIUS;
+    if (typeof ball.spin !== 'undefined') {
+      ball.spin = 0; ball.spinAim = 0; ball.rotation = 0;
+    }
+    if (typeof ball.lastCollidedMat !== 'undefined') {
+      ball.lastCollidedMat = null;
+      ball.lastCollisionNormal = null;
+      ball.lastCollisionY = null;
+      ball.lastCollisionSource = 'terrain';
+    }
+
+    ensureHolesAhead(currentHole + 2);
+  };
+
+  // Load course data from localStorage
+  const saved = loadCourseData();
+  if (saved) {
+    editorHoleCount = saved.holeCount || getCourseHoleCount(currentCourse);
+    if (saved.holes) {
+      for (const key of Object.keys(saved.holes)) {
+        customHoleIndices.add(Number(key));
+      }
+    }
+  } else {
+    editorHoleCount = getCourseHoleCount(currentCourse);
+    // Don't mark code-defined holes as custom — they only become custom
+    // when the user explicitly edits them. This prevents the serializer
+    // from capturing stray background vertices from adjacent holes.
+  }
+  if (editorHoleCount < 1) editorHoleCount = getCourseHoleCount(currentCourse);
+
+  // Immediately switch to edit mode
+  state = STATE_EDIT;
+  showTitle = false;
+
+  // Populate UI
+  populateMetadataFields();
+  updateMaterialPicker();
+  buildHoleList();
+  updateModeBadge();
+  updatePropsPanel();
+}
+
+// ── Mode Switching ────────────────────────────────────────
+function switchMode(mode) {
+  ed.mode = mode;
+  deselectAll();
+
+  if (mode === 'edit') {
+    state = STATE_EDIT;
+    ball.vx = 0; ball.vy = 0;
+    ball.atRest = true;
+    aiming = false;
+    canvas.style.cursor = 'crosshair';
+    // Restore editor camera/zoom state if we saved it
+    if (ed._savedCamX != null) {
+      camera.x = ed._savedCamX;
+      ed.zoom = ed._savedZoom;
+      ed.camY = ed._savedCamY;
+    }
+  } else {
+    // Save editor camera/zoom state before switching
+    ed._savedCamX = camera.x;
+    ed._savedZoom = ed.zoom;
+    ed._savedCamY = ed.camY;
+    // Play mode — reset zoom and camera to proper hole view
+    ed.zoom = 1.0;
+    ed.camY = 0;
+    setHoleCamera(holes[currentHole]);
+    resetBallToTee();
+    state = STATE_AIM;
+    canvas.style.cursor = 'crosshair';
+  }
+
+  document.getElementById('btn-edit').classList.toggle('active', mode === 'edit');
+  document.getElementById('btn-play').classList.toggle('active', mode === 'play');
+  updateModeBadge();
+}
+
+function updateModeBadge() {
+  const badge = document.getElementById('mode-badge');
+  if (ed.mode === 'edit') {
+    const zoomPct = Math.round(ed.zoom * 100);
+    let text = zoomPct !== 100 ? `EDIT MODE  ${zoomPct}%` : 'EDIT MODE';
+    if (ed.shotLoop.active) {
+      text += ed.shotLoop.hasShot ? '  ⟳ LOOP' : '  ⟳ AIM TO START';
+    }
+    badge.textContent = text;
+  } else {
+    badge.textContent = '';
+  }
+}
+
+function deselectAll() {
+  ed.selectedVert = -1;
+  ed.selectedObject = -1;
+  ed.selectedObjectVert = -1;
+  ed.objectVertexMode = false;
+  ed.dragging = false;
+  ed.dragType = null;
+  // Clear knife state if active
+  if (ed.knifeActive) clearKnifeState();
+  updatePropsPanel();
+}
+
+// ── Knife Tool ──────────────────────────────────────────
+function clearKnifeState() {
+  ed.knifeActive = false;
+  ed.knifeStart = null;
+  ed.knifePreviewEnd = null;
+  ed.knifeTargetObject = -1;
+  const btn = document.getElementById('btn-knife');
+  if (btn) btn.classList.remove('active');
+}
+
+function toggleKnifeTool() {
+  if (ed.knifeActive) {
+    clearKnifeState();
+    return;
+  }
+  deselectAll();
+  ed.knifeActive = true;
+  ed.knifeStart = null;
+  ed.knifePreviewEnd = null;
+  ed.knifeTargetObject = -1;
+  document.getElementById('btn-knife').classList.add('active');
+  canvas.style.cursor = 'crosshair';
+}
+
+function handleKnifeClick(w) {
+  if (!ed.knifeStart) {
+    // First click — must land inside an object
+    const oi = findObjectAtPoint(w.x, w.y);
+    if (oi < 0) return;
+    ed.knifeStart = { x: w.x, y: w.y };
+    ed.knifeTargetObject = oi;
+  } else {
+    // Second click — attempt the cut
+    performKnifeCut(ed.knifeTargetObject, ed.knifeStart, { x: w.x, y: w.y });
+    ed.knifeStart = null;
+    ed.knifePreviewEnd = null;
+    ed.knifeTargetObject = -1;
+  }
+}
+
+function performKnifeCut(oi, lineA, lineB) {
+  const obj = objects[oi];
+  if (!obj || obj.verts.length < 3) return false;
+
+  const verts = obj.verts;
+  const intersections = [];
+
+  // Find all intersections of infinite line through A,B with polygon edges
+  for (let i = 0; i < verts.length; i++) {
+    const j = (i + 1) % verts.length;
+    const hit = lineSegmentIntersect(lineA, lineB, verts[i], verts[j]);
+    if (hit) {
+      intersections.push({ edgeIndex: i, t: hit.t2, point: hit.point });
+    }
+  }
+
+  // Deduplicate near-coincident intersections (vertex grazing)
+  for (let i = intersections.length - 1; i > 0; i--) {
+    const a = intersections[i].point, b = intersections[i - 1].point;
+    if ((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y) < 1) {
+      intersections.splice(i, 1);
+    }
+  }
+
+  // Need exactly 2 intersections for a clean cut
+  if (intersections.length !== 2) return false;
+
+  intersections.sort((a, b) => a.edgeIndex - b.edgeIndex || a.t - b.t);
+  const [int1, int2] = intersections;
+
+  pushUndo();
+
+  // Build polygon A: int1.point → vertices between → int2.point
+  const polyA = [{ x: int1.point.x, y: int1.point.y }];
+  for (let i = int1.edgeIndex + 1; i <= int2.edgeIndex; i++) {
+    polyA.push({ x: verts[i].x, y: verts[i].y });
+  }
+  polyA.push({ x: int2.point.x, y: int2.point.y });
+
+  // Build polygon B: int2.point → remaining vertices → int1.point
+  const polyB = [{ x: int2.point.x, y: int2.point.y }];
+  for (let i = int2.edgeIndex + 1; i < verts.length; i++) {
+    polyB.push({ x: verts[i].x, y: verts[i].y });
+  }
+  for (let i = 0; i <= int1.edgeIndex; i++) {
+    polyB.push({ x: verts[i].x, y: verts[i].y });
+  }
+  polyB.push({ x: int1.point.x, y: int1.point.y });
+
+  // Discard degenerate polygons (< 3 verts or near-zero area)
+  if (polyA.length < 3 || polyB.length < 3) return false;
+
+  // Replace original with polyA, insert polyB after
+  objects[oi] = { verts: polyA, mat: obj.mat, holeIndex: obj.holeIndex };
+  objects.splice(oi + 1, 0, { verts: polyB, mat: obj.mat, holeIndex: obj.holeIndex });
+
+  ed.selectedObject = oi;
+  ed.objectVertexMode = false;
+  updatePropsPanel();
+  return true;
+}
+
+function resetBallToTee() {
+  const hole = holes[currentHole];
+  if (!hole) return;
+  ball.x = hole.teeX;
+  ball.y = terrainYAt(hole.teeX) - BALL_RADIUS;
+  ball.vx = 0; ball.vy = 0;
+  ball.atRest = true;
+  ball.onGround = true;
+  ball.slowFrames = 0;
+  strokes = 0;
+  if (ed.mode === 'play') state = STATE_AIM;
+}
+
+// ── Hole Navigation ───────────────────────────────────────
+function restoreCup(hole) {
+  // Rebuild the cup notch from saved metadata (reverse of flattenCup)
+  if (!hole || hole.cupLeftX == null) return;
+  const halfW = CUP_WIDTH / 2;
+  const flatMargin = 20;
+  const leftX = hole.cupLeftX;
+  const rightX = hole.cupRightX;
+  const rimLeftY = hole.cupLeftY;
+  const rimRightY = hole.cupRightY;
+  const bottomY = hole.cupBottomY;
+  const wallInset = hole.cupWallInset || 3;
+
+  // Remove all vertices in the cup zone (including flat approach margins)
+  vertices = vertices.filter(v => v.x < leftX - flatMargin || v.x > rightX + flatMargin);
+
+  // Re-insert the 6-vertex cup notch
+  const cupVerts = [
+    { x: leftX - flatMargin,   y: rimLeftY },
+    { x: leftX,                y: rimLeftY },
+    { x: leftX + wallInset,    y: bottomY },
+    { x: rightX - wallInset,   y: bottomY },
+    { x: rightX,               y: rimRightY },
+    { x: rightX + flatMargin,  y: rimRightY },
+  ];
+
+  let insertIdx = vertices.findIndex(v => v.x >= leftX - flatMargin);
+  if (insertIdx === -1) insertIdx = vertices.length;
+  vertices.splice(insertIdx, 0, ...cupVerts);
+
+  hole.cupFilled = false;
+  hole.cupFillProgress = 0;
+}
+
+function goToHole(idx) {
+  if (idx < 0 || idx >= editorHoleCount) return;
+  ensureHolesAhead(idx + 2);
+  currentHole = idx;
+  // Reset editor zoom/pan so the selected hole is centered at 1:1
+  if (ed.mode === 'edit') {
+    ed.zoom = 1.0;
+    ed.camY = 0;
+    ed._savedCamX = null;  // clear stale saved state
+  }
+  setHoleCamera(holes[idx]);
+
+  // Restore ALL cups to their original notched state first
+  for (let i = 0; i < holes.length; i++) {
+    restoreCup(holes[i]);
+  }
+
+  // Then flatten cups for all holes BEFORE the current one
+  // (their tee areas need to be flat since they're "completed")
+  for (let i = 0; i < idx; i++) {
+    if (holes[i]) {
+      flattenCup(holes[i]);
+      holes[i].cupFilled = true;
+    }
+  }
+
+  resetBallToTee();
+  deselectAll();
+  _lastTrackedHole = currentHole;
+  buildHoleList();
+}
+
+function buildHoleList() {
+  updateHoleList();
+  syncHoleNavWidth();
+}
+
+function syncHoleNavWidth() {
+  // Fixed width for the hole nav sidebar
+  const holeNav = document.getElementById('hole-nav');
+  if (holeNav) {
+    holeNav.style.width = '200px';
+  }
+}
+
+function updateHoleList() {
+  const list = document.getElementById('hole-list');
+  list.innerHTML = '';
+
+  ensureHolesAhead(editorHoleCount - 1);
+
+  for (let i = 0; i < editorHoleCount; i++) {
+    const div = document.createElement('div');
+    const isCustom = customHoleIndices.has(i);
+    div.className = 'hole-item' + (i === currentHole ? ' active' : '') + (isCustom ? ' custom' : '');
+    div.innerHTML = `<span>${i + 1}</span><span class="type">${isCustom ? '✎' : 'auto'}</span>`;
+    div.onclick = () => goToHole(i);
+    list.appendChild(div);
+  }
+
+  updateToggleButton();
+  updateHoleCountLabel();
+}
+
+function updateToggleButton() {
+  const btn = document.getElementById('btn-toggle-type');
+  const presetBar = document.getElementById('preset-bar');
+  const isCustom = customHoleIndices.has(currentHole);
+  btn.textContent = isCustom ? 'Set Auto' : 'Set Custom';
+  btn.className = 'ed-btn' + (isCustom ? ' active' : '');
+  presetBar.classList.toggle('visible', isCustom);
+}
+
+function toggleHoleType() {
+  const isCustom = customHoleIndices.has(currentHole);
+  pushUndo();
+
+  if (isCustom) {
+    // Switch to procedural
+    customHoleIndices.delete(currentHole);
+    // Regenerate this hole procedurally — need to remove old vertices and regenerate
+    regenerateCurrentHole();
+  } else {
+    // Switch to hand-designed with flat preset
+    customHoleIndices.add(currentHole);
+    currentPresetIndex = 0;
+    applyPreset(currentPresetIndex);
+  }
+
+  buildHoleList();
+  goToHole(currentHole);
+}
+
+function applyPreset(presetIdx) {
+  const preset = TERRAIN_PRESETS[presetIdx];
+  const hole = holes[currentHole];
+  if (!hole) return;
+
+  const teeX = hole.teeX;
+  const dist = Math.round(hole.cupX - teeX);
+  const startX = teeX + 40;
+
+  // Remove existing terrain vertices for this hole (between startX and cup zone)
+  const cupLeftBound = hole.cupLeftX - 21;
+  vertices = vertices.filter(v => v.x <= startX || v.x >= cupLeftBound);
+
+  // Insert preset vertices
+  const presetVerts = preset.verts(dist);
+  const newVerts = presetVerts.map(v => ({ x: startX + v.dx, y: v.y }));
+
+  // Find insertion point
+  let insertIdx = vertices.findIndex(v => v.x >= cupLeftBound);
+  if (insertIdx === -1) insertIdx = vertices.length;
+  vertices.splice(insertIdx, 0, ...newVerts);
+
+  // Update preset name display
+  document.getElementById('preset-name').textContent = preset.name;
+}
+
+function cyclePreset(dir) {
+  pushUndo();
+  currentPresetIndex = (currentPresetIndex + dir + TERRAIN_PRESETS.length) % TERRAIN_PRESETS.length;
+  applyPreset(currentPresetIndex);
+}
+
+function regenerateCurrentHole() {
+  // Remove this hole's terrain and let it be regenerated
+  const hole = holes[currentHole];
+  if (!hole) return;
+
+  const teeX = hole.teeX;
+  const startX = teeX + 40;
+  const nextHole = currentHole < holes.length - 1 ? holes[currentHole + 1] : null;
+  const endX = nextHole ? nextHole.teeX + 40 : hole.cupX + 200;
+
+  // Remove vertices in this hole's range
+  vertices = vertices.filter(v => v.x < startX || v.x > endX);
+
+  // Remove the hole metadata so it gets regenerated
+  // We need to regenerate by calling generateHoleTerrain
+  // First remove from holes array to allow regeneration
+  const savedLength = holes.length;
+  holes.length = currentHole;
+  generateHoleTerrain(currentHole);
+  // Restore any holes after this one
+  if (savedLength > currentHole + 1) {
+    ensureHolesAhead(savedLength - 1);
+  }
+}
+
+// ── Undo ──────────────────────────────────────────────────
+function pushUndo() {
+  const hole = holes[currentHole];
+  if (!hole) return;
+
+  const range = getHoleVertexRange(currentHole);
+  const snapshot = {
+    holeIdx: currentHole,
+    startIdx: range.start,
+    vertCount: range.end - range.start + 1,
+    verts: vertices.slice(range.start, range.end + 1).map(v => ({...v})),
+    totalVertCount: vertices.length,
+    cupX: hole.cupX, cupY: hole.cupY,
+    cupLeftX: hole.cupLeftX, cupRightX: hole.cupRightX,
+    cupLeftY: hole.cupLeftY, cupRightY: hole.cupRightY,
+    cupBottomY: hole.cupBottomY,
+    // Save object state too
+    objects: objects.map(ov => ({
+      mat: ov.mat,
+      holeIndex: ov.holeIndex,
+      verts: ov.verts.map(v => ({...v})),
+    })),
+  };
+
+  ed.undoStack.push(snapshot);
+  if (ed.undoStack.length > ed.maxUndo) ed.undoStack.shift();
+}
+
+function editorUndo() {
+  if (ed.undoStack.length === 0) return;
+  const snap = ed.undoStack.pop();
+
+  // Restore vertices — handle insertion/deletion changing count
+  const currentCount = vertices.length;
+  const range = getHoleVertexRange(snap.holeIdx);
+
+  // Remove current vertices in this range and splice in saved ones
+  vertices.splice(snap.startIdx, range.end - range.start + 1, ...snap.verts.map(v => ({...v})));
+
+  // Restore cup
+  const hole = holes[snap.holeIdx];
+  if (hole) {
+    hole.cupX = snap.cupX; hole.cupY = snap.cupY;
+    hole.cupLeftX = snap.cupLeftX; hole.cupRightX = snap.cupRightX;
+    hole.cupLeftY = snap.cupLeftY; hole.cupRightY = snap.cupRightY;
+    hole.cupBottomY = snap.cupBottomY;
+  }
+
+  // Restore objects
+  if (snap.objects) {
+    objects.length = 0;
+    for (const ov of snap.objects) {
+      objects.push({
+        mat: ov.mat,
+        holeIndex: ov.holeIndex,
+        verts: ov.verts.map(v => ({...v})),
+      });
+    }
+  }
+
+  deselectAll();
+}
+
+// ── Vertex Range for a Hole ───────────────────────────────
+function getHoleVertexRange(holeIdx) {
+  const hole = holes[holeIdx];
+  if (!hole) return { start: 0, end: 0 };
+
+  const prevHole = holeIdx > 0 ? holes[holeIdx - 1] : null;
+  const nextHole = holeIdx < holes.length - 1 ? holes[holeIdx + 1] : null;
+
+  const startX = prevHole ? prevHole.cupX : hole.teeX - 200;
+  const endX = nextHole ? nextHole.cupX : hole.cupX + 400;
+
+  let start = 0, end = vertices.length - 1;
+  for (let i = 0; i < vertices.length; i++) {
+    if (vertices[i].x >= startX) { start = Math.max(0, i - 1); break; }
+  }
+  for (let i = vertices.length - 1; i >= 0; i--) {
+    if (vertices[i].x <= endX) { end = Math.min(vertices.length - 1, i + 1); break; }
+  }
+
+  return { start, end };
+}
+
+// ── Coordinate Helpers ────────────────────────────────────
+function screenToWorld(clientX, clientY) {
+  const pos = toGameCoords(clientX, clientY);
+  if (ed.mode === 'edit') {
+    // Account for editor zoom & pan
+    const z = ed.zoom;
+    return { x: pos.x / z + camera.x, y: pos.y / z + ed.camY };
+  }
+  return { x: pos.x + camera.x, y: pos.y };
+}
+
+function getScaledHit() {
+  return HANDLE_HIT / displayScale * (canvas.height / H) / ed.zoom;
+}
+
+// ── Hit Detection ─────────────────────────────────────────
+function findVertNear(wx, wy) {
+  const range = getHoleVertexRange(currentHole);
+  let best = -1, bestDist = Infinity;
+  const scaledHit = getScaledHit();
+
+  for (let i = range.start; i <= range.end; i++) {
+    const v = vertices[i];
+    const dx = v.x - wx, dy = v.y - wy;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < scaledHit * scaledHit && d2 < bestDist) {
+      bestDist = d2;
+      best = i;
+    }
+  }
+  return best;
+}
+
+function findEdgeNear(wx, wy) {
+  // Find nearest terrain edge within hit distance (skip cup region)
+  const range = getHoleVertexRange(currentHole);
+  const cupIndices = getCupVertexIndices(currentHole);
+  // Build an exclusion zone around the cup's X range
+  const hole = holes[currentHole];
+  const cupXMin = hole ? (hole.cupLeftX || hole.cupX - 20) - 25 : -Infinity;
+  const cupXMax = hole ? (hole.cupRightX || hole.cupX + 20) + 25 : Infinity;
+  const scaledHit = getScaledHit() * 1.5;
+  let bestIdx = -1, bestDist = scaledHit * scaledHit;
+
+  for (let i = range.start; i < range.end; i++) {
+    if (cupIndices.includes(i) && cupIndices.includes(i + 1)) continue;
+    const a = vertices[i], b = vertices[i + 1];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq < 0.001) continue;
+
+    let t = ((wx - a.x) * dx + (wy - a.y) * dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+
+    const cx = a.x + t * dx, cy = a.y + t * dy;
+    // Skip if click is within the cup's X exclusion zone
+    if (wx >= cupXMin && wx <= cupXMax) continue;
+    const distSq = (wx - cx) * (wx - cx) + (wy - cy) * (wy - cy);
+    if (distSq < bestDist) {
+      bestDist = distSq;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+
+function findObjectVertNear(wx, wy) {
+  // Returns {objectIdx, vertIdx} or null
+  const scaledHit = getScaledHit();
+  let best = null, bestDist = scaledHit * scaledHit;
+
+  for (let oi = 0; oi < objects.length; oi++) {
+    const verts = objects[oi].verts;
+    for (let vi = 0; vi < verts.length; vi++) {
+      const dx = verts[vi].x - wx, dy = verts[vi].y - wy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < bestDist) {
+        bestDist = d2;
+        best = { objectIdx: oi, vertIdx: vi };
+      }
+    }
+  }
+  return best;
+}
+
+function findObjectEdgeNear(oi, wx, wy) {
+  // Find nearest edge of a specific object
+  const verts = objects[oi].verts;
+  const scaledHit = getScaledHit() * 1.5;
+  let bestIdx = -1, bestDist = scaledHit * scaledHit;
+
+  for (let i = 0; i < verts.length; i++) {
+    const a = verts[i], b = verts[(i + 1) % verts.length];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq < 0.001) continue;
+
+    let t = ((wx - a.x) * dx + (wy - a.y) * dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+
+    const cx = a.x + t * dx, cy = a.y + t * dy;
+    const distSq = (wx - cx) * (wx - cx) + (wy - cy) * (wy - cy);
+    if (distSq < bestDist) {
+      bestDist = distSq;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+
+function pointInPolygon(px, py, verts) {
+  let inside = false;
+  for (let i = 0, j = verts.length - 1; i < verts.length; j = i++) {
+    const xi = verts[i].x, yi = verts[i].y;
+    const xj = verts[j].x, yj = verts[j].y;
+    if (((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function findObjectAtPoint(wx, wy) {
+  // Return index of object containing point, or -1
+  // Check in reverse order (later objects drawn on top)
+  for (let oi = objects.length - 1; oi >= 0; oi--) {
+    if (objects[oi].verts.length >= 3 && pointInPolygon(wx, wy, objects[oi].verts)) {
+      return oi;
+    }
+  }
+  return -1;
+}
+
+// ── Line Segment Intersection ────────────────────────────
+// Returns {t1, t2, point} or null. t1 is unconstrained (infinite line through a1→a2).
+// t2 must be in [0,1] (intersection on segment b1→b2).
+function lineSegmentIntersect(a1, a2, b1, b2) {
+  const dx1 = a2.x - a1.x, dy1 = a2.y - a1.y;
+  const dx2 = b2.x - b1.x, dy2 = b2.y - b1.y;
+  const denom = dx1 * dy2 - dy1 * dx2;
+  if (Math.abs(denom) < 1e-10) return null;
+  const t1 = ((b1.x - a1.x) * dy2 - (b1.y - a1.y) * dx2) / denom;
+  const t2 = ((b1.x - a1.x) * dy1 - (b1.y - a1.y) * dx1) / denom;
+  if (t2 < -1e-9 || t2 > 1 + 1e-9) return null;
+  const ct2 = Math.max(0, Math.min(1, t2));
+  return { t1, t2: ct2, point: { x: b1.x + ct2 * dx2, y: b1.y + ct2 * dy2 } };
+}
+
+// ── Object Resize ───────────────────────────────────────
+function getObjectBounds(obj) {
+  const verts = obj.verts;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const v of verts) {
+    if (v.x < minX) minX = v.x;
+    if (v.y < minY) minY = v.y;
+    if (v.x > maxX) maxX = v.x;
+    if (v.y > maxY) maxY = v.y;
+  }
+  return { minX, minY, maxX, maxY };
+}
+function getObjectAABB(oi) {
+  const verts = objects[oi].verts;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const v of verts) {
+    if (v.x < minX) minX = v.x;
+    if (v.y < minY) minY = v.y;
+    if (v.x > maxX) maxX = v.x;
+    if (v.y > maxY) maxY = v.y;
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+const RESIZE_HANDLES = [
+  { id: 'tl', getPos: bb => ({x: bb.minX, y: bb.minY}), cx: -1, cy: -1 },
+  { id: 'tc', getPos: bb => ({x: (bb.minX+bb.maxX)/2, y: bb.minY}), cx: 0, cy: -1 },
+  { id: 'tr', getPos: bb => ({x: bb.maxX, y: bb.minY}), cx: 1, cy: -1 },
+  { id: 'ml', getPos: bb => ({x: bb.minX, y: (bb.minY+bb.maxY)/2}), cx: -1, cy: 0 },
+  { id: 'mr', getPos: bb => ({x: bb.maxX, y: (bb.minY+bb.maxY)/2}), cx: 1, cy: 0 },
+  { id: 'bl', getPos: bb => ({x: bb.minX, y: bb.maxY}), cx: -1, cy: 1 },
+  { id: 'bc', getPos: bb => ({x: (bb.minX+bb.maxX)/2, y: bb.maxY}), cx: 0, cy: 1 },
+  { id: 'br', getPos: bb => ({x: bb.maxX, y: bb.maxY}), cx: 1, cy: 1 },
+];
+
+const RESIZE_HANDLE_SIZE = 5; // half-width of square handle
+
+function findResizeHandleAt(wx, wy) {
+  if (ed.selectedObject < 0) return null;
+  const bb = getObjectAABB(ed.selectedObject);
+  const hitR = getScaledHit();
+  for (const h of RESIZE_HANDLES) {
+    const pos = h.getPos(bb);
+    const dx = pos.x - wx, dy = pos.y - wy;
+    if (dx * dx + dy * dy < hitR * hitR) return h;
+  }
+  return null;
+}
+
+const ROT_HANDLE_OFFSET = 25; // distance above top-center of bbox
+
+function getRotationHandlePos(bb, invZ) {
+  return {
+    x: (bb.minX + bb.maxX) / 2,
+    y: bb.minY - ROT_HANDLE_OFFSET * (invZ || 1)
+  };
+}
+
+function findRotationHandleAt(wx, wy) {
+  if (ed.selectedObject < 0 || ed.objectVertexMode) return false;
+  const bb = getObjectAABB(ed.selectedObject);
+  const invZ = 1 / ed.zoom;
+  const pos = getRotationHandlePos(bb, invZ);
+  const hitR = getScaledHit() * 1.5; // slightly larger hit area for rotation handle
+  const dx = pos.x - wx, dy = pos.y - wy;
+  return dx * dx + dy * dy < hitR * hitR;
+}
+
+// ── Cup Dragging ─────────────────────────────────────────
+function getCupVertexIndices(holeIdx) {
+  const hole = holes[holeIdx];
+  if (!hole) return [];
+  const flatMargin = 20;
+  const leftBound = hole.cupLeftX - flatMargin;
+  const rightBound = hole.cupRightX + flatMargin;
+  const indices = [];
+  for (let i = 0; i < vertices.length; i++) {
+    if (vertices[i].x >= leftBound - 1 && vertices[i].x <= rightBound + 1) {
+      indices.push(i);
+    }
+  }
+  return indices;
+}
+
+function isCupVertex(vertIdx) {
+  const cupIndices = getCupVertexIndices(currentHole);
+  return cupIndices.includes(vertIdx);
+}
+
+function findCupAtPoint(wx, wy) {
+  const hole = holes[currentHole];
+  if (!hole || hole.cupFilled) return false;
+  const dx = hole.cupX - wx, dy = hole.cupY - wy;
+  return dx * dx + dy * dy < 14 * 14;
+}
+
+function moveCupTo(newCupX, newCupY) {
+  const hole = holes[currentHole];
+  if (!hole) return;
+
+  // Clamp X: cup must be at least 80px right of the tee
+  newCupX = Math.max(hole.teeX + 80, newCupX);
+
+  // Clamp X: can't overlap with next hole's cup
+  const nextHole = holes[currentHole + 1];
+  if (nextHole) {
+    newCupX = Math.min(newCupX, nextHole.cupX - 100);
+  }
+
+  const cupIndices = getCupVertexIndices(currentHole);
+  const halfW = CUP_WIDTH / 2;
+  const flatMargin = 20;
+  const wallInset = hole.cupWallInset || 3;
+
+  // Determine rim Y: use provided Y if given, otherwise interpolate from terrain
+  let rimY;
+  if (newCupY != null) {
+    rimY = clampY(newCupY);
+  } else {
+    const leftIdx = cupIndices[0];
+    const rightIdx = cupIndices[cupIndices.length - 1];
+    const leftV = leftIdx > 0 ? vertices[leftIdx - 1] : null;
+    const rightV = rightIdx < vertices.length - 1 ? vertices[rightIdx + 1] : null;
+
+    if (leftV && rightV) {
+      const t = (newCupX - leftV.x) / (rightV.x - leftV.x);
+      rimY = leftV.y + t * (rightV.y - leftV.y);
+    } else if (leftV) {
+      rimY = leftV.y;
+    } else {
+      rimY = hole.cupY;
+    }
+    rimY = clampY(rimY);
+  }
+
+  const leftX = newCupX - halfW;
+  const rightX = newCupX + halfW;
+  const bottomY = rimY + CUP_DEPTH;
+
+  // Update the 6 cup vertices in order
+  if (cupIndices.length === 6) {
+    vertices[cupIndices[0]] = { x: leftX - flatMargin, y: rimY, mat: hole.cupMat || DEFAULT_MAT };
+    vertices[cupIndices[1]] = { x: leftX, y: rimY, mat: hole.cupMat || DEFAULT_MAT };
+    vertices[cupIndices[2]] = { x: leftX + wallInset, y: bottomY, mat: hole.cupMat || DEFAULT_MAT };
+    vertices[cupIndices[3]] = { x: rightX - wallInset, y: bottomY, mat: hole.cupMat || DEFAULT_MAT };
+    vertices[cupIndices[4]] = { x: rightX, y: rimY, mat: hole.cupMat || DEFAULT_MAT };
+    vertices[cupIndices[5]] = { x: rightX + flatMargin, y: rimY, mat: hole.cupMat || DEFAULT_MAT };
+  }
+
+  // Update hole metadata
+  hole.cupX = newCupX;
+  hole.cupY = rimY;
+  hole.cupLeftX = leftX;
+  hole.cupRightX = rightX;
+  hole.cupLeftY = rimY;
+  hole.cupRightY = rimY;
+  hole.cupBottomY = bottomY;
+}
+
+// ── Shape Creation ────────────────────────────────────────
+function addObject(type) {
+  pushUndo();
+
+  // Center shape on the visible area
+  const cx = camera.x + W / 2;
+  const cy = H * 0.4;
+  let verts;
+
+  switch (type) {
+    case 'square':
+      verts = [
+        {x: cx - 40, y: cy - 40}, {x: cx + 40, y: cy - 40},
+        {x: cx + 40, y: cy + 40}, {x: cx - 40, y: cy + 40},
+      ];
+      break;
+    case 'rect':
+      verts = [
+        {x: cx - 80, y: cy - 30}, {x: cx + 80, y: cy - 30},
+        {x: cx + 80, y: cy + 30}, {x: cx - 80, y: cy + 30},
+      ];
+      break;
+    case 'tri':
+      verts = [
+        {x: cx, y: cy - 50},
+        {x: cx + 50, y: cy + 40},
+        {x: cx - 50, y: cy + 40},
+      ];
+      break;
+    case 'circle': {
+      const r = 40, segs = 12;
+      verts = [];
+      for (let i = 0; i < segs; i++) {
+        const a = (i / segs) * Math.PI * 2 - Math.PI / 2;
+        verts.push({x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r});
+      }
+      break;
+    }
+  }
+
+  objects.push({ verts, mat: 'sand', holeIndex: currentHole });
+
+  // Auto-select the new object
+  ed.selectedVert = -1;
+  ed.selectedObject = objects.length - 1;
+  ed.selectedObjectVert = -1;
+  updatePropsPanel();
+}
+
+// ── Sprite Asset Placement ────────────────────────────────
+function addSpriteObject(spriteKey, gameHeight) {
+  gameHeight = gameHeight || 95;
+  const hull = SPRITE_HULLS[spriteKey];
+  const img = SPRITES[spriteKey];
+  if (!hull || !img || hull.length < 3) {
+    console.warn('No hull for sprite:', spriteKey);
+    return;
+  }
+  pushUndo();
+
+  const cx = camera.x + W / 2;
+  const groundY = H * 0.55;
+  const aspect = img.naturalWidth / img.naturalHeight;
+  const totalH = gameHeight;
+  const totalW = totalH * aspect;
+  const top = groundY - totalH;
+
+  // Convert normalized hull (0-1) to game coordinates
+  const verts = hull.map(p => ({
+    x: cx - totalW/2 + p.x * totalW,
+    y: top + p.y * totalH
+  }));
+
+  objects.push({
+    verts, mat: 'rock', holeIndex: currentHole,
+    sprite: spriteKey,
+    rotation: 0
+  });
+
+  ed.selectedVert = -1;
+  ed.selectedObject = objects.length - 1;
+  ed.selectedObjectVert = -1;
+  ed.objectVertexMode = false;
+  updatePropsPanel();
+}
+
+function addLander() { addSpriteObject('lander', 95); }
+function addAsset(key) {
+  const info = SPRITE_CATALOG[key];
+  if (!info) return;
+  addSpriteObject(key, info.defaultHeight);
+}
+function placeSelectedAsset() {
+  const key = document.getElementById('asset-picker').value;
+  if (key) addAsset(key);
+}
+
+// Populate asset picker dropdown grouped by category
+(function buildAssetPicker() {
+  const picker = document.getElementById('asset-picker');
+  if (!picker) return;
+  const groups = {};
+  for (const [key, info] of Object.entries(SPRITE_CATALOG)) {
+    const cat = info.category || 'other';
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push({ key, label: info.label });
+  }
+  // Category display names
+  const catNames = { vehicles: 'Vehicles', plants: 'Plants', other: 'Other' };
+  // Order: plants first (most common), then vehicles, then other
+  const catOrder = ['plants', 'vehicles', 'other'];
+  for (const cat of catOrder) {
+    if (!groups[cat]) continue;
+    const optgroup = document.createElement('optgroup');
+    optgroup.label = catNames[cat] || cat;
+    for (const item of groups[cat]) {
+      const opt = document.createElement('option');
+      opt.value = item.key;
+      opt.textContent = item.label;
+      optgroup.appendChild(opt);
+    }
+    picker.appendChild(optgroup);
+  }
+})();
+
+// ── Delete Selected ───────────────────────────────────────
+function deleteSelected() {
+  if (ed.selectedObject >= 0) {
+    pushUndo();
+    objects.splice(ed.selectedObject, 1);
+    deselectAll();
+  } else if (ed.selectedVert >= 0) {
+    // Delete terrain vertex (right-click also does this)
+    deleteTerrainVertex(ed.selectedVert);
+  }
+}
+
+function deleteTerrainVertex(idx) {
+  const range = getHoleVertexRange(currentHole);
+  const rangeSize = range.end - range.start + 1;
+  if (rangeSize <= 3) return; // need minimum vertices
+  if (idx < range.start || idx > range.end) return;
+
+  pushUndo();
+  vertices.splice(idx, 1);
+  deselectAll();
+}
+
+// ── Material Change ───────────────────────────────────────
+function onMaterialChange() {
+  const mat = document.getElementById('mat-picker').value;
+
+  if (ed.selectedObject >= 0) {
+    pushUndo();
+    objects[ed.selectedObject].mat = mat;
+  } else if (ed.selectedVert >= 0) {
+    pushUndo();
+    vertices[ed.selectedVert].mat = mat;
+  }
+}
+
+function updatePropsPanel() {
+  const section = document.getElementById('props-group');
+  const picker = document.getElementById('mat-picker');
+  const deleteBtn = document.getElementById('btn-delete');
+
+  if (ed.selectedObject >= 0) {
+    section.classList.add('visible');
+    picker.value = objects[ed.selectedObject].mat || 'sand';
+    deleteBtn.style.display = 'block';
+  } else if (ed.selectedVert >= 0) {
+    section.classList.add('visible');
+    picker.value = vertices[ed.selectedVert].mat || 'sand';
+    deleteBtn.style.display = 'block';
+  } else {
+    section.classList.remove('visible');
+  }
+}
+
+// ── Editor Input ──────────────────────────────────────────
+canvas.addEventListener('mousedown', (e) => {
+  if (ed.mode !== 'edit') return;
+  if (state !== STATE_EDIT) return;
+
+  // Right-click: start panning
+  if (e.button === 2) {
+    ed.panning = true;
+    ed.panStartX = e.clientX;
+    ed.panStartY = e.clientY;
+    ed.panStartCamX = camera.x;
+    ed.panStartCamY = ed.camY;
+    ed.panMoved = false;
+    e.preventDefault();
+    return;
+  }
+
+  const w = screenToWorld(e.clientX, e.clientY);
+
+  // Knife tool intercept
+  if (ed.knifeActive) {
+    handleKnifeClick(w);
+    e.preventDefault();
+    return;
+  }
+
+  // Priority 0: cup marker hit (drag cup as unit)
+  if (findCupAtPoint(w.x, w.y)) {
+    pushUndo();
+    deselectAll();
+    ed.dragging = true;
+    ed.dragType = 'cup';
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
+  // Priority 1: terrain vertex hit (skip cup vertices)
+  const vi = findVertNear(w.x, w.y);
+  if (vi >= 0 && !isCupVertex(vi)) {
+    pushUndo();
+    ed.selectedObject = -1;
+    ed.selectedObjectVert = -1;
+    ed.objectVertexMode = false;
+    ed.selectedVert = vi;
+    ed.dragging = true;
+    ed.dragType = 'terrain-vert';
+    ed.dragStartX = w.x;
+    ed.dragStartY = w.y;
+    updatePropsPanel();
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
+  // Object interactions depend on vertex mode
+  if (ed.objectVertexMode && ed.selectedObject >= 0) {
+    // VERTEX MODE: drag individual vertices, insert on edges
+
+    const objVert = findObjectVertNear(w.x, w.y);
+    if (objVert && objVert.objectIdx === ed.selectedObject) {
+      pushUndo();
+      ed.selectedObjectVert = objVert.vertIdx;
+      ed.dragging = true;
+      ed.dragType = 'object-vert';
+      updatePropsPanel();
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    // Edge click inserts a new vertex
+    const edgeIdx = findObjectEdgeNear(ed.selectedObject, w.x, w.y);
+    if (edgeIdx >= 0) {
+      pushUndo();
+      objects[ed.selectedObject].verts.splice(edgeIdx + 1, 0, {x: w.x, y: w.y});
+      ed.selectedObjectVert = edgeIdx + 1;
+      ed.dragging = true;
+      ed.dragType = 'object-vert';
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    // Click inside shape body in vertex mode — start move
+    if (findObjectAtPoint(w.x, w.y) === ed.selectedObject) {
+      pushUndo();
+      ed.selectedObjectVert = -1;
+      ed.dragging = true;
+      ed.dragType = 'object-move';
+      ed.dragStartX = w.x;
+      ed.dragStartY = w.y;
+      ed.dragObjectOffsets = objects[ed.selectedObject].verts.map(v => ({dx: v.x - w.x, dy: v.y - w.y}));
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    // Click outside — exit vertex mode and deselect
+    deselectAll();
+    e.preventDefault();
+    return;
+
+  } else {
+    // RESIZE MODE (default): resize handles, body select, body move
+
+    // Rotation handle on already-selected object (check before resize)
+    if (findRotationHandleAt(w.x, w.y)) {
+      pushUndo();
+      const bb = getObjectAABB(ed.selectedObject);
+      ed.dragging = true;
+      ed.dragType = 'object-rotate';
+      ed.dragOrigVerts = objects[ed.selectedObject].verts.map(v => ({x: v.x, y: v.y}));
+      ed.dragRotCenter = { x: (bb.minX + bb.maxX) / 2, y: (bb.minY + bb.maxY) / 2 };
+      ed.dragRotStartAngle = Math.atan2(w.y - ed.dragRotCenter.y, w.x - ed.dragRotCenter.x);
+      ed._dragOrigRotation = objects[ed.selectedObject].rotation || 0;
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    // Resize handle on already-selected object
+    const resizeHandle = findResizeHandleAt(w.x, w.y);
+    if (resizeHandle) {
+      pushUndo();
+      const bb = getObjectAABB(ed.selectedObject);
+      ed.dragging = true;
+      ed.dragType = 'object-resize';
+      ed.dragResizeHandle = resizeHandle;
+      ed.dragOrigBB = bb;
+      ed.dragOrigVerts = objects[ed.selectedObject].verts.map(v => ({x: v.x, y: v.y}));
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    // Object body hit — select (or start move if already selected)
+    const oi = findObjectAtPoint(w.x, w.y);
+    if (oi >= 0) {
+      if (oi === ed.selectedObject) {
+        // Already selected — start move drag
+        pushUndo();
+        ed.selectedObjectVert = -1;
+        ed.dragging = true;
+        ed.dragType = 'object-move';
+        ed.dragStartX = w.x;
+        ed.dragStartY = w.y;
+        ed.dragObjectOffsets = objects[oi].verts.map(v => ({dx: v.x - w.x, dy: v.y - w.y}));
+      } else {
+        // New selection
+        pushUndo();
+        ed.selectedVert = -1;
+        ed.selectedObject = oi;
+        ed.selectedObjectVert = -1;
+        ed.objectVertexMode = false;
+      }
+      updatePropsPanel();
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+  }
+
+  // Priority 5: terrain edge hit (insert new vertex)
+  const edgeIdx = findEdgeNear(w.x, w.y);
+  if (edgeIdx >= 0) {
+    pushUndo();
+    const newVert = {x: w.x, y: w.y};
+    // Copy material from the edge's starting vertex
+    if (vertices[edgeIdx].mat) newVert.mat = vertices[edgeIdx].mat;
+    vertices.splice(edgeIdx + 1, 0, newVert);
+    ed.selectedObject = -1;
+    ed.selectedObjectVert = -1;
+    ed.selectedVert = edgeIdx + 1;
+    ed.dragging = true;
+    ed.dragType = 'terrain-vert';
+    updatePropsPanel();
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
+  // Shot loop aiming — if loop mode active and click on empty terrain, start aiming
+  if (ed.shotLoop.active) {
+    ed.shotLoop.aiming = true;
+    ed.shotLoop.aimStartX = w.x;
+    ed.shotLoop.aimStartY = w.y;
+    ed.shotLoop.aimCurrentX = w.x;
+    ed.shotLoop.aimCurrentY = w.y;
+    e.preventDefault();
+    return;
+  }
+
+  // Nothing hit — deselect
+  deselectAll();
+});
+
+// Double-click to enter vertex edit mode on an object
+canvas.addEventListener('dblclick', (e) => {
+  if (ed.mode !== 'edit') return;
+  if (state !== STATE_EDIT) return;
+
+  const w = screenToWorld(e.clientX, e.clientY);
+  const oi = findObjectAtPoint(w.x, w.y);
+  if (oi >= 0) {
+    ed.selectedVert = -1;
+    ed.selectedObject = oi;
+    ed.selectedObjectVert = -1;
+    ed.objectVertexMode = true;
+    updatePropsPanel();
+    e.preventDefault();
+  }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  if (ed.mode !== 'edit') return;
+
+  // Right-click pan
+  if (ed.panning) {
+    const dx = e.clientX - ed.panStartX;
+    const dy = e.clientY - ed.panStartY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) ed.panMoved = true;
+    const scale = displayScale * (canvas.height / H) * ed.zoom;
+    camera.x = ed.panStartCamX - dx / scale;
+    ed.camY  = ed.panStartCamY - dy / scale;
+    return;
+  }
+
+  // Shot loop aiming — track aim position
+  if (ed.shotLoop.aiming) {
+    const w = screenToWorld(e.clientX, e.clientY);
+    ed.shotLoop.aimCurrentX = w.x;
+    ed.shotLoop.aimCurrentY = w.y;
+    return;
+  }
+
+  const w = screenToWorld(e.clientX, e.clientY);
+
+  // Knife tool preview
+  if (ed.knifeActive) {
+    if (ed.knifeStart) {
+      ed.knifePreviewEnd = { x: w.x, y: w.y };
+    } else {
+      canvas.style.cursor = findObjectAtPoint(w.x, w.y) >= 0 ? 'crosshair' : 'not-allowed';
+    }
+    return;
+  }
+
+  // Handle active drag
+  if (ed.dragging) {
+    if (ed.dragType === 'terrain-vert' && ed.selectedVert >= 0) {
+      const v = vertices[ed.selectedVert];
+      v.y = Math.max(20, Math.min(H + 200, w.y));
+      v.x = w.x;
+    } else if (ed.dragType === 'object-vert' && ed.selectedObject >= 0 && ed.selectedObjectVert >= 0) {
+      const v = objects[ed.selectedObject].verts[ed.selectedObjectVert];
+      v.x = w.x;
+      v.y = Math.max(20, Math.min(H + 50, w.y));
+    } else if (ed.dragType === 'object-move' && ed.selectedObject >= 0) {
+      const verts = objects[ed.selectedObject].verts;
+      for (let i = 0; i < verts.length; i++) {
+        verts[i].x = w.x + ed.dragObjectOffsets[i].dx;
+        verts[i].y = w.y + ed.dragObjectOffsets[i].dy;
+      }
+    } else if (ed.dragType === 'cup') {
+      moveCupTo(w.x, w.y);
+    } else if (ed.dragType === 'object-rotate' && ed.selectedObject >= 0) {
+      const cx = ed.dragRotCenter.x, cy = ed.dragRotCenter.y;
+      const curAngle = Math.atan2(w.y - cy, w.x - cx);
+      const delta = curAngle - ed.dragRotStartAngle;
+      const cosD = Math.cos(delta), sinD = Math.sin(delta);
+      const obj = objects[ed.selectedObject];
+      const verts = obj.verts;
+      for (let i = 0; i < verts.length; i++) {
+        const ov = ed.dragOrigVerts[i];
+        const dx = ov.x - cx, dy = ov.y - cy;
+        verts[i].x = cx + dx * cosD - dy * sinD;
+        verts[i].y = cy + dx * sinD + dy * cosD;
+      }
+      // Update sprite rotation
+      if (obj.sprite) {
+        obj.rotation = (ed._dragOrigRotation || 0) + delta;
+      }
+    } else if (ed.dragType === 'object-resize' && ed.selectedObject >= 0) {
+      const orig = ed.dragOrigBB;
+      const handle = ed.dragResizeHandle;
+      const origW = orig.maxX - orig.minX;
+      const origH = orig.maxY - orig.minY;
+
+      let newMinX = orig.minX, newMaxX = orig.maxX;
+      let newMinY = orig.minY, newMaxY = orig.maxY;
+
+      if (handle.cx !== 0) {
+        if (handle.cx < 0) newMinX = w.x; else newMaxX = w.x;
+        if (newMinX > newMaxX - 5) {
+          if (handle.cx < 0) newMinX = newMaxX - 5; else newMaxX = newMinX + 5;
+        }
+      }
+      if (handle.cy !== 0) {
+        if (handle.cy < 0) newMinY = w.y; else newMaxY = w.y;
+        if (newMinY > newMaxY - 5) {
+          if (handle.cy < 0) newMinY = newMaxY - 5; else newMaxY = newMinY + 5;
+        }
+      }
+
+      const verts = objects[ed.selectedObject].verts;
+      for (let i = 0; i < verts.length; i++) {
+        const ov = ed.dragOrigVerts[i];
+        if (handle.cx !== 0 && origW > 0.1) {
+          const t = (ov.x - orig.minX) / origW;
+          verts[i].x = newMinX + t * (newMaxX - newMinX);
+        }
+        if (handle.cy !== 0 && origH > 0.1) {
+          const t = (ov.y - orig.minY) / origH;
+          verts[i].y = newMinY + t * (newMaxY - newMinY);
+        }
+      }
+    }
+    e.preventDefault();
+    return;
+  }
+
+  // Hover detection
+  ed.hoverVert = findVertNear(w.x, w.y);
+  const objVert = findObjectVertNear(w.x, w.y);
+  ed.hoverObject = -1;
+  ed.hoverObjectVert = -1;
+  ed.hoverResizeHandle = null;
+  ed.hoverRotHandle = false;
+
+  if (findCupAtPoint(w.x, w.y)) {
+    canvas.style.cursor = 'grab';
+  } else if (ed.hoverVert >= 0 && !isCupVertex(ed.hoverVert)) {
+    canvas.style.cursor = 'grab';
+  } else if (ed.objectVertexMode && objVert && objVert.objectIdx === ed.selectedObject) {
+    // In vertex mode: show grab cursor on object vertices
+    ed.hoverObject = objVert.objectIdx;
+    ed.hoverObjectVert = objVert.vertIdx;
+    canvas.style.cursor = 'grab';
+  } else if (ed.objectVertexMode) {
+    // In vertex mode but not hovering a vertex: show crosshair
+    const oi = findObjectAtPoint(w.x, w.y);
+    if (oi >= 0 && oi === ed.selectedObject) {
+      ed.hoverObject = oi;
+      canvas.style.cursor = 'move';
+    } else {
+      canvas.style.cursor = 'crosshair';
+    }
+  } else if (!ed.objectVertexMode) {
+    // In resize mode: check rotation handle first, then resize handles
+    ed.hoverRotHandle = false;
+    if (findRotationHandleAt(w.x, w.y)) {
+      ed.hoverRotHandle = true;
+      canvas.style.cursor = 'grab';
+    } else {
+      const rh = findResizeHandleAt(w.x, w.y);
+      if (rh) {
+        ed.hoverResizeHandle = rh.id;
+        const cursors = {tl:'nwse-resize',tr:'nesw-resize',bl:'nesw-resize',br:'nwse-resize',
+                         tc:'ns-resize',bc:'ns-resize',ml:'ew-resize',mr:'ew-resize'};
+        canvas.style.cursor = cursors[rh.id] || 'nwse-resize';
+      } else {
+        const oi = findObjectAtPoint(w.x, w.y);
+        if (oi >= 0) {
+          ed.hoverObject = oi;
+          canvas.style.cursor = 'move';
+        } else {
+          canvas.style.cursor = 'crosshair';
+        }
+      }
+    }
+  }
+});
+
+canvas.addEventListener('mouseup', (e) => {
+  if (ed.mode !== 'edit') return;
+
+  // Right-click release: if we didn't pan, do vertex delete
+  if (e.button === 2 && ed.panning) {
+    const wasPan = ed.panMoved;
+    ed.panning = false;
+    if (!wasPan) {
+      // Treat as a right-click (delete vertex)
+      const w = screenToWorld(e.clientX, e.clientY);
+      const objVert = ed.objectVertexMode ? findObjectVertNear(w.x, w.y) : null;
+      if (objVert && objects[objVert.objectIdx].verts.length > 3) {
+        pushUndo();
+        objects[objVert.objectIdx].verts.splice(objVert.vertIdx, 1);
+        if (ed.selectedObject === objVert.objectIdx) {
+          ed.selectedObjectVert = -1;
+        }
+      } else {
+        const vi = findVertNear(w.x, w.y);
+        if (vi >= 0) deleteTerrainVertex(vi);
+      }
+    }
+    return;
+  }
+
+  // Shot loop — record shot on release
+  if (ed.shotLoop.aiming) {
+    ed.shotLoop.aiming = false;
+    const dx = ed.shotLoop.aimStartX - ed.shotLoop.aimCurrentX;
+    const dy = ed.shotLoop.aimStartY - ed.shotLoop.aimCurrentY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist >= 5) {
+      const power = Math.min(dist * POWER_SCALE, MAX_POWER);
+      const angle = Math.atan2(dy, dx);
+      ed.shotLoop.vx = Math.cos(angle) * power;
+      ed.shotLoop.vy = Math.sin(angle) * power;
+      ed.shotLoop.spin = ball.spinAim * (Math.sign(ed.shotLoop.vx) || 1);
+      ed.shotLoop.hasShot = true;
+      ed.shotLoop.balls = []; // clear old balls
+      ed.shotLoop.spawnTimer = ed.shotLoop.spawnInterval; // spawn one immediately
+    }
+    return;
+  }
+
+  ed.dragging = false;
+  ed.dragType = null;
+  ed.dragResizeHandle = null;
+  ed.dragOrigBB = null;
+  ed.dragOrigVerts = null;
+});
+
+// Suppress context menu in edit mode (panning uses right-click)
+canvas.addEventListener('contextmenu', (e) => {
+  if (ed.mode === 'edit') e.preventDefault();
+});
+
+// Mouse wheel for camera pan/zoom in edit mode
+canvas.addEventListener('wheel', (e) => {
+  if (ed.mode !== 'edit') return;
+  e.preventDefault();
+  if (e.shiftKey) {
+    // Horizontal pan (shift+scroll)
+    camera.x += e.deltaY * 0.5 / ed.zoom;
+  } else {
+    // Zoom — centered on mouse position (plain scroll)
+    const oldZoom = ed.zoom;
+    const factor = e.deltaY > 0 ? 0.9 : 1.1;
+    ed.zoom = Math.max(0.15, Math.min(3, ed.zoom * factor));
+    // Adjust camera so the point under the mouse stays fixed
+    const pos = toGameCoords(e.clientX, e.clientY);
+    const worldXBefore = pos.x / oldZoom + camera.x;
+    const worldYBefore = pos.y / oldZoom + ed.camY;
+    camera.x = worldXBefore - pos.x / ed.zoom;
+    ed.camY  = worldYBefore - pos.y / ed.zoom;
+  }
+}, { passive: false });
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+
+  switch(e.key.toLowerCase()) {
+    case 'e':
+      switchMode('edit');
+      break;
+    case 'p':
+      switchMode('play');
+      break;
+    case 'r':
+      resetBallToTee();
+      break;
+    case 'z':
+      if (e.ctrlKey || e.metaKey) { editorUndo(); e.preventDefault(); }
+      break;
+    case '[':
+      goToHole(currentHole - 1);
+      break;
+    case ']':
+      goToHole(currentHole + 1);
+      break;
+    case 'c':
+      ed.showCollision = !ed.showCollision;
+      break;
+    case 'k':
+      toggleKnifeTool();
+      break;
+    case 'l':
+      // Toggle shot loop mode
+      if (ed.mode === 'edit') {
+        ed.shotLoop.active = !ed.shotLoop.active;
+        if (!ed.shotLoop.active) {
+          ed.shotLoop.balls = [];
+          ed.shotLoop.aiming = false;
+        }
+        updateModeBadge();
+      }
+      break;
+    case '0':
+      // Reset zoom & pan
+      ed.zoom = 1.0;
+      ed.camY = 0;
+      setHoleCamera(holes[currentHole]);
+      break;
+    case 'escape':
+      if (ed.knifeActive) {
+        if (ed.knifeStart) {
+          // Cancel pending cut, stay in knife mode
+          ed.knifeStart = null;
+          ed.knifePreviewEnd = null;
+          ed.knifeTargetObject = -1;
+        } else {
+          clearKnifeState();
+        }
+      } else {
+        deselectAll();
+      }
+      break;
+    case 'delete':
+    case 'backspace':
+      if (ed.selectedObject >= 0) {
+        deleteSelected();
+        e.preventDefault();
+      }
+      break;
+  }
+});
+
+// ── Editor Object Drawing ────────────────────────────────
+function drawEditorObjects() {
+  const editMode = (ed.mode === 'edit');
+
+  ctx.save();
+  ctx.scale(displayScale, displayScale);
+  ctx.save();
+  MODE.applyCameraTransform(ctx);
+  // Scale handles/lines inversely so they stay the same screen size regardless of zoom
+  const invZ = 1 / ed.zoom;
+
+  // Draw object outlines and handles
+  for (let oi = 0; oi < objects.length; oi++) {
+    const ov = objects[oi];
+    if (ov.verts.length < 3) continue;
+    const isSelected = oi === ed.selectedObject;
+    const isHover = oi === ed.hoverObject;
+
+    // Outline
+    ctx.beginPath();
+    ctx.moveTo(ov.verts[0].x, ov.verts[0].y);
+    for (let k = 1; k < ov.verts.length; k++) {
+      ctx.lineTo(ov.verts[k].x, ov.verts[k].y);
+    }
+    ctx.closePath();
+
+    // Draw object fill — sprite image or terrain-colored shape
+    if (ov.sprite && SPRITES[ov.sprite]) {
+      // Sprite object: draw the image within the bounding box
+      ctx.save();
+      const bounds = getObjectBounds(ov);
+      if (ov.rotation) {
+        const cx = (bounds.minX + bounds.maxX) / 2;
+        const cy = (bounds.minY + bounds.maxY) / 2;
+        ctx.translate(cx, cy);
+        ctx.rotate(ov.rotation);
+        ctx.drawImage(SPRITES[ov.sprite],
+          -(bounds.maxX - bounds.minX) / 2,
+          -(bounds.maxY - bounds.minY) / 2,
+          bounds.maxX - bounds.minX,
+          bounds.maxY - bounds.minY);
+      } else {
+        ctx.drawImage(SPRITES[ov.sprite],
+          bounds.minX, bounds.minY,
+          bounds.maxX - bounds.minX,
+          bounds.maxY - bounds.minY);
+      }
+      ctx.restore();
+    } else {
+      // Non-sprite object: fill with terrain color
+      ctx.fillStyle = GROUND || '#d68841';
+      ctx.fill();
+    }
+
+    // Editor-only overlays and handles
+    if (editMode) {
+    // Collision overlay — press C to toggle
+    if (ed.showCollision) {
+      ctx.fillStyle = 'rgba(255, 50, 50, 0.3)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 50, 50, 0.8)';
+      ctx.lineWidth = 1.5 * invZ;
+      ctx.stroke();
+    }
+
+    if (isSelected) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2 * invZ;
+      ctx.setLineDash([6 * invZ, 4 * invZ]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else if (isHover) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+      ctx.lineWidth = 1 * invZ;
+      ctx.setLineDash([4 * invZ, 4 * invZ]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Handles for selected object — mode-dependent
+    if (isSelected) {
+      if (ed.objectVertexMode) {
+        // Vertex edit mode (double-click to enter): show vertex circles
+        for (let vi = 0; vi < ov.verts.length; vi++) {
+          const v = ov.verts[vi];
+          const isVertSelected = vi === ed.selectedObjectVert;
+          const isVertHover = oi === ed.hoverObject && vi === ed.hoverObjectVert;
+
+          ctx.beginPath();
+          ctx.arc(v.x, v.y, HANDLE_RADIUS * invZ, 0, Math.PI * 2);
+
+          if (isVertSelected) {
+            ctx.fillStyle = 'rgba(232, 200, 64, 0.9)';
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2 * invZ;
+            ctx.stroke();
+          } else if (isVertHover) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1 * invZ;
+            ctx.stroke();
+          } else {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.lineWidth = 1 * invZ;
+            ctx.stroke();
+          }
+        }
+      } else {
+        // Resize mode (default, click to select): show bounding box + resize handles
+        const bb = getObjectAABB(oi);
+        // Dashed bounding box
+        ctx.strokeStyle = 'rgba(100, 180, 255, 0.5)';
+        ctx.lineWidth = 1 * invZ;
+        ctx.setLineDash([4 * invZ, 4 * invZ]);
+        ctx.strokeRect(bb.minX, bb.minY, bb.maxX - bb.minX, bb.maxY - bb.minY);
+        ctx.setLineDash([]);
+
+        // 8 resize handles (squares)
+        for (const h of RESIZE_HANDLES) {
+          const pos = h.getPos(bb);
+          const isHov = ed.hoverResizeHandle === h.id;
+          const s = (isHov ? RESIZE_HANDLE_SIZE + 1 : RESIZE_HANDLE_SIZE) * invZ;
+
+          ctx.fillStyle = isHov ? '#66bbff' : 'rgba(100, 180, 255, 0.9)';
+          ctx.fillRect(pos.x - s, pos.y - s, s * 2, s * 2);
+          ctx.strokeStyle = '#234';
+          ctx.lineWidth = 1 * invZ;
+          ctx.strokeRect(pos.x - s, pos.y - s, s * 2, s * 2);
+        }
+
+        // Rotation handle — circle above top-center
+        const rotPos = getRotationHandlePos(bb, invZ);
+        const topCenter = { x: (bb.minX + bb.maxX) / 2, y: bb.minY };
+        const rotR = (ed.hoverRotHandle ? HANDLE_RADIUS + 1 : HANDLE_RADIUS) * invZ;
+
+        // Stem line from top-center to rotation handle
+        ctx.strokeStyle = 'rgba(100, 220, 100, 0.6)';
+        ctx.lineWidth = 1.5 * invZ;
+        ctx.beginPath();
+        ctx.moveTo(topCenter.x, topCenter.y);
+        ctx.lineTo(rotPos.x, rotPos.y);
+        ctx.stroke();
+
+        // Circle handle
+        ctx.fillStyle = ed.hoverRotHandle ? '#88ff88' : 'rgba(100, 220, 100, 0.9)';
+        ctx.beginPath();
+        ctx.arc(rotPos.x, rotPos.y, rotR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#234';
+        ctx.lineWidth = 1 * invZ;
+        ctx.stroke();
+      }
+    }
+    } // end if (editMode)
+  }
+
+  // Only draw terrain/cup handles in edit mode
+  if (!editMode) { ctx.restore(); ctx.restore(); return; }
+
+  // Draw terrain vertex handles for current hole (skip cup vertices)
+  const range = getHoleVertexRange(currentHole);
+  const cupVerts = getCupVertexIndices(currentHole);
+  for (let i = range.start; i <= range.end; i++) {
+    if (cupVerts.includes(i)) continue; // cup vertices hidden — use cup marker instead
+    const v = vertices[i];
+    const isSelected = i === ed.selectedVert;
+    const isHover = i === ed.hoverVert;
+
+    ctx.beginPath();
+    ctx.arc(v.x, v.y, HANDLE_RADIUS * invZ, 0, Math.PI * 2);
+
+    if (isSelected) {
+      ctx.fillStyle = 'rgba(232, 200, 64, 0.9)';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2 * invZ;
+      ctx.stroke();
+    } else if (isHover) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1 * invZ;
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.lineWidth = 1 * invZ;
+      ctx.stroke();
+    }
+
+    // Show material indicator on selected terrain vertex
+    if (isSelected && vertices[i].mat && vertices[i].mat !== 'sand') {
+      const matColor = MATERIALS[vertices[i].mat].color;
+      ctx.fillStyle = matColor;
+      ctx.fillRect(v.x - 4 * invZ, v.y - 14 * invZ, 8 * invZ, 4 * invZ);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 0.5 * invZ;
+      ctx.strokeRect(v.x - 4 * invZ, v.y - 14 * invZ, 8 * invZ, 4 * invZ);
+    }
+  }
+
+  // Draw tee marker
+  const hole = holes[currentHole];
+  if (hole) {
+    const teeY = terrainYAt(hole.teeX);
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = "9px 'Departure Mono', monospace";
+    ctx.textAlign = 'center';
+    ctx.fillText('T', hole.teeX, teeY - 12);
+
+    // Cup marker
+    ctx.fillStyle = '#e8c840';
+    ctx.beginPath();
+    ctx.arc(hole.cupX, hole.cupY, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = '#333';
+    ctx.font = "8px 'Departure Mono', monospace";
+    ctx.textAlign = 'center';
+    ctx.fillText('C', hole.cupX, hole.cupY + 3);
+  }
+
+  // ── Knife Tool Preview ──────────────────────────────────
+  if (ed.knifeActive && ed.knifeStart && ed.knifePreviewEnd) {
+    const a = ed.knifeStart, b = ed.knifePreviewEnd;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+
+    if (len > 0.1) {
+      // Extended dashed line (the infinite cut plane)
+      const extend = 2000;
+      const ex = dx / len * extend, ey = dy / len * extend;
+      ctx.beginPath();
+      ctx.moveTo(a.x - ex, a.y - ey);
+      ctx.lineTo(a.x + ex, a.y + ey);
+      ctx.strokeStyle = 'rgba(255, 80, 80, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([8, 6]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Solid segment between clicks
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.strokeStyle = '#ff4444';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // Start point marker
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#ff4444';
+    ctx.fill();
+
+    // Intersection preview dots on target object
+    if (ed.knifeTargetObject >= 0 && len > 0.1) {
+      const obj = objects[ed.knifeTargetObject];
+      if (obj) {
+        for (let i = 0; i < obj.verts.length; i++) {
+          const j = (i + 1) % obj.verts.length;
+          const hit = lineSegmentIntersect(a, b, obj.verts[i], obj.verts[j]);
+          if (hit) {
+            ctx.beginPath();
+            ctx.arc(hit.point.x, hit.point.y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffcc00';
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          }
+        }
+      }
+    }
+  }
+
+  ctx.restore(); // world space
+  ctx.restore(); // displayScale
+}
+
+// ── Editor Game Loop ──────────────────────────────────────
+// ── Serialize / Save ─────────────────────────────────────
+function serializeHole(holeIdx) {
+  const hole = holes[holeIdx];
+  if (!hole) return null;
+
+  const teeX = hole.teeX;
+  const startX = teeX + 40;
+  const cupX = hole.cupX;
+
+  // Collect cup vertex X bounds so we can exclude them
+  const cupLeftBound = hole.cupLeftX - 21; // flatMargin(20) + 1
+  const cupRightBound = hole.cupRightX + 21;
+
+  // Find terrain vertices between tee and cup, excluding cup vertices and background
+  const midVerts = [];
+  for (let i = 0; i < vertices.length; i++) {
+    const v = vertices[i];
+    if (v.x <= startX) continue;            // before playable area
+    if (v.x >= cupLeftBound) break;         // at or past cup zone
+    const entry = { dx: Math.round(v.x - startX), y: Math.round(v.y) };
+    if (v.mat && v.mat !== 'sand') entry.mat = v.mat;
+    midVerts.push(entry);
+  }
+
+  const def = {
+    teeY: Math.round(hole.teeY),
+    dist: Math.round(cupX - teeX),
+    cupY: Math.round(hole.cupY),
+    verts: midVerts,
+  };
+
+  // Include cup material if non-default
+  if (hole.cupMat && hole.cupMat !== 'sand') def.cupMat = hole.cupMat;
+
+  // Collect objects belonging to this hole
+  const holeObjects = objects.filter(ov => ov.holeIndex === holeIdx);
+  if (holeObjects.length > 0) {
+    def.objects = holeObjects.map(ov => {
+      const o = {
+        mat: ov.mat,
+        verts: ov.verts.map(v => ({ dx: Math.round(v.x - startX), y: Math.round(v.y) }))
+      };
+      if (ov.sprite) o.sprite = ov.sprite;
+      if (ov.rotation) o.rotation = ov.rotation;
+      return o;
+    });
+  }
+
+  return def;
+}
+
+function serializeAllCustomHoles() {
+  const obj = {};
+  for (const idx of customHoleIndices) {
+    if (idx < holes.length) {
+      const def = serializeHole(idx);
+      if (def) obj[String(idx)] = def;
+    }
+  }
+  return obj;
+}
+
+function saveCustomHoles() {
+  const holeData = serializeAllCustomHoles();
+  // Save to course-scoped key (includes metadata)
+  const courseData = {
+    holeCount: editorHoleCount,
+    holes: holeData,
+    courseName: document.getElementById('course-name')?.value || '',
+  };
+  localStorage.setItem(courseStorageKey(), JSON.stringify(courseData));
+  // Also sync to the legacy key so level-design.js can read it
+  localStorage.setItem('desert-golfing-custom-holes', JSON.stringify(holeData));
+  // Save active world/course so the game loads the same one
+  const wId = document.getElementById('world-picker')?.value || 'desert-planet';
+  const cId = document.getElementById('course-picker')?.value || 'barren-flats';
+  localStorage.setItem('dg-active-course', JSON.stringify({ worldId: wId, courseId: cId }));
+  invalidateCustomHolesCache();
+  // Visual feedback
+  const btn = document.getElementById('btn-save');
+  btn.textContent = 'Saved!';
+  btn.style.background = '#4a4';
+  setTimeout(() => { btn.textContent = 'Save'; btn.style.background = ''; }, 1200);
+  console.log('Saved', Object.keys(holeData).length, 'custom holes to', courseStorageKey());
+}
+
+function clearCustomHoles() {
+  localStorage.removeItem(courseStorageKey());
+  localStorage.removeItem('desert-golfing-custom-holes');
+  invalidateCustomHolesCache();
+  // Reset to defaults
+  customHoleIndices.clear();
+  editorHoleCount = getCourseHoleCount(currentCourse);
+  buildHoleList();
+  const btn = document.getElementById('btn-clear');
+  btn.textContent = 'Cleared!';
+  btn.style.background = '#a44';
+  setTimeout(() => { btn.textContent = 'Clear'; btn.style.background = ''; }, 1200);
+  console.log('Cleared course data from localStorage');
+}
+
+// ── Shot Loop — ghost ball management ─────────────────────
+function spawnGhostBall() {
+  const hole = holes[currentHole];
+  if (!hole) return null;
+  const teeY = terrainYAt(hole.teeX) - BALL_RADIUS;
+  return {
+    x: hole.teeX, y: teeY,
+    vx: ed.shotLoop.vx, vy: ed.shotLoop.vy,
+    onGround: false, atRest: false, slowFrames: 0,
+    spin: ed.shotLoop.spin, spinAim: 0, rotation: 0,
+    lastCollidedMat: null, lastCollisionNormal: null,
+    lastCollisionY: null, lastCollisionSource: 'terrain',
+    dead: false, age: 0,
+  };
+}
+
+function updateShotLoop() {
+  const loop = ed.shotLoop;
+  if (!loop.active || !loop.hasShot) return;
+
+  // Spawn new balls on timer
+  loop.spawnTimer++;
+  if (loop.spawnTimer >= loop.spawnInterval) {
+    loop.spawnTimer = 0;
+    if (loop.balls.length < loop.maxBalls) {
+      loop.balls.push(spawnGhostBall());
+    }
+  }
+
+  // Update each ghost ball by temporarily swapping global ball
+  const realBall = ball;
+  const realState = state;
+  for (let i = loop.balls.length - 1; i >= 0; i--) {
+    const gb = loop.balls[i];
+    if (gb.dead) { loop.balls.splice(i, 1); continue; }
+
+    // Swap global ball with ghost ball
+    ball = gb;
+    state = STATE_FLIGHT;
+
+    // Run physics (same as updatePhysics)
+    if (!ball.atRest) {
+      ball.rotation += ball.onGround ? ball.vx / BALL_RADIUS : ball.spin * 0.3;
+      const substeps = 2;
+      for (let s = 0; s < substeps; s++) {
+        ball.vy += GRAVITY / substeps;
+        ball.x += ball.vx / substeps;
+        ball.y += ball.vy / substeps;
+        MODE.collide();
+      }
+      // Spin decay in air
+      if (!ball.onGround && Math.abs(ball.spin) > 0.001) {
+        ball.spin *= SPIN_AIR_DECAY;
+        if (Math.abs(ball.spin) < 0.001) ball.spin = 0;
+      }
+      // Friction on ground
+      if (ball.onGround) {
+        const mat = ball.lastCollidedMat ? MATERIALS[ball.lastCollidedMat] : MATERIALS[DEFAULT_MAT];
+        let effRoll = mat.rollingFriction;
+        if (Math.abs(ball.spin) > 0.01) {
+          const spinEffect = ball.spin * (Math.sign(ball.vx) || 1);
+          effRoll = Math.min(0.999, Math.max(0.85, effRoll + spinEffect * SPIN_ROLL_FACTOR));
+        }
+        ball.vx *= effRoll;
+        ball.vy *= effRoll;
+        const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+        if (speed > mat.surfaceFriction) {
+          ball.vx -= (ball.vx / speed) * mat.surfaceFriction;
+          ball.vy -= (ball.vy / speed) * mat.surfaceFriction;
+        }
+        if (Math.abs(ball.spin) > 0.001) {
+          ball.spin *= SPIN_GROUND_DECAY;
+          if (Math.abs(ball.spin) < 0.001) ball.spin = 0;
+        }
+        if (speed < 0.5) ball.slowFrames++;
+        else ball.slowFrames = 0;
+        if (speed < 0.05 || ball.slowFrames > 120) {
+          ball.vx = 0; ball.vy = 0; ball.atRest = true;
+          ball.spin = 0; ball.slowFrames = 0;
+        }
+      }
+    }
+
+    // Check if ghost ball should be removed (at rest, in cup, fallen off world, or old)
+    gb.age++;
+    if (gb.atRest || gb.age > 600) gb.dead = true;
+    // Don't use isBallOffScreen (it checks editor camera viewport).
+    // Instead check if ball has fallen far below terrain or gone very far
+    if (gb.y > H + 300 || gb.y < -200) gb.dead = true;
+    if (isBallInCup()) gb.dead = true;
+  }
+
+  // Restore real ball
+  ball = realBall;
+  state = realState;
+}
+
+function drawGhostBalls() {
+  const loop = ed.shotLoop;
+  if (!loop.active || loop.balls.length === 0) return;
+
+  // Ghost balls drawn in world coords (camera transform already applied by draw())
+  for (const gb of loop.balls) {
+    if (gb.dead) continue;
+    // Fade based on age
+    const alpha = Math.max(0.15, 1 - gb.age / 500);
+    ctx.globalAlpha = alpha * 0.7;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(gb.x, gb.y, BALL_RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+    // Rotation dots
+    const dotR = BALL_RADIUS * 0.55;
+    const dotSize = BALL_RADIUS * 0.18;
+    ctx.fillStyle = `rgba(140, 135, 120, ${alpha * 0.4})`;
+    for (let i = 0; i < 3; i++) {
+      const angle = gb.rotation + i * (Math.PI * 2 / 3);
+      ctx.beginPath();
+      ctx.arc(gb.x + Math.cos(angle) * dotR, gb.y + Math.sin(angle) * dotR, dotSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawShotLoopAimLine() {
+  // Draw aim line when user is aiming in shot loop mode
+  const loop = ed.shotLoop;
+  if (!loop.aiming) return;
+
+  const hole = holes[currentHole];
+  if (!hole) return;
+  const teeX = hole.teeX;
+  const teeY = terrainYAt(teeX) - BALL_RADIUS;
+
+  const dx = loop.aimStartX - loop.aimCurrentX;
+  const dy = loop.aimStartY - loop.aimCurrentY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < 5) return;
+
+  const power = Math.min(dist * POWER_SCALE, MAX_POWER);
+  const angle = Math.atan2(dy, dx);
+  const lineLen = power * 15; // visual length
+
+  ctx.strokeStyle = 'rgba(255, 100, 100, 0.7)';
+  ctx.lineWidth = 2 / ed.zoom;
+  ctx.setLineDash([6 / ed.zoom, 4 / ed.zoom]);
+  ctx.beginPath();
+  ctx.moveTo(teeX, teeY);
+  ctx.lineTo(teeX + Math.cos(angle) * lineLen, teeY + Math.sin(angle) * lineLen);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Draw small circle at tee
+  ctx.strokeStyle = 'rgba(255, 100, 100, 0.9)';
+  ctx.lineWidth = 1.5 / ed.zoom;
+  ctx.beginPath();
+  ctx.arc(teeX, teeY, BALL_RADIUS + 3, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+let _lastTrackedHole = 0;
+
+function editorGameLoop() {
+  _ballLogFrame++;
+
+  // Only run game update in play mode
+  if (ed.mode === 'play') {
+    update();
+    // Detect hole transitions and update sidebar
+    if (currentHole !== _lastTrackedHole) {
+      _lastTrackedHole = currentHole;
+      buildHoleList();
+    }
+  }
+
+  // Update shot loop ghost balls
+  if (ed.mode === 'edit') {
+    updateShotLoop();
+    updateModeBadge();
+  }
+
+  // Always use the real renderer
+  draw();
+
+  // Draw ghost balls (in world coords, after draw() which applies camera)
+  if (ed.mode === 'edit' && ed.shotLoop.active) {
+    ctx.save();
+    ctx.scale(displayScale, displayScale);
+    MODE.applyCameraTransform(ctx);
+    drawGhostBalls();
+    drawShotLoopAimLine();
+    ctx.restore();
+  }
+
+  // Then object editor UI on top
+  drawEditorObjects();
+
+  requestAnimationFrame(editorGameLoop);
+}
+
+// ── Start ─────────────────────────────────────────────────
+editorInit();
+editorGameLoop();
+</script>
+</body>
+</html>

@@ -148,6 +148,39 @@ function drawBallLog() {
   }
 }
 
+// ── Debug: Skip to Hole ──────────────────────────────────
+// Usage: skipToHole(5)  — jump to hole 5 (1-based)
+window.skipToHole = function(holeNum) {
+  const targetIndex = holeNum - 1;
+  // Generate holes up to target
+  for (let i = holes.length; i <= targetIndex; i++) {
+    generateHoleTerrain(i);
+    holes[i].flagVisible = true;
+  }
+  // Fill all previous cups
+  for (let i = 0; i < targetIndex; i++) {
+    holes[i].cupFilled = true;
+    holes[i].cupFillProgress = 1;
+    holes[i].flagVisible = false;
+    holes[i].flagOpacity = 0;
+    flattenCup(holes[i]);
+  }
+  currentHole = targetIndex;
+  const hole = holes[currentHole];
+  ball.x = hole.teeX;
+  ball.y = terrainYAt(hole.teeX) - BALL_RADIUS;
+  ball.vx = 0;
+  ball.vy = 0;
+  ball.atRest = true;
+  ball.onGround = false;
+  ball.spinRate = 0;
+  ball.rotation = 0;
+  setHoleCamera(hole);
+  state = STATE_AIM;
+  showTitle = false;
+  console.log('Skipped to hole ' + holeNum + ' (index ' + targetIndex + ')');
+};
+
 // Patch draw to include debug overlays
 const _origDraw = draw;
 draw = function() {

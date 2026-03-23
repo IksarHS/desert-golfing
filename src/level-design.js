@@ -629,7 +629,7 @@ function pickArchetype(difficulty) {
 // ── Main Terrain Generation ──────────────────────────────
 function generateHoleTerrain(holeIndex) {
   // Use hand-defined hole if available
-  if (holeIndex < HAND_DEFINED_HOLES.length) {
+  if (HAND_DEFINED_HOLES[holeIndex]) {
     return generateHandDefinedHole(holeIndex);
   }
 
@@ -683,13 +683,17 @@ function generateHoleTerrain(holeIndex) {
   // Add micro-noise: subdivide long segments with subtle perturbations
   const holeVerts = addMicroNoise(rawVerts, startX, teeY, difficulty);
 
+  // The cup X is at the last feature vertex (end of hole)
+  const lastVert = holeVerts[holeVerts.length - 1];
+
+  // Remove any stray vertices (e.g. background verts from previous hole)
+  // that fall within this hole's terrain range, to maintain X-order
+  vertices = vertices.filter(v => v.x <= startX || v.x >= lastVert.x);
+
   // Append hole vertices to global array
   for (const v of holeVerts) {
     vertices.push(v);
   }
-
-  // The cup X is at the last feature vertex (end of hole)
-  const lastVert = holeVerts[holeVerts.length - 1];
   const cupX = lastVert.x;
   const cupSurfaceY = lastVert.y;
 
@@ -728,9 +732,18 @@ function generateHandDefinedHole(holeIndex) {
 
   // Convert relative dx vertices to absolute world positions
   const startX = teeX + 40;
-  const holeVerts = def.verts.map(v => ({ x: startX + v.dx, y: v.y }));
+  const holeVerts = def.verts.map(v => {
+    const vert = { x: startX + v.dx, y: v.y };
+    if (v.mat) vert.mat = v.mat;
+    return vert;
+  });
   // Add the cup endpoint
   holeVerts.push({ x: teeX + def.dist, y: def.cupY });
+
+  // Remove any stray vertices (e.g. background verts from previous hole)
+  // that fall within this hole's terrain range, to maintain X-order
+  const holeEndX = teeX + def.dist;
+  vertices = vertices.filter(v => v.x <= startX || v.x >= holeEndX);
 
   // Append hole vertices to global array
   for (const v of holeVerts) {
@@ -739,17 +752,28 @@ function generateHandDefinedHole(holeIndex) {
 
   const cupX = teeX + def.dist;
 
-  // Add background terrain past the cup
+  // Add background terrain past the cup (deterministic for hand-defined holes)
   const bg1X = cupX + 120;
-  const bg1Y = clampY(def.cupY + (random() - 0.5) * 30);
+  const bg1Y = clampY(def.cupY + ((holeIndex * 7 % 13) / 13 - 0.5) * 30);
   const bg2X = bg1X + 150;
-  const bg2Y = clampY(bg1Y + (random() - 0.5) * 30);
+  const bg2Y = clampY(bg1Y + ((holeIndex * 11 % 17) / 17 - 0.5) * 30);
   vertices.push({ x: bg1X, y: bg1Y });
   vertices.push({ x: bg2X, y: bg2Y });
 
   // Place the cup
   placeCup(holeIndex, cupX, teeX, teeY);
   holes[holeIndex].archetype = 'hand_defined';
+
+  // Load objects defined for this hole
+  if (def.objects && def.objects.length > 0) {
+    for (const od of def.objects) {
+      const verts = od.verts.map(v => ({ x: startX + v.dx, y: v.y }));
+      const obj = { verts, mat: od.mat || DEFAULT_MAT, holeIndex };
+      if (od.sprite) obj.sprite = od.sprite;
+      if (od.rotation) obj.rotation = od.rotation;
+      objects.push(obj);
+    }
+  }
 }
 
 function placeCup(holeIndex, cupX, teeX, teeY) {
@@ -825,8 +849,11 @@ function flattenCup(hole) {
 }
 
 function ensureHolesAhead(upToHole) {
-  // Make sure terrain and cups exist for holes up to upToHole
-  for (let i = holes.length; i <= upToHole; i++) {
+  // Cap at course hole count if defined
+  const maxHoles = currentCourse?.holeCount ?? Infinity;
+  const cap = Math.min(upToHole, maxHoles - 1);
+  // Make sure terrain and cups exist for holes up to cap
+  for (let i = holes.length; i <= cap; i++) {
     generateHoleTerrain(i);
     holes[i].flagVisible = true;
   }

@@ -56,20 +56,13 @@ function collideWithTerrain() {
       const nx = distX / dist;
       const ny = distY / dist;
 
-      // Side check
-      const segNormX = dy / Math.sqrt(lenSq);
-      const segNormY = -dx / Math.sqrt(lenSq);
-      const upNx = segNormY < 0 ? segNormX : -segNormX;
-      const upNy = segNormY < 0 ? segNormY : -segNormY;
-      const sideCheck = (ball.x - a.x) * upNx + (ball.y - a.y) * upNy;
-      if (sideCheck < -BALL_RADIUS * 2) continue;
-
       // Push ball out of terrain
       const overlap = BALL_RADIUS - dist;
       ball.x += nx * overlap;
       ball.y += ny * overlap;
 
-      // Velocity response
+      // Velocity response — use material-specific restitution
+      const segMat = MATERIALS[vertices[i].mat || DEFAULT_MAT];
       const dot = ball.vx * nx + ball.vy * ny;
       if (dot < 0) {
         const isGround = Math.abs(ny) > Math.abs(nx);
@@ -77,16 +70,91 @@ function collideWithTerrain() {
           ball.vx -= dot * nx;
           ball.vy -= dot * ny;
         } else {
-          ball.vx -= (1 + RESTITUTION) * dot * nx;
-          ball.vy -= (1 + RESTITUTION) * dot * ny;
+          ball.vx -= (1 + segMat.restitution) * dot * nx;
+          ball.vy -= (1 + segMat.restitution) * dot * ny;
         }
       }
+
+      // Track last collided material for friction lookup
+      ball.lastCollidedMat = vertices[i].mat || DEFAULT_MAT;
 
       collided = true;
     }
   }
 
   ball.onGround = collided;
+  return collided;
+}
+
+function collideWithObjects() {
+  let collided = false;
+
+  for (let oi = 0; oi < objects.length; oi++) {
+    const obj = objects[oi];
+    const verts = obj.verts;
+    if (!verts || verts.length < 2) continue;
+
+    // Quick AABB check — skip objects far from ball
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const v of verts) {
+      if (v.x < minX) minX = v.x;
+      if (v.x > maxX) maxX = v.x;
+      if (v.y < minY) minY = v.y;
+      if (v.y > maxY) maxY = v.y;
+    }
+    if (ball.x + BALL_RADIUS < minX || ball.x - BALL_RADIUS > maxX ||
+        ball.y + BALL_RADIUS < minY || ball.y - BALL_RADIUS > maxY) continue;
+
+    // Check each edge of the polygon
+    for (let i = 0; i < verts.length; i++) {
+      const a = verts[i];
+      const b = verts[(i + 1) % verts.length];
+
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const lenSq = dx * dx + dy * dy;
+      if (lenSq < 0.001) continue;
+
+      let t = ((ball.x - a.x) * dx + (ball.y - a.y) * dy) / lenSq;
+      t = Math.max(0, Math.min(1, t));
+
+      const closestX = a.x + t * dx;
+      const closestY = a.y + t * dy;
+
+      const distX = ball.x - closestX;
+      const distY = ball.y - closestY;
+      const distSq = distX * distX + distY * distY;
+
+      if (distSq < BALL_RADIUS * BALL_RADIUS && distSq > 0.0001) {
+        const dist = Math.sqrt(distSq);
+        const nx = distX / dist;
+        const ny = distY / dist;
+
+        // Push ball out
+        const overlap = BALL_RADIUS - dist;
+        ball.x += nx * overlap;
+        ball.y += ny * overlap;
+
+        // Velocity response — use object material or default
+        const objMat = MATERIALS[obj.mat || DEFAULT_MAT];
+        const dot = ball.vx * nx + ball.vy * ny;
+        if (dot < 0) {
+          const isGround = Math.abs(ny) > Math.abs(nx);
+          if (isGround && -dot < BOUNCE_THRESHOLD) {
+            ball.vx -= dot * nx;
+            ball.vy -= dot * ny;
+          } else {
+            ball.vx -= (1 + objMat.restitution) * dot * nx;
+            ball.vy -= (1 + objMat.restitution) * dot * ny;
+          }
+        }
+
+        ball.lastCollidedMat = obj.mat || DEFAULT_MAT;
+        collided = true;
+      }
+    }
+  }
+
   return collided;
 }
 
@@ -154,6 +222,41 @@ MODE = {
   name: 'desert-golfing',
 
   init() {
+    // Set current world/course — check editor's active selection first
+    let worldId = 'desert-planet', courseId = 'barren-flats';
+    try {
+      const active = JSON.parse(localStorage.getItem('dg-active-course'));
+      if (active && active.worldId && active.courseId) {
+        worldId = active.worldId;
+        courseId = active.courseId;
+      }
+    } catch (e) {}
+    currentWorld = WORLDS[worldId] || WORLDS['desert-planet'];
+    currentCourse = currentWorld.courses[courseId] || Object.values(currentWorld.courses)[0];
+
+    // Apply editor metadata overrides (course name, hole count, etc.)
+    try {
+      const key = 'dg-course-' + worldId + '-' + courseId;
+      const saved = JSON.parse(localStorage.getItem(key));
+      if (saved) {
+        if (saved.worldName) currentWorld.name = saved.worldName;
+        if (saved.courseName) currentCourse.name = saved.courseName;
+        if (saved.holeCount) currentCourse.holeCount = saved.holeCount;
+      }
+    } catch (e) {}
+
+    // Load custom holes from editor
+    try {
+      const raw = localStorage.getItem('desert-golfing-custom-holes');
+      if (raw) {
+        const customHoles = JSON.parse(raw);
+        // Merge custom holes into HAND_DEFINED_HOLES
+        for (const [idx, holeData] of Object.entries(customHoles)) {
+          HAND_DEFINED_HOLES[Number(idx)] = holeData;
+        }
+      }
+    } catch (e) {}
+
     ensureHolesAhead(2);
 
     const firstHole = holes[0];
@@ -165,7 +268,9 @@ MODE = {
   },
 
   collide() {
-    return collideWithTerrain();
+    const terrain = collideWithTerrain();
+    const obj = collideWithObjects();
+    return terrain || obj;
   },
 
   canRest(forceRest) {
@@ -214,12 +319,19 @@ MODE = {
 
     currentHole++;
 
-    // Compute target camera position for new hole
-    const newHole = holes[currentHole];
-    const savedCamX = camera.x;
-    setHoleCamera(newHole);
-    transitionCamEnd = camera.x;
-    camera.x = savedCamX; // restore — we'll animate to target
+    // Check if this was the last hole in the course
+    if (currentHole >= (currentCourse?.holeCount ?? Infinity)) {
+      courseComplete = true;
+      // Don't compute new camera target — stay put
+      transitionCamEnd = camera.x;
+    } else {
+      // Compute target camera position for new hole
+      const newHole = holes[currentHole];
+      const savedCamX = camera.x;
+      setHoleCamera(newHole);
+      transitionCamEnd = camera.x;
+      camera.x = savedCamX; // restore — we'll animate to target
+    }
 
     if (currentHole === 1) showTitle = false;
   },
@@ -240,6 +352,13 @@ MODE = {
       prevHole.flagVisible = false;
       prevHole.flagOpacity = 0;
       flattenCup(prevHole);
+    }
+
+    // Course complete — enter idle end state
+    if (courseComplete) {
+      state = STATE_COMPLETE;
+      completeTimer = 0;
+      return;
     }
 
     // Ball stays at old cup X (which IS the new tee X) — just snap Y to terrain
@@ -263,6 +382,7 @@ MODE = {
 
   drawWorld() {
     drawTerrainDG();
+    drawObjects();
 
     // Cup fill + flag for current and previous hole
     if (state === STATE_TRANSITION && currentHole > 0) {
@@ -279,12 +399,47 @@ MODE = {
   },
 
   drawHUD() {
-    // Title on first hole
+    // Title on first hole — show world, course name, hole count
     if (showTitle && currentHole === 0) {
       ctx.fillStyle = '#ffffff';
-      ctx.font = '32px VT323, Silkscreen, monospace';
       ctx.textAlign = 'left';
-      ctx.fillText('Desert\u2014Golfing', 20, 38);
+
+      const worldName = currentWorld ? currentWorld.name : 'Desert Planet';
+      const courseName = currentCourse ? currentCourse.name : '';
+      const holeCount = currentCourse ? (currentCourse.holeCount || '?') : '?';
+
+      ctx.font = "28px 'Departure Mono', monospace";
+      ctx.fillText(worldName, 20, 34);
+
+      if (courseName) {
+        ctx.font = "20px 'Departure Mono', monospace";
+        ctx.fillText(courseName, 20, 58);
+      }
+
+      ctx.font = "16px 'Departure Mono', monospace";
+      ctx.fillText(holeCount + ' Holes', 20, 78);
+    }
+
+    // Course completion screen
+    if (state === STATE_COMPLETE) {
+      completeTimer++;
+      const fadeIn = Math.min(1, completeTimer / 30); // fade over ~0.5 seconds
+      ctx.fillStyle = 'rgba(255, 255, 255, ' + fadeIn + ')';
+      ctx.textAlign = 'center';
+
+      ctx.font = "28px 'Departure Mono', monospace";
+      ctx.fillText('COURSE COMPLETE', W / 2, H * 0.35);
+
+      const courseName = currentCourse ? currentCourse.name : '';
+      if (courseName) {
+        ctx.font = "20px 'Departure Mono', monospace";
+        ctx.fillText(courseName, W / 2, H * 0.35 + 30);
+      }
+
+      ctx.font = "20px 'Departure Mono', monospace";
+      ctx.fillText(totalStrokes + ' strokes', W / 2, H * 0.35 + 58);
+
+      ctx.textAlign = 'left'; // restore
     }
   }
 };

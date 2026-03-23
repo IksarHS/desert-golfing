@@ -3,14 +3,21 @@
 <head>
 <meta charset="utf-8">
 <title>Desert Golfing</title>
-<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=VT323&display=swap" rel="stylesheet">
 <style>
+  @font-face {
+    font-family: 'Departure Mono';
+    src: url('assets/fonts/DepartureMono-Regular.woff2') format('woff2'),
+         url('assets/fonts/DepartureMono-Regular.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
   * { margin: 0; padding: 0; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: #d5ad72; display: flex; align-items: center; justify-content: center; }
   canvas { display: block; cursor: crosshair; }
   #branch-label {
     position: fixed; top: 6px; right: 10px;
-    font: 11px 'Silkscreen', monospace;
+    font: 11px 'Departure Mono', monospace;
     color: rgba(255,255,255,0.3);
     pointer-events: none; z-index: 100;
     letter-spacing: 1px;
@@ -31,6 +38,7 @@
   }).catch(() => {});
 </script>
 <script src="src/shared.js"></script>
+<script src="src/worlds/desert-planet.js"></script>
 <script src="src/level-design.js"></script>
 <script src="src/modes/desert-golfing.js"></script>
 <script src="src/art.js"></script>

@@ -38,14 +38,57 @@ const ctx = canvas.getContext('2d');
 
 let displayScale = 1;
 
+// ── Sprite Assets ─────────────────────────────────────────
+// SPRITE_CATALOG defines all placeable assets: { label, category, defaultHeight, src }
+// SPRITES holds loaded Image objects keyed by sprite name
+const SPRITE_CATALOG = {
+  lander:                  { label: 'Lunar Lander',           category: 'vehicles', defaultHeight: 95,  src: 'assets/lunar_lander.png' },
+  cactus_1:                { label: 'Cactus 1',               category: 'plants',   defaultHeight: 60,  src: 'assets/plants/cactus_1.png' },
+  cactus_2:                { label: 'Cactus 2',               category: 'plants',   defaultHeight: 60,  src: 'assets/plants/cactus_2.png' },
+  agave:                   { label: 'Agave',                  category: 'plants',   defaultHeight: 40,  src: 'assets/plants/agave_small.png' },
+  barrel_cactus:           { label: 'Barrel Cactus',          category: 'plants',   defaultHeight: 45,  src: 'assets/plants/barrel_cactus_flowering.png' },
+  prickly_pear:            { label: 'Prickly Pear',           category: 'plants',   defaultHeight: 50,  src: 'assets/plants/prickly_pear_cactus.png' },
+  desert_scrub:            { label: 'Desert Scrub',           category: 'plants',   defaultHeight: 35,  src: 'assets/plants/desert_scrub_brush.png' },
+  alien_eye_plant:         { label: 'Alien Eye Plant',        category: 'plants',   defaultHeight: 50,  src: 'assets/plants/alien_eye_plant_small.png' },
+  purple_alien_eye_plant:  { label: 'Purple Alien Eye Plant', category: 'plants',   defaultHeight: 50,  src: 'assets/plants/purple_alien_eye_plant.png' },
+};
+
+const SPRITES = {};
+// Preload all sprite images
+for (const [key, info] of Object.entries(SPRITE_CATALOG)) {
+  const img = new Image();
+  img.src = info.src;
+  img.onload = () => { SPRITES[key] = img; };
+}
+
+// ── Materials ─────────────────────────────────────────────
+const DEFAULT_MAT = 'sand';
+const MATERIALS = {
+  sand:  { restitution: 0.47, rollingFriction: 0.98,  surfaceFriction: 0.004 },
+  grass: { restitution: 0.35, rollingFriction: 0.95,  surfaceFriction: 0.008 },
+  ice:   { restitution: 0.55, rollingFriction: 0.998, surfaceFriction: 0.001 },
+  rock:  { restitution: 0.75, rollingFriction: 0.97,  surfaceFriction: 0.003 },
+  mud:   { restitution: 0.15, rollingFriction: 0.90,  surfaceFriction: 0.015 },
+};
+
+function getMaterialAt(worldX) {
+  for (let i = 0; i < vertices.length - 1; i++) {
+    if (worldX >= vertices[i].x && worldX <= vertices[i + 1].x) {
+      return vertices[i].mat || DEFAULT_MAT;
+    }
+  }
+  return DEFAULT_MAT;
+}
+
 // ── Terrain ────────────────────────────────────────────────
 let vertices = [];
+let objects = []; // placeable sprite objects [{x, y, key, height, hull, mat}]
 let holes = []; // [{cupX, cupY, cupFilled, flagHole, teeX, teeY, flagVisible}]
 let currentHole = 0;
 let totalStrokes = 0;
 
 // ── Ball ───────────────────────────────────────────────────
-let ball = { x: 0, y: 0, vx: 0, vy: 0, onGround: false, atRest: true, slowFrames: 0 };
+let ball = { x: 0, y: 0, vx: 0, vy: 0, onGround: false, atRest: true, slowFrames: 0, rotation: 0, spinRate: 0 };
 let strokes = 0;
 
 // ── Camera ─────────────────────────────────────────────────
@@ -57,12 +100,21 @@ let camera = { x: 0, y: 0 };
 // before art.js, gameplay.js, and main.js load.
 let MODE = null;
 
+// ── World / Course ────────────────────────────────────────
+// WORLDS is populated by world definition files (e.g. worlds/desert-planet.js)
+// currentWorld and currentCourse are set during init
+const WORLDS = {};
+function invalidateCustomHolesCache() { /* no-op — editor calls this to signal holes changed */ }
+let currentWorld = null;
+let currentCourse = null;
+
 // ── Game State ─────────────────────────────────────────────
 const STATE_AIM       = 0;
 const STATE_FLIGHT    = 1;
 const STATE_PAUSE      = 2;  // ball in cup, waiting
 const STATE_TRANSITION = 3;  // camera panning to next hole
 const STATE_OOB        = 4;  // ball out of bounds, waiting to respawn
+const STATE_COMPLETE   = 5;  // course finished — idle end screen
 
 let state = STATE_AIM;
 let transitionTimer = 0;
@@ -70,6 +122,8 @@ let transitionCamStart = 0;   // camera position at start of transition (axis-ag
 let transitionCamEnd   = 0;   // camera position at end of transition
 let transitionBallStartY = 0; // ball's Y when it rested in cup
 let showTitle = true;
+let courseComplete = false;
+let completeTimer = 0;
 
 // Transition: cup fills and flag fades DURING the camera pan
 

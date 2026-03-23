@@ -113,11 +113,54 @@ function drawFlag(cupData, surfaceYFn) {
   // Hole number on pennant body
   const holeNum = cupData.flagHole !== undefined ? cupData.flagHole : (cupData.index !== undefined ? cupData.index + 1 : '');
   ctx.fillStyle = '#4a3520';
-  ctx.font = '10px Silkscreen, monospace';
+  ctx.font = "10px 'Departure Mono', monospace";
   ctx.textAlign = 'center';
   ctx.fillText(String(holeNum), poleWorldX + bodyW / 2, pMid + 4);
 
   ctx.globalAlpha = 1;
+}
+
+function drawObjects() {
+  // Draw placed objects (polygons / sprites) in world coords
+  for (let oi = 0; oi < objects.length; oi++) {
+    const ov = objects[oi];
+    if (!ov.verts || ov.verts.length < 3) continue;
+
+    ctx.beginPath();
+    ctx.moveTo(ov.verts[0].x, ov.verts[0].y);
+    for (let k = 1; k < ov.verts.length; k++) {
+      ctx.lineTo(ov.verts[k].x, ov.verts[k].y);
+    }
+    ctx.closePath();
+
+    if (ov.sprite && SPRITES[ov.sprite]) {
+      // Sprite object: draw image within bounding box
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const v of ov.verts) {
+        if (v.x < minX) minX = v.x;
+        if (v.x > maxX) maxX = v.x;
+        if (v.y < minY) minY = v.y;
+        if (v.y > maxY) maxY = v.y;
+      }
+      ctx.save();
+      if (ov.rotation) {
+        const cx = (minX + maxX) / 2;
+        const cy = (minY + maxY) / 2;
+        ctx.translate(cx, cy);
+        ctx.rotate(ov.rotation);
+        ctx.drawImage(SPRITES[ov.sprite],
+          -(maxX - minX) / 2, -(maxY - minY) / 2,
+          maxX - minX, maxY - minY);
+      } else {
+        ctx.drawImage(SPRITES[ov.sprite], minX, minY, maxX - minX, maxY - minY);
+      }
+      ctx.restore();
+    } else {
+      // Non-sprite: fill with terrain color
+      ctx.fillStyle = GROUND;
+      ctx.fill();
+    }
+  }
 }
 
 function drawBall() {
@@ -126,6 +169,23 @@ function drawBall() {
   ctx.beginPath();
   ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
   ctx.fill();
+
+  // Draw 3 dots on the ball that rotate to show spin
+  ctx.save();
+  ctx.translate(ball.x, ball.y);
+  ctx.rotate(ball.rotation || 0);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+  const dotR = 1;
+  const dotDist = BALL_RADIUS * 0.55;
+  for (let i = 0; i < 3; i++) {
+    const angle = (i / 3) * Math.PI * 2;
+    const dx = Math.cos(angle) * dotDist;
+    const dy = Math.sin(angle) * dotDist;
+    ctx.beginPath();
+    ctx.arc(dx, dy, dotR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 function drawAimUI() {
@@ -191,7 +251,7 @@ function drawStrokeCounter() {
   // Shared stroke HUD — screen space
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'center';
-  ctx.font = '26px VT323, Silkscreen, monospace';
+  ctx.font = "26px 'Departure Mono', monospace";
 
   if (totalStrokes > 0) {
     ctx.fillText(String(totalStrokes), W / 2 - 40, 30);

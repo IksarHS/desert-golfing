@@ -1,0 +1,1435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hole Editor</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a1a2e; font-family: monospace; color: #ccc; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+
+#toolbar {
+  background: #2a2a2a; border-bottom: 1px solid #444; padding: 6px 10px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; z-index: 20; font-size: 12px;
+}
+#toolbar button, #toolbar select { font-family: monospace; font-size: 12px; padding: 4px 10px; border: 1px solid #555; border-radius: 3px; cursor: pointer; background: #3a3a3a; color: #ccc; }
+#toolbar button:hover { background: #4a4a4a; }
+#toolbar button.active { background: #d68841; color: #1a1a2e; border-color: #d68841; }
+#toolbar .sep { width: 1px; height: 20px; background: #444; margin: 0 4px; }
+#toolbar label { display: flex; align-items: center; gap: 4px; }
+#toolbar input[type=checkbox] { accent-color: #d68841; }
+
+#main { display: flex; flex: 1; overflow: hidden; }
+
+#sidebar {
+  width: 210px; min-width: 210px; background: #2a2a2a; border-right: 1px solid #444;
+  overflow-y: auto; padding: 8px; font-size: 11px; z-index: 10;
+}
+#sidebar h3 { color: #d68841; font-size: 12px; margin: 10px 0 4px; border-bottom: 1px solid #444; padding-bottom: 2px; }
+#sidebar h3:first-child { margin-top: 0; }
+#sidebar label { display: block; margin: 4px 0 2px; color: #999; }
+#sidebar input[type=range] { width: 100%; }
+#sidebar input[type=number] { width: 60px; background: #333; border: 1px solid #555; color: #ccc; padding: 2px 4px; font-family: monospace; font-size: 11px; }
+#sidebar select { width: 100%; background: #333; border: 1px solid #555; color: #ccc; padding: 2px; font-family: monospace; font-size: 11px; }
+#sidebar button { width: 100%; padding: 5px; margin: 3px 0; cursor: pointer; background: #3a3a3a; color: #ccc; border: 1px solid #555; border-radius: 3px; font-family: monospace; font-size: 11px; }
+#sidebar button:hover { background: #4a4a4a; }
+#sidebar .val { float: right; color: #fff; }
+#sidebar .info { color: #888; font-size: 10px; margin: 2px 0; }
+#vertexList { max-height: 150px; overflow-y: auto; border: 1px solid #444; border-radius: 3px; margin: 4px 0; }
+#vertexList .vitem { padding: 2px 4px; cursor: pointer; display: flex; justify-content: space-between; }
+#vertexList .vitem:hover { background: #3a3a3a; }
+#vertexList .vitem.sel { background: #d68841; color: #1a1a2e; }
+#vertexList .vitem.cup { color: #7ec8e3; }
+
+canvas { flex: 1; display: block; cursor: crosshair; }
+
+#statusbar {
+  background: #2a2a2a; border-top: 1px solid #444; padding: 4px 10px;
+  font-size: 11px; color: #888; display: flex; gap: 16px; z-index: 20;
+}
+#statusbar .highlight { color: #d68841; }
+
+/* Modal */
+.modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; }
+.modal-bg.show { display: flex; }
+.modal { background: #2a2a2a; border: 1px solid #555; border-radius: 8px; padding: 16px; width: 500px; max-width: 90vw; }
+.modal h3 { color: #d68841; margin-bottom: 8px; }
+.modal textarea { width: 100%; height: 200px; background: #1a1a2e; color: #ccc; border: 1px solid #555; font-family: monospace; font-size: 11px; padding: 8px; resize: vertical; }
+.modal button { padding: 6px 16px; margin: 8px 4px 0 0; cursor: pointer; background: #3a3a3a; color: #ccc; border: 1px solid #555; border-radius: 3px; font-family: monospace; }
+.modal button.primary { background: #d68841; color: #1a1a2e; border-color: #d68841; }
+</style>
+</head>
+<body>
+
+<!-- Toolbar -->
+<div id="toolbar">
+  <button id="btnEdit" class="active" title="Edit mode (E)">Edit</button>
+  <button id="btnPlay" title="Play mode (P)">Play</button>
+  <span class="sep"></span>
+  <button id="btnVertex" class="active" title="Vertex tool (V)">Vertex</button>
+  <button id="btnTee" title="Tee tool (T)">Tee</button>
+  <button id="btnCup" title="Cup tool (C)">Cup</button>
+  <span class="sep"></span>
+  <label><input type="checkbox" id="chkSnap" checked> Snap</label>
+  <label>Grid: <input type="number" id="numGrid" value="16" min="4" max="64" step="4" style="width:40px"></label>
+  <span class="sep"></span>
+  <button id="btnImport" title="Import JSON">Import</button>
+  <button id="btnExport" title="Export JSON">Export</button>
+  <button id="btnCopy" title="Copy JSON to clipboard">Copy</button>
+  <span class="sep"></span>
+  <button id="btnUndo" title="Undo (Ctrl+Z)">Undo</button>
+</div>
+
+<!-- Main area -->
+<div id="main">
+  <div id="sidebar">
+    <h3>Template</h3>
+    <label>Archetype</label>
+    <select id="selArch">
+      <option value="blank">Blank Canvas</option>
+      <optgroup label="Easy">
+        <option value="flat_run">flat_run</option>
+        <option value="gentle_slope">gentle_slope</option>
+        <option value="gentle_hill">gentle_hill</option>
+      </optgroup>
+      <optgroup label="Easy-Med">
+        <option value="downhill">downhill</option>
+        <option value="uphill">uphill</option>
+        <option value="rolling_hills">rolling_hills</option>
+      </optgroup>
+      <optgroup label="Medium">
+        <option value="cliff_drop">cliff_drop</option>
+        <option value="valley">valley</option>
+        <option value="mesa">mesa</option>
+        <option value="shelf">shelf</option>
+      </optgroup>
+      <optgroup label="Med-Hard">
+        <option value="peak_obstacle">peak_obstacle</option>
+        <option value="wall_shot">wall_shot</option>
+        <option value="twin_peaks">twin_peaks</option>
+        <option value="stepped_descent">stepped_descent</option>
+        <option value="canyon">canyon</option>
+      </optgroup>
+      <optgroup label="Hard">
+        <option value="deep_pocket">deep_pocket</option>
+        <option value="canyon_cup">canyon_cup</option>
+        <option value="fortress">fortress</option>
+        <option value="narrow_gap">narrow_gap</option>
+        <option value="cliff_shelf">cliff_shelf</option>
+        <option value="compound_terrain">compound_terrain</option>
+      </optgroup>
+    </select>
+    <label>Distance <span class="val" id="vDist">700</span></label>
+    <input type="range" id="sDist" min="300" max="1200" step="10" value="700">
+    <label>Difficulty <span class="val" id="vDiff">0.5</span></label>
+    <input type="range" id="sDiff" min="0" max="1" step="0.05" value="0.5">
+    <label>Tee Y <span class="val" id="vTeeY">350</span></label>
+    <input type="range" id="sTeeY" min="108" max="486" step="2" value="350">
+    <label>Cup Y <span class="val" id="vCupY">380</span></label>
+    <input type="range" id="sCupY" min="108" max="486" step="2" value="380">
+    <label><input type="checkbox" id="chkNoise" checked> Micro-noise</label>
+    <button id="btnGenerate">Generate</button>
+    <button id="btnRandomize">Randomize</button>
+
+    <h3>Hole Info</h3>
+    <div class="info">Tee: <span id="infoTee">100, 350</span></div>
+    <div class="info">Cup: <span id="infoCup">—</span></div>
+    <div class="info">Distance: <span id="infoDist">—</span></div>
+    <div class="info">Vertices: <span id="infoVerts">0</span></div>
+
+    <h3>Selected Vertex</h3>
+    <div id="vertexProps" style="display:none">
+      <label>X <input type="number" id="vpX" step="1"></label>
+      <label>Y <input type="number" id="vpY" step="1"></label>
+      <label>Material
+        <select id="vpMat">
+          <option value="">sand (default)</option>
+          <option value="bouncy">bouncy</option>
+          <option value="sticky">sticky</option>
+          <option value="ice">ice</option>
+        </select>
+      </label>
+      <div class="info" id="vpInfo"></div>
+    </div>
+    <div id="vertexNone" style="color:#666">No vertex selected</div>
+
+    <h3>Vertices</h3>
+    <div id="vertexList"></div>
+  </div>
+
+  <canvas id="c"></canvas>
+</div>
+
+<!-- Status bar -->
+<div id="statusbar">
+  <span>Mode: <span class="highlight" id="sbMode">Edit</span></span>
+  <span>Tool: <span class="highlight" id="sbTool">Vertex</span></span>
+  <span>Vertices: <span id="sbVerts">0</span></span>
+  <span id="sbStrokes" style="display:none">Strokes: <span class="highlight" id="sbStrokesN">0</span></span>
+  <span id="sbCoords" style="color:#666"></span>
+</div>
+
+<!-- Import/Export Modal -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal" id="modal">
+    <h3 id="modalTitle">Export</h3>
+    <textarea id="modalText"></textarea>
+    <div>
+      <button class="primary" id="modalAction">Copy</button>
+      <button id="modalClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ========== CONSTANTS & MATERIALS ==========
+const H = 540;
+let W = 960;
+const SKY = '#d5ad72';
+const GROUND = '#d68841';
+const BALL_COLOR = '#ffffff';
+const GRAVITY = 0.04;
+const RESTITUTION = 0.47;
+const ROLLING_FRICTION = 0.98;
+const SURFACE_FRICTION = 0.004;
+const POWER_SCALE = 0.04;
+const MAX_POWER = 8;
+const BOUNCE_THRESHOLD = 1.0;
+const BALL_RADIUS = 4;
+const CUP_WIDTH = 36;
+const CUP_DEPTH = 20;
+const HANDLE_R = 5;
+const HANDLE_HIT_R = 12;
+
+const MATERIALS = {
+  normal: { name: 'Sand', restitution: 0.47, bounceThreshold: 1.0, rollingFriction: 0.98, surfaceFriction: 0.004, color: '#d68841' },
+  bouncy: { name: 'Bouncy', restitution: 0.85, bounceThreshold: 0.3, rollingFriction: 0.97, surfaceFriction: 0.005, color: '#4a9e4a' },
+  sticky: { name: 'Sticky', restitution: 0.05, bounceThreshold: 3.0, rollingFriction: 0.88, surfaceFriction: 0.04, color: '#8b5e3c' },
+  ice:    { name: 'Ice', restitution: 0.35, bounceThreshold: 1.0, rollingFriction: 0.998, surfaceFriction: 0.0005, color: '#7ec8e3' },
+};
+
+function getMaterial(segIndex) {
+  const key = E.vertices[segIndex] && E.vertices[segIndex].mat;
+  return MATERIALS[key] || MATERIALS.normal;
+}
+
+// ========== SEEDED PRNG ==========
+function _mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+let _prng = null, _seed = 42;
+function random() { return _prng ? _prng() : Math.random(); }
+function setSeed(s) { _seed = s | 0; _prng = _mulberry32(_seed); }
+function clampY(y) { return Math.max(H * 0.20, Math.min(H * 0.90, y)); }
+function lerp(a, b, t) { return a + (b - a) * t; }
+function randRange(lo, hi) { return lo + random() * (hi - lo); }
+
+// ========== CANVAS SETUP ==========
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let displayScale = 1;
+
+function resizeCanvas() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(rect.width * dpr);
+  canvas.height = Math.round(rect.height * dpr);
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  displayScale = canvas.height / H;
+  W = Math.round(canvas.width / displayScale);
+}
+window.addEventListener('resize', resizeCanvas);
+setTimeout(resizeCanvas, 0);
+
+// ========== EDITOR STATE ==========
+const E = {
+  mode: 'edit',    // 'edit' | 'play'
+  tool: 'vertex',  // 'vertex' | 'tee' | 'cup'
+  vertices: [],
+  teeX: 100, teeY: 350,
+  cupX: 0, cupY: 0, cupPlaced: false, cupData: null,
+  camera: { x: 0 },
+  selectedVertex: -1,
+  hoveredVertex: -1,
+  dragging: false,
+  dragTarget: null, // 'vertex' | 'tee' | 'cup' | 'pan'
+  panStartCamX: 0,
+  dragStartScreenX: 0, dragStartScreenY: 0,
+  snapEnabled: true,
+  gridSize: 16,
+  // Play mode
+  ball: { x: 0, y: 0, vx: 0, vy: 0, onGround: false, atRest: true, slowFrames: 0 },
+  aiming: false,
+  aimStartX: 0, aimStartY: 0, aimCurrentX: 0, aimCurrentY: 0,
+  strokes: 0,
+  inCup: false,
+  cupResetTimer: 0,
+};
+
+// Undo stack
+const undoStack = [];
+const UNDO_MAX = 50;
+function pushUndo() {
+  undoStack.push({
+    vertices: JSON.parse(JSON.stringify(E.vertices)),
+    teeX: E.teeX, teeY: E.teeY,
+    cupX: E.cupX, cupY: E.cupY, cupPlaced: E.cupPlaced,
+    cupData: E.cupData ? JSON.parse(JSON.stringify(E.cupData)) : null,
+  });
+  if (undoStack.length > UNDO_MAX) undoStack.shift();
+}
+function undo() {
+  if (!undoStack.length) return;
+  const s = undoStack.pop();
+  E.vertices = s.vertices;
+  E.teeX = s.teeX; E.teeY = s.teeY;
+  E.cupX = s.cupX; E.cupY = s.cupY;
+  E.cupPlaced = s.cupPlaced; E.cupData = s.cupData;
+  E.selectedVertex = -1;
+  updateSidebar();
+}
+
+// Space key tracking
+let spaceHeld = false;
+
+// ========== TERRAIN HELPERS ==========
+function terrainYAt(worldX) {
+  const verts = E.vertices;
+  for (let i = 0; i < verts.length - 1; i++) {
+    const a = verts[i], b = verts[i + 1];
+    if (worldX >= a.x && worldX <= b.x) {
+      const t = (worldX - a.x) / (b.x - a.x);
+      return a.y + t * (b.y - a.y);
+    }
+  }
+  if (verts.length >= 2) {
+    const a = verts[verts.length - 2], b = verts[verts.length - 1];
+    const t = (worldX - a.x) / (b.x - a.x);
+    return a.y + t * (b.y - a.y);
+  }
+  return H * 0.6;
+}
+
+function findSegment(worldX) {
+  for (let i = 0; i < E.vertices.length - 1; i++) {
+    if (worldX >= E.vertices[i].x && worldX <= E.vertices[i + 1].x) return i;
+  }
+  return Math.max(0, E.vertices.length - 2);
+}
+
+function segmentNormal(i) {
+  const a = E.vertices[i], b = E.vertices[i + 1];
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 0.001) return { x: 0, y: -1 };
+  return { x: dy / len, y: -dx / len };
+}
+
+function snap(v) {
+  if (!E.snapEnabled) return v;
+  return Math.round(v / E.gridSize) * E.gridSize;
+}
+
+function isCupVertex(idx) {
+  return E.vertices[idx] && E.vertices[idx]._cup;
+}
+
+function insertVertex(x, y, mat) {
+  const v = { x, y };
+  if (mat) v.mat = mat;
+  let idx = E.vertices.findIndex(vt => vt.x > x);
+  if (idx === -1) idx = E.vertices.length;
+  E.vertices.splice(idx, 0, v);
+  return idx;
+}
+
+// ========== COORDINATE CONVERSION ==========
+function screenToWorld(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (clientX - rect.left) * (canvas.width / rect.width) / displayScale + E.camera.x,
+    y: (clientY - rect.top) * (canvas.height / rect.height) / displayScale
+  };
+}
+
+function worldToScreen(wx, wy) {
+  return { x: wx - E.camera.x, y: wy };
+}
+
+function screenToCanvas(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (clientX - rect.left) * (canvas.width / rect.width) / displayScale,
+    y: (clientY - rect.top) * (canvas.height / rect.height) / displayScale
+  };
+}
+
+// ========== ARCHETYPES ==========
+const archetypes = {
+  flat_run(sx, sy, dist, cupY) {
+    const kinkX = sx + dist * randRange(0.3, 0.7);
+    const kinkY = clampY(lerp(sy, cupY, 0.5) + (random() - 0.5) * 20);
+    return [{ x: kinkX, y: kinkY }, { x: sx + dist, y: cupY }];
+  },
+  gentle_slope(sx, sy, dist, cupY) {
+    const bx = sx + dist * randRange(0.3, 0.6);
+    const by = clampY(lerp(sy, cupY, randRange(0.3, 0.7)) + (random() - 0.5) * 15);
+    return [{ x: bx, y: by }, { x: sx + dist, y: cupY }];
+  },
+  gentle_hill(sx, sy, dist, cupY, diff) {
+    const px = sx + dist * randRange(0.3, 0.6);
+    const isHill = random() < 0.5;
+    const amp = randRange(40, 80 + diff * 50);
+    const py = clampY(lerp(sy, cupY, 0.5) + (isHill ? -amp : amp));
+    return [{ x: px, y: py }, { x: sx + dist, y: cupY }];
+  },
+  downhill(sx, sy, dist, cupY, diff) {
+    const drop = 60 + diff * 120;
+    const acy = clampY(Math.max(cupY, sy + drop));
+    const bx = sx + dist * randRange(0.25, 0.5);
+    const by = clampY(lerp(sy, acy, randRange(0.2, 0.6)));
+    return [{ x: bx, y: by }, { x: sx + dist, y: acy }];
+  },
+  uphill(sx, sy, dist, cupY, diff) {
+    const rise = 60 + diff * 120;
+    const acy = clampY(Math.min(cupY, sy - rise));
+    const bx = sx + dist * randRange(0.3, 0.6);
+    const by = clampY(lerp(sy, acy, randRange(0.3, 0.7)));
+    return [{ x: bx, y: by }, { x: sx + dist, y: acy }];
+  },
+  rolling_hills(sx, sy, dist, cupY, diff) {
+    const n = 2 + Math.floor(random() * (1 + diff * 2));
+    const verts = [], sw = dist / (n + 1);
+    for (let i = 1; i <= n; i++) {
+      const hx = sx + sw * i + (random() - 0.5) * sw * 0.3;
+      const amp = randRange(40, 80 + diff * 80);
+      const up = (i % 2 === 1) ? -1 : 1;
+      verts.push({ x: hx, y: clampY(lerp(sy, cupY, i / (n + 1)) + up * amp) });
+    }
+    verts.push({ x: sx + dist, y: cupY });
+    return verts;
+  },
+  cliff_drop(sx, sy, dist, cupY, diff) {
+    const cx = sx + dist * randRange(0.3, 0.55);
+    const dh = randRange(80, 160 + diff * 100);
+    const topY = clampY(sy), botY = clampY(topY + dh);
+    return [{ x: cx - 20, y: topY }, { x: cx, y: topY }, { x: cx + 8, y: botY }, { x: sx + dist, y: botY }];
+  },
+  valley(sx, sy, dist, cupY, diff) {
+    const vx = sx + dist * randRange(0.3, 0.55);
+    const depth = randRange(60, 140 + diff * 80);
+    const bl = Math.max(sy, cupY), botY = clampY(bl + depth);
+    const flat = random() < 0.4, ww = randRange(8, 20 + diff * 10);
+    if (flat) {
+      const gw = randRange(40, 80);
+      return [{ x: vx - gw/2 - ww, y: clampY(bl - 10) }, { x: vx - gw/2, y: botY }, { x: vx + gw/2, y: botY }, { x: vx + gw/2 + ww, y: clampY(bl - 10) }, { x: sx + dist, y: cupY }];
+    }
+    return [{ x: vx - ww, y: clampY(bl - 10) }, { x: vx, y: botY }, { x: vx + ww, y: clampY(bl - 10) }, { x: sx + dist, y: cupY }];
+  },
+  mesa(sx, sy, dist, cupY, diff) {
+    const ml = sx + dist * randRange(0.15, 0.3), mr = sx + dist * randRange(0.55, 0.75);
+    const mh = randRange(60, 120 + diff * 100);
+    const mt = clampY(Math.min(sy, cupY) - mh), ww = randRange(8, 18);
+    return [{ x: ml, y: sy }, { x: ml + ww, y: mt }, { x: mr - ww, y: mt }, { x: mr, y: clampY(mt + mh * 0.8) }, { x: sx + dist, y: cupY }];
+  },
+  shelf(sx, sy, dist, cupY, diff) {
+    const stepX = sx + dist * randRange(0.35, 0.55);
+    const stepH = randRange(60, 120 + diff * 80);
+    const down = random() < 0.6;
+    const topY = down ? sy : clampY(sy - stepH), botY = down ? clampY(sy + stepH) : sy;
+    const ww = randRange(6, 15);
+    return [{ x: stepX - 30, y: topY }, { x: stepX, y: topY }, { x: stepX + ww, y: botY }, { x: sx + dist, y: botY }];
+  },
+  peak_obstacle(sx, sy, dist, cupY, diff) {
+    const px = sx + dist * randRange(0.3, 0.55);
+    const bl = Math.max(sy, cupY), ph = randRange(80, 140 + diff * 120);
+    const py = clampY(bl - ph), bw = randRange(20, 50 + diff * 30);
+    return [{ x: px - bw, y: clampY(bl) }, { x: px, y: py }, { x: px + bw, y: clampY(bl) }, { x: sx + dist, y: cupY }];
+  },
+  wall_shot(sx, sy, dist, cupY, diff) {
+    const wx = sx + dist * randRange(0.65, 0.8);
+    const wh = randRange(100, 180 + diff * 80);
+    const fy = clampY(Math.max(sy + 30, H * 0.7)), wt = clampY(fy - wh);
+    return [{ x: sx + dist * 0.3, y: clampY(lerp(sy, fy, 0.5)) }, { x: wx - 30, y: fy }, { x: wx, y: fy }, { x: wx + 8, y: wt }, { x: sx + dist + 80, y: wt }];
+  },
+  twin_peaks(sx, sy, dist, cupY, diff) {
+    const bl = clampY(Math.max(sy, cupY) + 20), gap = randRange(40, 70);
+    const cx = sx + dist * randRange(0.35, 0.55);
+    const p1h = randRange(80, 140 + diff * 80), p2h = randRange(80, 140 + diff * 80);
+    const p1y = clampY(bl - p1h), p2y = clampY(bl - p2h), bw = randRange(15, 30);
+    return [{ x: cx - gap/2 - bw, y: bl }, { x: cx - gap/2, y: p1y }, { x: cx - gap/2 + bw*0.5, y: bl }, { x: cx + gap/2 - bw*0.5, y: bl }, { x: cx + gap/2, y: p2y }, { x: cx + gap/2 + bw, y: bl }, { x: sx + dist, y: cupY }];
+  },
+  stepped_descent(sx, sy, dist, cupY, diff) {
+    const ns = 2 + Math.floor(random() * (1 + diff));
+    const verts = [], sw = dist / (ns + 1);
+    let cy = sy; const td = clampY(sy + 80 + diff * 150) - sy;
+    for (let i = 1; i <= ns; i++) {
+      const stepX = sx + sw * i, fl = randRange(30, 60);
+      verts.push({ x: stepX - fl, y: cy }, { x: stepX, y: cy });
+      cy = clampY(sy + td * (i / ns));
+      verts.push({ x: stepX + 8, y: cy });
+    }
+    verts.push({ x: sx + dist, y: cy });
+    return verts;
+  },
+  deep_pocket(sx, sy, dist, cupY, diff) {
+    const px = sx + dist * randRange(0.55, 0.75), pw = randRange(50, 80);
+    const pd = randRange(80, 160 + diff * 80);
+    const ry = clampY(Math.min(sy, H * 0.45)), by = clampY(ry + pd), ww = randRange(6, 12);
+    return [{ x: sx + dist * 0.25, y: clampY(lerp(sy, ry, 0.5)) }, { x: px - pw/2 - 20, y: ry }, { x: px - pw/2, y: ry }, { x: px - pw/2 + ww, y: by }, { x: px + pw/2 - ww, y: by }, { x: px + pw/2, y: ry }, { x: sx + dist, y: ry }];
+  },
+  canyon_cup(sx, sy, dist, cupY, diff) {
+    const cx = sx + dist * randRange(0.5, 0.7), depth = randRange(120, 220 + diff * 60);
+    const ty = clampY(Math.min(sy, H * 0.35)), by = clampY(ty + depth);
+    const cw = randRange(60, 100), ww = randRange(6, 12);
+    return [{ x: sx + dist * 0.2, y: clampY(lerp(sy, ty, 0.4)) }, { x: cx - cw/2, y: ty }, { x: cx - cw/2 + ww, y: by }, { x: cx + cw/2 - ww, y: by }, { x: cx + cw/2, y: ty }, { x: sx + dist, y: ty }];
+  },
+  fortress(sx, sy, dist, cupY, diff) {
+    const bl = sx + dist * randRange(0.25, 0.4), br = sx + dist * randRange(0.5, 0.65);
+    const bh = randRange(120, 200 + diff * 80);
+    const fy = clampY(Math.max(sy, H * 0.65)), bt = clampY(fy - bh), ww = randRange(6, 12);
+    return [{ x: bl - 10, y: fy }, { x: bl, y: fy }, { x: bl + ww, y: bt }, { x: br - ww, y: bt }, { x: br, y: fy }, { x: sx + dist, y: cupY }];
+  },
+  narrow_gap(sx, sy, dist, cupY, diff) {
+    const gx = sx + dist * randRange(0.35, 0.55), gw = randRange(30, 55);
+    const wh = randRange(120, 200 + diff * 80);
+    const fy = clampY(Math.max(sy + 30, H * 0.7)), wt = clampY(fy - wh), ww = randRange(8, 15);
+    return [{ x: gx - gw/2 - 60, y: fy }, { x: gx - gw/2 - ww, y: fy }, { x: gx - gw/2, y: wt }, { x: gx - gw/2 + ww, y: fy }, { x: gx + gw/2 - ww, y: fy }, { x: gx + gw/2, y: wt }, { x: gx + gw/2 + ww, y: fy }, { x: sx + dist, y: cupY }];
+  },
+  cliff_shelf(sx, sy, dist, cupY, diff) {
+    const cx = sx + dist * randRange(0.4, 0.55);
+    const th = randRange(140, 240 + diff * 60), sh = th * randRange(0.3, 0.6);
+    const ty = clampY(Math.min(sy, H * 0.3)), sY = clampY(ty + sh), by = clampY(ty + th);
+    const sw = randRange(50, 90), ww = randRange(6, 12);
+    return [{ x: cx, y: ty }, { x: cx + ww, y: sY }, { x: cx + ww + sw, y: sY }, { x: cx + ww + sw + ww, y: by }, { x: sx + dist, y: by }];
+  },
+  compound_terrain(sx, sy, dist, cupY, diff) {
+    const nf = 2 + Math.floor(random() * 2), verts = [], sw = dist / (nf + 1);
+    let y = sy;
+    for (let i = 1; i <= nf; i++) {
+      const fx = sx + sw * i, amp = randRange(60, 120 + diff * 80), ft = random();
+      if (ft < 0.3) { verts.push({ x: fx - 20, y }, { x: fx, y: clampY(y - amp) }, { x: fx + 20, y }); }
+      else if (ft < 0.6) { verts.push({ x: fx, y }); y = clampY(y + amp * 0.7); verts.push({ x: fx + 8, y }); }
+      else { const dy = clampY(y + amp); verts.push({ x: fx - 15, y }, { x: fx, y: dy }, { x: fx + 15, y }); }
+    }
+    verts.push({ x: sx + dist, y: cupY });
+    return verts;
+  },
+};
+
+function addMicroNoise(verts, startX, startY, difficulty) {
+  const noiseAmp = 2 + difficulty * 4;
+  const result = [];
+  let prevV = { x: startX, y: startY };
+  for (const v of verts) {
+    const gap = v.x - prevV.x;
+    if (gap > 80) {
+      const np = gap > 200 ? 3 : gap > 120 ? 2 : 1;
+      for (let j = 1; j <= np; j++) {
+        const t = j / (np + 1);
+        result.push({ x: lerp(prevV.x, v.x, t), y: clampY(lerp(prevV.y, v.y, t) + (random() - 0.5) * noiseAmp) });
+      }
+    }
+    result.push({ x: v.x, y: clampY(v.y) });
+    prevV = v;
+  }
+  return result;
+}
+
+// ========== CUP PLACEMENT ==========
+function placeCupEditor() {
+  const cupX = E.cupX;
+  const halfW = CUP_WIDTH / 2;
+  const leftX = cupX - halfW, rightX = cupX + halfW;
+  const flatMargin = 20;
+
+  const sly = terrainYAt(leftX), sry = terrainYAt(rightX);
+  const rimY = (sly + sry) / 2;
+
+  // Remove existing cup vertices and vertices in cup zone
+  E.vertices = E.vertices.filter(v => !v._cup && (v.x < leftX - flatMargin || v.x > rightX + flatMargin));
+
+  const wallInset = 3, bottomY = rimY + CUP_DEPTH;
+  const cupVerts = [
+    { x: leftX - flatMargin, y: rimY, _cup: true },
+    { x: leftX, y: rimY, _cup: true },
+    { x: leftX + wallInset, y: bottomY, _cup: true },
+    { x: rightX - wallInset, y: bottomY, _cup: true },
+    { x: rightX, y: rimY, _cup: true },
+    { x: rightX + flatMargin, y: rimY, _cup: true },
+  ];
+
+  let idx = E.vertices.findIndex(v => v.x >= leftX - flatMargin);
+  if (idx === -1) idx = E.vertices.length;
+  E.vertices.splice(idx, 0, ...cupVerts);
+
+  E.cupY = rimY;
+  E.cupPlaced = true;
+  E.cupData = {
+    cupX, cupY: rimY,
+    cupLeftX: leftX, cupLeftY: rimY,
+    cupRightX: rightX, cupRightY: rimY,
+    cupBottomY: bottomY, cupWallInset: wallInset,
+    cupFilled: false, cupFillProgress: 0,
+    flagHole: 1, flagVisible: true, flagOpacity: 1,
+  };
+}
+
+function removeCup() {
+  E.vertices = E.vertices.filter(v => !v._cup);
+  E.cupPlaced = false;
+  E.cupData = null;
+}
+
+// ========== COLLISION (ported from game) ==========
+function collideWithTerrain() {
+  let collided = false;
+  const ball = E.ball, verts = E.vertices;
+
+  for (let i = 0; i < verts.length - 1; i++) {
+    const a = verts[i], b = verts[i + 1];
+    if (b.x < ball.x - BALL_RADIUS * 2 && a.x < ball.x - BALL_RADIUS * 2) continue;
+    if (a.x > ball.x + BALL_RADIUS * 2 && b.x > ball.x + BALL_RADIUS * 2) break;
+
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq < 0.001) continue;
+
+    let t = ((ball.x - a.x) * dx + (ball.y - a.y) * dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+
+    const cx = a.x + t * dx, cy = a.y + t * dy;
+    const distX = ball.x - cx, distY = ball.y - cy;
+    const distSq = distX * distX + distY * distY;
+
+    if (distSq < BALL_RADIUS * BALL_RADIUS && distSq > 0.0001) {
+      const dist = Math.sqrt(distSq);
+      const nx = distX / dist, ny = distY / dist;
+
+      const segLen = Math.sqrt(lenSq);
+      const snx = dy / segLen, sny = -dx / segLen;
+      const upNx = sny < 0 ? snx : -snx, upNy = sny < 0 ? sny : -sny;
+      if ((ball.x - a.x) * upNx + (ball.y - a.y) * upNy < -BALL_RADIUS * 2) continue;
+
+      ball.x += nx * (BALL_RADIUS - dist);
+      ball.y += ny * (BALL_RADIUS - dist);
+
+      const mat = getMaterial(i);
+      const dot = ball.vx * nx + ball.vy * ny;
+      if (dot < 0) {
+        const isGround = Math.abs(ny) > Math.abs(nx);
+        if (isGround && -dot < mat.bounceThreshold) {
+          ball.vx -= dot * nx;
+          ball.vy -= dot * ny;
+        } else {
+          ball.vx -= (1 + mat.restitution) * dot * nx;
+          ball.vy -= (1 + mat.restitution) * dot * ny;
+        }
+      }
+      collided = true;
+    }
+  }
+  ball.onGround = collided;
+  return collided;
+}
+
+// ========== PHYSICS (ported from game) ==========
+function updatePhysics() {
+  const ball = E.ball;
+  if (ball.atRest) return;
+
+  const substeps = 2;
+  for (let s = 0; s < substeps; s++) {
+    ball.vy += GRAVITY / substeps;
+    ball.x += ball.vx / substeps;
+    ball.y += ball.vy / substeps;
+    collideWithTerrain();
+  }
+
+  if (ball.onGround) {
+    const seg = findSegment(ball.x);
+    const mat = getMaterial(seg);
+
+    ball.vx *= mat.rollingFriction;
+    ball.vy *= mat.rollingFriction;
+
+    const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+    if (speed > mat.surfaceFriction) {
+      ball.vx -= (ball.vx / speed) * mat.surfaceFriction;
+      ball.vy -= (ball.vy / speed) * mat.surfaceFriction;
+    }
+
+    if (speed < 0.5) ball.slowFrames = (ball.slowFrames || 0) + 1;
+    else ball.slowFrames = 0;
+
+    const REST_SPEED = 0.05;
+    const forceRest = ball.slowFrames > 120;
+    if (speed < REST_SPEED || forceRest) {
+      const n = segmentNormal(seg);
+      const slopeGravity = Math.abs(GRAVITY * n.x);
+      if (slopeGravity <= mat.surfaceFriction || forceRest) {
+        ball.vx = 0; ball.vy = 0;
+        ball.atRest = true; ball.slowFrames = 0;
+        ball.y = terrainYAt(ball.x) - BALL_RADIUS;
+      }
+    }
+  }
+}
+
+function isBallInCup() {
+  if (!E.cupPlaced || !E.cupData) return false;
+  return Math.abs(E.ball.x - E.cupX) < CUP_WIDTH / 2 && E.ball.y > E.cupY;
+}
+
+function isBallOOB() {
+  const sx = E.ball.x - E.camera.x;
+  const margin = BALL_RADIUS + 10;
+  return sx < -margin - 200 || sx > W + margin + 200 || E.ball.y < -margin || E.ball.y > H + margin;
+}
+
+// ========== TEMPLATE GENERATION ==========
+function loadTemplate(archName) {
+  pushUndo();
+  setSeed(_seed);
+
+  const dist = parseFloat(document.getElementById('sDist').value);
+  const diff = parseFloat(document.getElementById('sDiff').value);
+  const teeY = parseFloat(document.getElementById('sTeeY').value);
+  const cupY = parseFloat(document.getElementById('sCupY').value);
+  const useNoise = document.getElementById('chkNoise').checked;
+
+  E.teeX = 100;
+  E.teeY = teeY;
+  const startX = E.teeX + 40;
+
+  let rawVerts;
+  if (archName === 'blank') {
+    rawVerts = [{ x: startX + dist, y: teeY }];
+  } else {
+    rawVerts = archetypes[archName](startX, teeY, dist, cupY, diff);
+  }
+
+  const holeVerts = useNoise ? addMicroNoise(rawVerts, startX, teeY, diff) : rawVerts.map(v => ({ x: v.x, y: clampY(v.y) }));
+
+  E.vertices = [
+    { x: E.teeX - 120, y: teeY },
+    { x: E.teeX - 20, y: teeY },
+  ];
+  for (const v of holeVerts) E.vertices.push(v);
+
+  // Background extension
+  const lastV = E.vertices[E.vertices.length - 1];
+  E.vertices.push({ x: lastV.x + 120, y: lastV.y });
+  E.vertices.push({ x: lastV.x + 270, y: lastV.y + (random() - 0.5) * 30 });
+
+  // Place cup
+  E.cupX = E.teeX + dist;
+  placeCupEditor();
+
+  E.camera.x = 0;
+  E.selectedVertex = -1;
+  updateSidebar();
+}
+
+// ========== EXPORT / IMPORT ==========
+function exportHole() {
+  const teeX = E.teeX;
+  const startX = teeX + 40;
+  const cupLeftBound = E.cupPlaced ? E.cupX - CUP_WIDTH / 2 - 20 : Infinity;
+
+  const midVerts = E.vertices.filter(v => !v._cup && v.x > startX && v.x < cupLeftBound);
+
+  const data = {
+    teeY: Math.round(E.teeY),
+    dist: E.cupPlaced ? Math.round(E.cupX - teeX) : Math.round(E.vertices[E.vertices.length - 1].x - teeX),
+    cupY: E.cupPlaced ? Math.round(E.cupY) : null,
+    verts: midVerts.map(v => {
+      const entry = { dx: Math.round(v.x - startX), y: Math.round(v.y) };
+      if (v.mat) entry.mat = v.mat;
+      return entry;
+    }),
+  };
+  return JSON.stringify(data, null, 2);
+}
+
+function importHole(json) {
+  let data;
+  try { data = JSON.parse(json); } catch (e) { alert('Invalid JSON'); return; }
+  if (!data.teeY || !data.dist || !data.verts) { alert('Missing teeY, dist, or verts'); return; }
+
+  pushUndo();
+  E.teeX = 100;
+  E.teeY = data.teeY;
+  const startX = E.teeX + 40;
+
+  E.vertices = [
+    { x: E.teeX - 120, y: data.teeY },
+    { x: E.teeX - 20, y: data.teeY },
+  ];
+
+  for (const v of data.verts) {
+    const entry = { x: startX + v.dx, y: v.y };
+    if (v.mat) entry.mat = v.mat;
+    E.vertices.push(entry);
+  }
+
+  const cupEndY = data.cupY || data.teeY;
+  E.vertices.push({ x: E.teeX + data.dist, y: cupEndY });
+  E.vertices.push({ x: E.teeX + data.dist + 120, y: cupEndY });
+  E.vertices.push({ x: E.teeX + data.dist + 270, y: cupEndY });
+
+  if (data.cupY !== null && data.cupY !== undefined) {
+    E.cupX = E.teeX + data.dist;
+    placeCupEditor();
+  } else {
+    E.cupPlaced = false;
+    E.cupData = null;
+  }
+
+  E.camera.x = 0;
+  E.selectedVertex = -1;
+  updateSidebar();
+}
+
+// ========== INPUT: EDIT MODE ==========
+function hitTestVertices(wx, wy) {
+  let best = -1, bestDist = HANDLE_HIT_R * HANDLE_HIT_R;
+  for (let i = 0; i < E.vertices.length; i++) {
+    const v = E.vertices[i];
+    const dx = wx - v.x, dy = wy - v.y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < bestDist) { bestDist = d2; best = i; }
+  }
+  return best;
+}
+
+function hitTestTee(wx, wy) {
+  const ty = terrainYAt(E.teeX) - BALL_RADIUS;
+  const dx = wx - E.teeX, dy = wy - ty;
+  return dx * dx + dy * dy < 15 * 15;
+}
+
+function hitTestCup(wx, wy) {
+  if (!E.cupPlaced) return false;
+  const dx = wx - E.cupX, dy = wy - E.cupY;
+  return dx * dx + dy * dy < 20 * 20;
+}
+
+canvas.addEventListener('mousedown', (e) => {
+  if (E.mode === 'play') return handlePlayMousedown(e);
+  const world = screenToWorld(e.clientX, e.clientY);
+
+  // Right-click = delete vertex
+  if (e.button === 2) {
+    const hit = hitTestVertices(world.x, world.y);
+    if (hit >= 0 && !isCupVertex(hit) && E.vertices.length > 2) {
+      pushUndo();
+      E.vertices.splice(hit, 1);
+      if (E.selectedVertex === hit) E.selectedVertex = -1;
+      else if (E.selectedVertex > hit) E.selectedVertex--;
+      updateSidebar();
+    }
+    return;
+  }
+
+  // Middle-click or space = pan
+  if (e.button === 1 || spaceHeld) {
+    E.dragging = true;
+    E.dragTarget = 'pan';
+    E.panStartCamX = E.camera.x;
+    E.dragStartScreenX = e.clientX;
+    return;
+  }
+
+  if (E.tool === 'vertex') {
+    const hit = hitTestVertices(world.x, world.y);
+    if (hit >= 0) {
+      E.selectedVertex = hit;
+      E.dragging = true;
+      E.dragTarget = isCupVertex(hit) ? 'cup_vert' : 'vertex';
+      E.dragStartScreenX = e.clientX;
+      E.dragStartScreenY = e.clientY;
+      pushUndo();
+    } else {
+      // Add new vertex
+      pushUndo();
+      const idx = insertVertex(snap(world.x), snap(world.y));
+      E.selectedVertex = idx;
+    }
+    updateSidebar();
+  } else if (E.tool === 'tee') {
+    pushUndo();
+    E.teeX = snap(world.x);
+    E.teeY = terrainYAt(E.teeX);
+    updateSidebar();
+  } else if (E.tool === 'cup') {
+    pushUndo();
+    E.cupX = snap(world.x);
+    placeCupEditor();
+    updateSidebar();
+  }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  if (E.mode === 'play') return handlePlayMousemove(e);
+  const world = screenToWorld(e.clientX, e.clientY);
+
+  // Update status bar coords
+  document.getElementById('sbCoords').textContent = `(${Math.round(world.x)}, ${Math.round(world.y)})`;
+
+  if (E.dragging) {
+    if (E.dragTarget === 'pan') {
+      const rect = canvas.getBoundingClientRect();
+      const dx = (e.clientX - E.dragStartScreenX) * (canvas.width / rect.width) / displayScale;
+      E.camera.x = E.panStartCamX - dx;
+    } else if (E.dragTarget === 'vertex') {
+      const v = E.vertices[E.selectedVertex];
+      if (v) {
+        let newX = snap(world.x), newY = snap(world.y);
+        // Constrain X between neighbors
+        const prev = E.vertices[E.selectedVertex - 1];
+        const next = E.vertices[E.selectedVertex + 1];
+        if (prev) newX = Math.max(prev.x + 1, newX);
+        if (next) newX = Math.min(next.x - 1, newX);
+        v.x = newX; v.y = newY;
+        // Rebuild cup if we moved near it
+        if (E.cupPlaced && Math.abs(v.x - E.cupX) < CUP_WIDTH + 40) {
+          // Don't auto-rebuild — let user manually re-place cup
+        }
+      }
+    }
+    return;
+  }
+
+  E.hoveredVertex = hitTestVertices(world.x, world.y);
+  canvas.style.cursor = E.hoveredVertex >= 0 ? 'grab' : (spaceHeld ? 'grab' : 'crosshair');
+});
+
+canvas.addEventListener('mouseup', (e) => {
+  if (E.mode === 'play') return handlePlayMouseup(e);
+  E.dragging = false;
+  E.dragTarget = null;
+  updateSidebar();
+});
+
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+// Scroll to zoom / pan
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  E.camera.x += e.deltaX * 0.5 + (e.deltaY * 0.5);
+}, { passive: false });
+
+// ========== INPUT: PLAY MODE ==========
+function handlePlayMousedown(e) {
+  if (!E.ball.atRest || E.inCup) return;
+  const pos = screenToCanvas(e.clientX, e.clientY);
+  E.aiming = true;
+  E.aimStartX = pos.x; E.aimStartY = pos.y;
+  E.aimCurrentX = pos.x; E.aimCurrentY = pos.y;
+}
+
+function handlePlayMousemove(e) {
+  if (!E.aiming) return;
+  const pos = screenToCanvas(e.clientX, e.clientY);
+  E.aimCurrentX = pos.x; E.aimCurrentY = pos.y;
+}
+
+function handlePlayMouseup(e) {
+  if (!E.aiming) return;
+  E.aiming = false;
+
+  const pos = screenToCanvas(e.clientX, e.clientY);
+  const dx = E.aimStartX - pos.x, dy = E.aimStartY - pos.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < 5) return;
+
+  const power = Math.min(dist * POWER_SCALE, MAX_POWER);
+  const angle = Math.atan2(dy, dx);
+  E.ball.vx = Math.cos(angle) * power;
+  E.ball.vy = Math.sin(angle) * power;
+  E.ball.atRest = false;
+  E.ball.onGround = false;
+  E.ball.slowFrames = 0;
+  E.strokes++;
+}
+
+// ========== KEYBOARD ==========
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (e.code === 'Space') { spaceHeld = true; e.preventDefault(); }
+  if (e.key === 'e' || e.key === 'E') setMode('edit');
+  if (e.key === 'p' || e.key === 'P') setMode('play');
+  if (e.key === 'v' || e.key === 'V') setTool('vertex');
+  if (e.key === 't' && !e.ctrlKey) setTool('tee');
+  if (e.key === 'c' && !e.ctrlKey) setTool('cup');
+  if (e.key === 'g' || e.key === 'G') { E.snapEnabled = !E.snapEnabled; document.getElementById('chkSnap').checked = E.snapEnabled; }
+  if (e.key === 'r' || e.key === 'R') { if (E.mode === 'play') resetBall(); }
+  if ((e.key === 'Delete' || e.key === 'Backspace') && E.mode === 'edit' && E.selectedVertex >= 0 && !isCupVertex(E.selectedVertex) && E.vertices.length > 2) {
+    pushUndo();
+    E.vertices.splice(E.selectedVertex, 1);
+    E.selectedVertex = -1;
+    updateSidebar();
+  }
+  if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); }
+});
+
+document.addEventListener('keyup', (e) => {
+  if (e.code === 'Space') spaceHeld = false;
+});
+
+// ========== MODE & TOOL SWITCHING ==========
+function setMode(mode) {
+  E.mode = mode;
+  document.getElementById('btnEdit').classList.toggle('active', mode === 'edit');
+  document.getElementById('btnPlay').classList.toggle('active', mode === 'play');
+  document.getElementById('sbMode').textContent = mode === 'edit' ? 'Edit' : 'Play';
+  document.getElementById('sbStrokes').style.display = mode === 'play' ? 'inline' : 'none';
+  canvas.style.cursor = mode === 'play' ? 'crosshair' : 'crosshair';
+
+  if (mode === 'play') {
+    resetBall();
+  } else {
+    E.aiming = false;
+    E.inCup = false;
+    E.ball.atRest = true;
+  }
+}
+
+function setTool(tool) {
+  E.tool = tool;
+  document.getElementById('btnVertex').classList.toggle('active', tool === 'vertex');
+  document.getElementById('btnTee').classList.toggle('active', tool === 'tee');
+  document.getElementById('btnCup').classList.toggle('active', tool === 'cup');
+  document.getElementById('sbTool').textContent = tool.charAt(0).toUpperCase() + tool.slice(1);
+}
+
+function resetBall() {
+  E.ball.x = E.teeX;
+  E.ball.y = terrainYAt(E.teeX) - BALL_RADIUS;
+  E.ball.vx = 0; E.ball.vy = 0;
+  E.ball.atRest = true; E.ball.onGround = false; E.ball.slowFrames = 0;
+  E.aiming = false; E.strokes = 0; E.inCup = false; E.cupResetTimer = 0;
+  if (E.cupData) { E.cupData.cupFillProgress = 0; E.cupData.cupFilled = false; }
+  // Reset camera to show tee
+  E.camera.x = Math.max(0, E.teeX - W * 0.3);
+}
+
+// ========== RENDERING ==========
+function drawGrid() {
+  if (E.mode !== 'edit' || !E.snapEnabled) return;
+  const gs = E.gridSize;
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 0.5;
+  const startX = Math.floor(E.camera.x / gs) * gs;
+  for (let x = startX; x < E.camera.x + W + gs; x += gs) {
+    ctx.beginPath(); ctx.moveTo(x - E.camera.x, 0); ctx.lineTo(x - E.camera.x, H); ctx.stroke();
+  }
+  const startY = Math.floor(0 / gs) * gs;
+  for (let y = startY; y < H + gs; y += gs) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+}
+
+function drawTerrain() {
+  // Material-colored segments
+  let i = 0;
+  while (i < E.vertices.length - 1) {
+    const matKey = E.vertices[i].mat || '';
+    const mat = MATERIALS[matKey] || MATERIALS.normal;
+    let runEnd = i + 1;
+    while (runEnd < E.vertices.length - 1 && ((E.vertices[runEnd].mat || '') === matKey)) runEnd++;
+
+    ctx.fillStyle = mat.color;
+    ctx.beginPath();
+    ctx.moveTo(E.vertices[i].x - E.camera.x, E.vertices[i].y);
+    for (let j = i + 1; j <= runEnd; j++) ctx.lineTo(E.vertices[j].x - E.camera.x, E.vertices[j].y);
+    ctx.lineTo(E.vertices[runEnd].x - E.camera.x, H);
+    ctx.lineTo(E.vertices[i].x - E.camera.x, H);
+    ctx.closePath();
+    ctx.fill();
+    i = runEnd;
+  }
+}
+
+function drawTerrainWireframe() {
+  if (E.mode !== 'edit') return;
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 0; i < E.vertices.length; i++) {
+    const v = E.vertices[i];
+    const sx = v.x - E.camera.x;
+    if (i === 0) ctx.moveTo(sx, v.y);
+    else ctx.lineTo(sx, v.y);
+  }
+  ctx.stroke();
+}
+
+function drawVertexHandles() {
+  if (E.mode !== 'edit') return;
+  for (let i = 0; i < E.vertices.length; i++) {
+    const v = E.vertices[i];
+    const sx = v.x - E.camera.x;
+    const isCup = v._cup;
+
+    let r = HANDLE_R, fillColor = '#fff', strokeColor = '#333';
+    if (isCup) { fillColor = '#7ec8e3'; r = 4; }
+    if (i === E.hoveredVertex) { fillColor = '#f0a030'; r = 7; }
+    if (i === E.selectedVertex) { fillColor = '#ffe040'; r = 7; strokeColor = '#d68841'; }
+
+    ctx.fillStyle = fillColor;
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(sx, v.y, r, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+
+    // Mat indicator
+    if (v.mat && MATERIALS[v.mat]) {
+      ctx.fillStyle = MATERIALS[v.mat].color;
+      ctx.beginPath();
+      ctx.arc(sx, v.y - r - 4, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Tooltip for hovered vertex
+  if (E.hoveredVertex >= 0) {
+    const v = E.vertices[E.hoveredVertex];
+    const sx = v.x - E.camera.x;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`(${Math.round(v.x)}, ${Math.round(v.y)})`, sx, v.y - 14);
+  }
+}
+
+function drawTeeMarker() {
+  const ty = terrainYAt(E.teeX) - BALL_RADIUS;
+  const sx = E.teeX - E.camera.x;
+
+  // Vertical line
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(sx, ty - 20); ctx.lineTo(sx, ty + 10); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Ball preview (in edit mode)
+  if (E.mode === 'edit') {
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.beginPath();
+    ctx.arc(sx, ty, BALL_RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Label
+  ctx.fillStyle = '#fff';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('TEE', sx, ty - 24);
+}
+
+function drawCupFlag() {
+  if (!E.cupPlaced || !E.cupData) return;
+  const cd = E.cupData;
+  // Draw flag
+  const cupW = cd.cupRightX - cd.cupLeftX;
+  const poleX = cd.cupLeftX + cupW + 2 - E.camera.x;
+  const sy = terrainYAt(cd.cupLeftX + cupW + 2);
+
+  // Pole
+  const poleH = 55;
+  ctx.strokeStyle = '#7888a0';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(poleX, sy); ctx.lineTo(poleX, sy - poleH); ctx.stroke();
+
+  // Pennant
+  const pTop = sy - poleH, pBot = sy - poleH + 16, pMid = (pTop + pBot) / 2;
+  const bodyW = 22, pointW = 10;
+  ctx.fillStyle = '#e8c840';
+  ctx.beginPath();
+  ctx.moveTo(poleX, pTop);
+  ctx.lineTo(poleX + bodyW, pTop);
+  ctx.lineTo(poleX + bodyW + pointW, pMid);
+  ctx.lineTo(poleX + bodyW, pBot);
+  ctx.lineTo(poleX, pBot);
+  ctx.closePath(); ctx.fill();
+
+  ctx.fillStyle = '#4a3520';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('1', poleX + bodyW / 2, pMid + 4);
+}
+
+function drawCupFill() {
+  if (!E.cupData || !E.cupData.cupFillProgress || E.cupData.cupFillProgress <= 0) return;
+  const cd = E.cupData;
+  const leftX = cd.cupLeftX - E.camera.x, rightX = cd.cupRightX - E.camera.x;
+  const bottomY = cd.cupBottomY, wi = cd.cupWallInset;
+  const topRim = Math.min(cd.cupLeftY, cd.cupRightY);
+  const fillTopY = bottomY + (topRim - bottomY) * cd.cupFillProgress;
+  if (fillTopY >= bottomY) return;
+
+  ctx.fillStyle = GROUND;
+  ctx.beginPath();
+  ctx.moveTo(leftX, fillTopY);
+  ctx.lineTo(leftX + wi, bottomY + 1);
+  ctx.lineTo(rightX - wi, bottomY + 1);
+  ctx.lineTo(rightX, fillTopY);
+  ctx.closePath(); ctx.fill();
+}
+
+function drawBall() {
+  const ball = E.ball;
+  const sx = ball.x - E.camera.x;
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.beginPath(); ctx.arc(sx, ball.y + 1, BALL_RADIUS, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = BALL_COLOR;
+  ctx.beginPath(); ctx.arc(sx, ball.y, BALL_RADIUS, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawAimUI() {
+  if (!E.aiming || !E.ball.atRest) return;
+  const dx = E.aimCurrentX - E.aimStartX, dy = E.aimCurrentY - E.aimStartY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < 5) return;
+  const nx = dx / dist, ny = dy / dist;
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(E.aimStartX, E.aimStartY, 8, 0, Math.PI * 2); ctx.stroke();
+
+  const lx = E.aimStartX - dx, ly = E.aimStartY - dy;
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(E.aimStartX, E.aimStartY); ctx.lineTo(lx, ly); ctx.stroke();
+
+  const aLen = 10, aAngle = 0.45, la = Math.atan2(-dy, -dx);
+  ctx.beginPath();
+  ctx.moveTo(lx, ly); ctx.lineTo(lx - aLen * Math.cos(la - aAngle), ly - aLen * Math.sin(la - aAngle));
+  ctx.moveTo(lx, ly); ctx.lineTo(lx - aLen * Math.cos(la + aAngle), ly - aLen * Math.sin(la + aAngle));
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(80,70,55,0.5)';
+  const numDots = Math.min(Math.floor(dist / 10), 15);
+  for (let i = 1; i <= numDots; i++) {
+    ctx.beginPath(); ctx.arc(E.aimStartX + nx * i * 10, E.aimStartY + ny * i * 10, 2.5, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+function render() {
+  ctx.save();
+  ctx.scale(displayScale, displayScale);
+
+  // Sky
+  ctx.fillStyle = SKY;
+  ctx.fillRect(0, 0, W, H);
+
+  drawGrid();
+  drawTerrain();
+  drawTerrainWireframe();
+  drawCupFill();
+  drawCupFlag();
+  drawTeeMarker();
+  drawVertexHandles();
+
+  // Ball
+  if (E.mode === 'play') {
+    drawBall();
+  }
+
+  // Aim UI (screen space — no camera transform needed, already in screen coords)
+  drawAimUI();
+
+  // Play mode HUD
+  if (E.mode === 'play') {
+    document.getElementById('sbStrokesN').textContent = E.strokes;
+
+    if (E.inCup) {
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      ctx.font = '20px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('In the cup!', W / 2, 40);
+      ctx.fillStyle = '#ffe040';
+      ctx.fillText('In the cup!', W / 2 - 1, 39);
+    }
+  }
+
+  ctx.restore();
+}
+
+// ========== SIDEBAR UPDATE ==========
+function updateSidebar() {
+  document.getElementById('infoTee').textContent = `${Math.round(E.teeX)}, ${Math.round(E.teeY)}`;
+  document.getElementById('infoCup').textContent = E.cupPlaced ? `${Math.round(E.cupX)}, ${Math.round(E.cupY)}` : '—';
+  document.getElementById('infoDist').textContent = E.cupPlaced ? Math.round(E.cupX - E.teeX) : '—';
+  document.getElementById('infoVerts').textContent = E.vertices.length;
+  document.getElementById('sbVerts').textContent = E.vertices.length;
+
+  // Selected vertex props
+  const vp = document.getElementById('vertexProps');
+  const vn = document.getElementById('vertexNone');
+  if (E.selectedVertex >= 0 && E.selectedVertex < E.vertices.length) {
+    const v = E.vertices[E.selectedVertex];
+    vp.style.display = 'block'; vn.style.display = 'none';
+    document.getElementById('vpX').value = Math.round(v.x);
+    document.getElementById('vpY').value = Math.round(v.y);
+    document.getElementById('vpMat').value = v.mat || '';
+    document.getElementById('vpInfo').textContent = v._cup ? '(cup vertex)' : `#${E.selectedVertex}`;
+  } else {
+    vp.style.display = 'none'; vn.style.display = 'block';
+  }
+
+  // Vertex list
+  const list = document.getElementById('vertexList');
+  let html = '';
+  for (let i = 0; i < E.vertices.length; i++) {
+    const v = E.vertices[i];
+    const cls = (i === E.selectedVertex ? ' sel' : '') + (v._cup ? ' cup' : '');
+    const matLabel = v.mat ? ` [${v.mat}]` : '';
+    html += `<div class="vitem${cls}" data-idx="${i}">#${i} (${Math.round(v.x)}, ${Math.round(v.y)})${matLabel}</div>`;
+  }
+  list.innerHTML = html;
+}
+
+// Vertex list click
+document.getElementById('vertexList').addEventListener('click', (e) => {
+  const item = e.target.closest('.vitem');
+  if (item) {
+    E.selectedVertex = parseInt(item.dataset.idx);
+    updateSidebar();
+  }
+});
+
+// Vertex property inputs
+document.getElementById('vpX').addEventListener('change', (e) => {
+  if (E.selectedVertex >= 0 && !isCupVertex(E.selectedVertex)) {
+    pushUndo();
+    E.vertices[E.selectedVertex].x = parseFloat(e.target.value);
+    updateSidebar();
+  }
+});
+document.getElementById('vpY').addEventListener('change', (e) => {
+  if (E.selectedVertex >= 0 && !isCupVertex(E.selectedVertex)) {
+    pushUndo();
+    E.vertices[E.selectedVertex].y = parseFloat(e.target.value);
+    updateSidebar();
+  }
+});
+document.getElementById('vpMat').addEventListener('change', (e) => {
+  if (E.selectedVertex >= 0 && !isCupVertex(E.selectedVertex)) {
+    pushUndo();
+    const v = E.vertices[E.selectedVertex];
+    if (e.target.value) v.mat = e.target.value;
+    else delete v.mat;
+    updateSidebar();
+  }
+});
+
+// ========== TOOLBAR & SIDEBAR CONTROLS ==========
+document.getElementById('btnEdit').addEventListener('click', () => setMode('edit'));
+document.getElementById('btnPlay').addEventListener('click', () => setMode('play'));
+document.getElementById('btnVertex').addEventListener('click', () => setTool('vertex'));
+document.getElementById('btnTee').addEventListener('click', () => setTool('tee'));
+document.getElementById('btnCup').addEventListener('click', () => setTool('cup'));
+document.getElementById('btnUndo').addEventListener('click', undo);
+document.getElementById('chkSnap').addEventListener('change', (e) => { E.snapEnabled = e.target.checked; });
+document.getElementById('numGrid').addEventListener('change', (e) => { E.gridSize = Math.max(4, parseInt(e.target.value) || 16); });
+
+// Slider value displays
+['sDist', 'sDiff', 'sTeeY', 'sCupY'].forEach(id => {
+  const el = document.getElementById(id);
+  const valId = 'v' + id.charAt(1).toUpperCase() + id.slice(2);
+  el.addEventListener('input', () => { document.getElementById(valId).textContent = el.value; });
+});
+
+document.getElementById('btnGenerate').addEventListener('click', () => {
+  loadTemplate(document.getElementById('selArch').value);
+});
+
+document.getElementById('btnRandomize').addEventListener('click', () => {
+  _seed = Math.floor(Math.random() * 999999);
+  loadTemplate(document.getElementById('selArch').value);
+});
+
+// Export / Import
+document.getElementById('btnExport').addEventListener('click', () => {
+  showModal('Export', exportHole(), 'Copy', () => {
+    navigator.clipboard.writeText(document.getElementById('modalText').value);
+  });
+});
+
+document.getElementById('btnCopy').addEventListener('click', () => {
+  navigator.clipboard.writeText(exportHole());
+});
+
+document.getElementById('btnImport').addEventListener('click', () => {
+  showModal('Import', '', 'Load', () => {
+    importHole(document.getElementById('modalText').value);
+    hideModal();
+  });
+});
+
+function showModal(title, text, actionLabel, actionFn) {
+  document.getElementById('modalTitle').textContent = title;
+  document.getElementById('modalText').value = text;
+  document.getElementById('modalAction').textContent = actionLabel;
+  document.getElementById('modalAction').onclick = actionFn;
+  document.getElementById('modalBg').classList.add('show');
+}
+
+function hideModal() { document.getElementById('modalBg').classList.remove('show'); }
+document.getElementById('modalClose').addEventListener('click', hideModal);
+document.getElementById('modalBg').addEventListener('click', (e) => { if (e.target === e.currentTarget) hideModal(); });
+
+// ========== MAIN LOOP ==========
+function frame() {
+  if (E.mode === 'play') {
+    updatePhysics();
+
+    // Camera follows ball
+    const target = E.ball.x - W * 0.3;
+    E.camera.x += (target - E.camera.x) * 0.08;
+
+    // Cup detection
+    if (!E.inCup && isBallInCup() && E.ball.atRest) {
+      E.inCup = true;
+      E.cupResetTimer = 0;
+    }
+    if (E.inCup) {
+      E.cupResetTimer++;
+      if (E.cupData && E.cupData.cupFillProgress < 1) {
+        E.cupData.cupFillProgress = Math.min(1, E.cupData.cupFillProgress + 0.02);
+      }
+      if (E.cupResetTimer > 120) resetBall();
+    }
+
+    // OOB detection
+    if (!E.ball.atRest && isBallOOB()) {
+      resetBall();
+    }
+  }
+
+  render();
+  requestAnimationFrame(frame);
+}
+
+// ========== INIT ==========
+// Start with a gentle_slope template
+setSeed(42);
+loadTemplate('gentle_slope');
+undoStack.length = 0; // Clear init undo
+updateSidebar();
+resizeCanvas();
+frame();
+</script>
+</body>
+</html>

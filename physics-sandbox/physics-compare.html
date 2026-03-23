@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Physics Compare — Desert Golfing</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #000; }
+    canvas { display: block; cursor: crosshair; }
+    #loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+               color: #d5ad72; font: 20px 'VT323', monospace; text-align: center; z-index: 10; }
+  </style>
+</head>
+<body>
+  <div id="loading">Loading physics engine…</div>
+  <canvas id="c"></canvas>
+
+  <script src="https://cdn.jsdelivr.net/npm/planck-js@0.3.28/dist/planck.min.js"
+          onerror="window._planckError=true"></script>
+
+  <script>
+(function() {
+'use strict';
+
+// ═══════════════════════════════════════════════════════════
+// CONSTANTS  (exact values from src/shared.js)
+// ═══════════════════════════════════════════════════════════
+const SKY          = '#d5ad72';
+const GROUND       = '#d68841';
+const GROUND_LIGHT = '#dea050';
+const BALL_COLOR   = '#ffffff';
+
+const GRAVITY          = 0.04;
+const RESTITUTION      = 0.47;
+const ROLLING_FRICTION = 0.98;
+const SURFACE_FRICTION = 0.004;
+const POWER_SCALE      = 0.04;
+const MAX_POWER        = 8;
+const BOUNCE_THRESHOLD = 1.0;
+const BALL_RADIUS      = 4;
+
+const CUP_WIDTH      = 36;
+const CUP_DEPTH      = 20;
+const CUP_HALF_W     = CUP_WIDTH / 2;
+const CUP_WALL_INSET = 3;
+
+const H = 540;
+let   W = 960;
+
+// ═══════════════════════════════════════════════════════════
+// TERRAIN  (hardcoded rolling-hills hole)
+// ═══════════════════════════════════════════════════════════
+const TEE_X     = 100;
+const TEE_Y     = 360;
+const CUP_X     = 780;
+const CUP_RIM_Y = 370;
+const CUP_BOT_Y = CUP_RIM_Y + CUP_DEPTH;
+
+const vertices = [
+  { x: -200, y: 360 },
+  { x:   80, y: 360 },
+  { x:  200, y: 355 },
+  { x:  310, y: 335 },
+  { x:  400, y: 295 },   // hill 1 peak
+  { x:  470, y: 330 },
+  { x:  520, y: 365 },   // valley
+  { x:  580, y: 345 },
+  { x:  650, y: 310 },   // hill 2 peak
+  { x:  710, y: 350 },
+  // cup flat approach
+  { x: CUP_X - CUP_HALF_W - 20, y: CUP_RIM_Y },
+  // cup notch
+  { x: CUP_X - CUP_HALF_W,                    y: CUP_RIM_Y },
+  { x: CUP_X - CUP_HALF_W + CUP_WALL_INSET,   y: CUP_BOT_Y },
+  { x: CUP_X + CUP_HALF_W - CUP_WALL_INSET,   y: CUP_BOT_Y },
+  { x: CUP_X + CUP_HALF_W,                    y: CUP_RIM_Y },
+  { x: CUP_X + CUP_HALF_W + 20,               y: CUP_RIM_Y },
+  // background
+  { x:  880, y: 365 },
+  { x: 1050, y: 372 },
+  { x: 1200, y: 368 },
+];
+
+// ═══════════════════════════════════════════════════════════
+// CANVAS
+// ═══════════════════════════════════════════════════════════
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+let displayScale = 1;
+
+function resize() {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width  = Math.round(vw * dpr);
+  canvas.height = Math.round(vh * dpr);
+  canvas.style.width  = vw + 'px';
+  canvas.style.height = vh + 'px';
+  displayScale = canvas.height / H;
+  W = Math.round(vw * dpr / displayScale);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ═══════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════
+let mode = 'custom';   // 'custom' | 'box2d'
+let cameraX = 0;
+
+let ball = {
+  x: 0, y: 0, vx: 0, vy: 0,
+  onGround: false, atRest: true, slowFrames: 0,
+  rotation: 0, spinRate: 0,
+};
+let strokes = 0;
+let inCup = false;
+
+let aiming = false;
+let aimStartX = 0, aimStartY = 0;
+let aimCurrentX = 0, aimCurrentY = 0;
+let aimDotPhase = 0;
+
+// ═══════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════
+function terrainYAt(worldX) {
+  for (let i = 0; i < vertices.length - 1; i++) {
+    const a = vertices[i], b = vertices[i + 1];
+    if (worldX >= a.x && worldX <= b.x) {
+      const t = (worldX - a.x) / (b.x - a.x);
+      return a.y + t * (b.y - a.y);
+    }
+  }
+  return H * 0.6;
+}
+
+function findSegAt(worldX) {
+  for (let i = 0; i < vertices.length - 1; i++) {
+    if (worldX >= vertices[i].x && worldX <= vertices[i + 1].x) return i;
+  }
+  return vertices.length - 2;
+}
+
+function canRestOnSlope(worldX) {
+  const i = findSegAt(worldX);
+  const a = vertices[i], b = vertices[i + 1];
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 0.001) return true;
+  const nx = dy / len;  // normal x component
+  return Math.abs(GRAVITY * nx) <= SURFACE_FRICTION;
+}
+
+function setupCamera() {
+  const margin = 120;
+  cameraX = TEE_X - margin;
+  if (CUP_X - cameraX > W - margin) {
+    cameraX = (TEE_X + CUP_X) / 2 - W / 2;
+  }
+}
+
+function toGameCoords(cx, cy) {
+  const r = canvas.getBoundingClientRect();
+  return { x: (cx - r.left) * (W / r.width), y: (cy - r.top) * (H / r.height) };
+}
+
+// ═══════════════════════════════════════════════════════════
+// BOX2D  (planck-js)
+// ═══════════════════════════════════════════════════════════
+const PX_PER_M = 30;
+let b2World = null, b2Ball = null, b2Loaded = false;
+
+function initBox2D() {
+  try {
+    if (typeof planck === 'undefined') return false;
+
+    // Game gravity: 0.04 px/frame² → 144 px/s² → 4.8 m/s²
+    b2World = planck.World(planck.Vec2(0, -4.8));
+
+    // Terrain chain (flip y for planck's y-up coords)
+    const chainVerts = vertices.map(function(v) {
+      return planck.Vec2(v.x / PX_PER_M, -v.y / PX_PER_M);
+    });
+    var ground = b2World.createBody();
+    ground.createFixture(planck.Chain(chainVerts, false), {
+      friction: 0.6,
+      restitution: RESTITUTION,
+    });
+
+    return true;
+  } catch (e) {
+    console.error('Box2D init failed:', e);
+    return false;
+  }
+}
+
+function createB2Ball(gx, gy) {
+  if (b2Ball) b2World.destroyBody(b2Ball);
+  b2Ball = b2World.createBody({
+    type: 'dynamic',
+    position: planck.Vec2(gx / PX_PER_M, -gy / PX_PER_M),
+    bullet: true,
+    linearDamping: 0.3,
+    angularDamping: 0.5,
+    allowSleep: false,
+  });
+  b2Ball.createFixture(planck.Circle(BALL_RADIUS / PX_PER_M), {
+    density: 1.0,
+    friction: 0.5,
+    restitution: RESTITUTION,
+  });
+}
+
+function isB2OnGround() {
+  for (var ce = b2Ball.getContactList(); ce; ce = ce.next) {
+    if (ce.contact.isTouching()) return true;
+  }
+  return false;
+}
+
+function syncFromB2() {
+  var pos = b2Ball.getPosition();
+  ball.x = pos.x * PX_PER_M;
+  ball.y = -pos.y * PX_PER_M;
+  ball.rotation = -b2Ball.getAngle();
+  ball.onGround = isB2OnGround();
+
+  var vel = b2Ball.getLinearVelocity();
+  var speed = vel.length();
+
+  if (ball.onGround && speed < 0.3) {
+    ball.slowFrames++;
+    if (ball.slowFrames > 120 || speed < 0.02) {
+      b2Ball.setLinearVelocity(planck.Vec2(0, 0));
+      b2Ball.setAngularVelocity(0);
+      ball.atRest = true;
+      ball.slowFrames = 0;
+      // Snap to terrain surface
+      var ty = terrainYAt(ball.x);
+      ball.y = ty - BALL_RADIUS;
+      b2Ball.setPosition(planck.Vec2(ball.x / PX_PER_M, -ball.y / PX_PER_M));
+    }
+  } else {
+    ball.slowFrames = 0;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// CUSTOM PHYSICS  (exact replica of gameplay.js + desert-golfing.js)
+// ═══════════════════════════════════════════════════════════
+function collideCustom() {
+  var collided = false;
+  for (var i = 0; i < vertices.length - 1; i++) {
+    var a = vertices[i], b = vertices[i + 1];
+    if (b.x < ball.x - BALL_RADIUS * 2 && a.x < ball.x - BALL_RADIUS * 2) continue;
+    if (a.x > ball.x + BALL_RADIUS * 2 && b.x > ball.x + BALL_RADIUS * 2) break;
+
+    var dx = b.x - a.x, dy = b.y - a.y;
+    var lenSq = dx * dx + dy * dy;
+    if (lenSq < 0.001) continue;
+
+    var t = ((ball.x - a.x) * dx + (ball.y - a.y) * dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+
+    var cx = a.x + t * dx, cy = a.y + t * dy;
+    var ex = ball.x - cx, ey = ball.y - cy;
+    var dSq = ex * ex + ey * ey;
+
+    if (dSq < BALL_RADIUS * BALL_RADIUS && dSq > 0.0001) {
+      var d = Math.sqrt(dSq);
+      var nx = ex / d, ny = ey / d;
+
+      // Side check (same as desert-golfing.js)
+      var segLen = Math.sqrt(lenSq);
+      var snx = dy / segLen, sny = -dx / segLen;
+      var upNx = sny < 0 ? snx : -snx;
+      var upNy = sny < 0 ? sny : -sny;
+      if ((ball.x - a.x) * upNx + (ball.y - a.y) * upNy < -BALL_RADIUS * 2) continue;
+
+      // Push out
+      ball.x += nx * (BALL_RADIUS - d);
+      ball.y += ny * (BALL_RADIUS - d);
+
+      // Velocity response
+      var dot = ball.vx * nx + ball.vy * ny;
+      if (dot < 0) {
+        var isGround = Math.abs(ny) > Math.abs(nx);
+        if (isGround && -dot < BOUNCE_THRESHOLD) {
+          ball.vx -= dot * nx;
+          ball.vy -= dot * ny;
+        } else {
+          ball.vx -= (1 + RESTITUTION) * dot * nx;
+          ball.vy -= (1 + RESTITUTION) * dot * ny;
+        }
+      }
+      collided = true;
+    }
+  }
+  ball.onGround = collided;
+}
+
+function updateCustomPhysics() {
+  if (ball.atRest) return;
+
+  // Rotation: backspin in air, forward roll on ground
+  if (ball.onGround) {
+    ball.rotation += ball.vx / BALL_RADIUS;
+    ball.spinRate = 0;
+  } else {
+    ball.rotation += ball.spinRate || 0;
+  }
+
+  // 2 substeps
+  for (var s = 0; s < 2; s++) {
+    ball.vy += GRAVITY / 2;
+    ball.x  += ball.vx / 2;
+    ball.y  += ball.vy / 2;
+    collideCustom();
+  }
+
+  // Friction (per-frame, outside substeps)
+  if (ball.onGround) {
+    ball.vx *= ROLLING_FRICTION;
+    ball.vy *= ROLLING_FRICTION;
+
+    var speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+    if (speed > SURFACE_FRICTION) {
+      ball.vx -= (ball.vx / speed) * SURFACE_FRICTION;
+      ball.vy -= (ball.vy / speed) * SURFACE_FRICTION;
+    }
+
+    if (speed < 0.5) ball.slowFrames++;
+    else ball.slowFrames = 0;
+
+    var REST_SPEED = 0.05;
+    var forceRest = ball.slowFrames > 120;
+    if (speed < REST_SPEED || forceRest) {
+      if (canRestOnSlope(ball.x) || forceRest) {
+        ball.vx = 0; ball.vy = 0;
+        ball.atRest = true; ball.slowFrames = 0;
+        ball.y = terrainYAt(ball.x) - BALL_RADIUS;
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// BOX2D PHYSICS UPDATE
+// ═══════════════════════════════════════════════════════════
+function updateBox2DPhysics() {
+  if (ball.atRest) return;
+  b2World.step(1 / 60, 8, 3);
+  syncFromB2();
+}
+
+// ═══════════════════════════════════════════════════════════
+// SHOOTING
+// ═══════════════════════════════════════════════════════════
+function shoot(dx, dy) {
+  var dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < 5) return;
+
+  var power = Math.min(dist * POWER_SCALE, MAX_POWER);
+  var angle = Math.atan2(dy, dx);
+  var vx = Math.cos(angle) * power;
+  var vy = Math.sin(angle) * power;
+
+  ball.atRest = false;
+  ball.onGround = false;
+  ball.slowFrames = 0;
+  ball.spinRate = -Math.sign(vx) * (power / MAX_POWER) * 0.4;
+  strokes++;
+  inCup = false;
+
+  if (mode === 'custom') {
+    ball.vx = vx;
+    ball.vy = vy;
+  } else if (b2Loaded) {
+    // Convert px/frame → m/s  (× 60fps ÷ scale)
+    b2Ball.setAwake(true);
+    b2Ball.setLinearVelocity(planck.Vec2(
+      vx * 60 / PX_PER_M,
+      -vy * 60 / PX_PER_M
+    ));
+    b2Ball.setAngularVelocity(ball.spinRate * 60);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// RESET
+// ═══════════════════════════════════════════════════════════
+function resetBall() {
+  ball.x = TEE_X; ball.y = TEE_Y - BALL_RADIUS;
+  ball.vx = 0; ball.vy = 0;
+  ball.atRest = true; ball.onGround = false;
+  ball.slowFrames = 0; ball.rotation = 0; ball.spinRate = 0;
+  strokes = 0; inCup = false; aiming = false;
+
+  if (mode === 'box2d' && b2Loaded) {
+    createB2Ball(ball.x, ball.y);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// CUP CHECK
+// ═══════════════════════════════════════════════════════════
+function checkCup() {
+  if (inCup || !ball.atRest) return;
+  if (Math.abs(ball.x - CUP_X) < CUP_HALF_W && ball.y + BALL_RADIUS > CUP_RIM_Y) {
+    inCup = true;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// INPUT
+// ═══════════════════════════════════════════════════════════
+canvas.addEventListener('mousedown', function(e) {
+  if (inCup || !ball.atRest) return;
+  var p = toGameCoords(e.clientX, e.clientY);
+  aiming = true;
+  aimStartX = p.x; aimStartY = p.y;
+  aimCurrentX = p.x; aimCurrentY = p.y;
+  aimDotPhase = 0;
+});
+
+window.addEventListener('mousemove', function(e) {
+  if (!aiming) return;
+  var p = toGameCoords(e.clientX, e.clientY);
+  aimCurrentX = p.x; aimCurrentY = p.y;
+});
+
+window.addEventListener('mouseup', function(e) {
+  if (!aiming) return;
+  aiming = false;
+  var p = toGameCoords(e.clientX, e.clientY);
+  shoot(aimStartX - p.x, aimStartY - p.y);
+});
+
+canvas.addEventListener('touchstart', function(e) {
+  e.preventDefault();
+  if (inCup || !ball.atRest) return;
+  var p = toGameCoords(e.touches[0].clientX, e.touches[0].clientY);
+  aiming = true;
+  aimStartX = p.x; aimStartY = p.y;
+  aimCurrentX = p.x; aimCurrentY = p.y;
+  aimDotPhase = 0;
+}, { passive: false });
+
+canvas.addEventListener('touchmove', function(e) {
+  e.preventDefault();
+  if (!aiming) return;
+  var p = toGameCoords(e.touches[0].clientX, e.touches[0].clientY);
+  aimCurrentX = p.x; aimCurrentY = p.y;
+}, { passive: false });
+
+canvas.addEventListener('touchend', function(e) {
+  e.preventDefault();
+  if (!aiming) return;
+  aiming = false;
+  shoot(aimStartX - aimCurrentX, aimStartY - aimCurrentY);
+}, { passive: false });
+
+window.addEventListener('keydown', function(e) {
+  if (e.key === 't' || e.key === 'T') {
+    if (!b2Loaded) return;
+    mode = (mode === 'custom') ? 'box2d' : 'custom';
+    resetBall();
+  }
+  if (e.key === 'r' || e.key === 'R') {
+    resetBall();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// DRAWING
+// ═══════════════════════════════════════════════════════════
+function drawSky() {
+  ctx.fillStyle = SKY;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawTerrain() {
+  ctx.fillStyle = GROUND;
+  ctx.beginPath();
+  ctx.moveTo(vertices[0].x, vertices[0].y);
+  for (var i = 1; i < vertices.length; i++) ctx.lineTo(vertices[i].x, vertices[i].y);
+  ctx.lineTo(vertices[vertices.length - 1].x, H + 300);
+  ctx.lineTo(vertices[0].x, H + 300);
+  ctx.closePath();
+  ctx.fill();
+
+  // Cup indent highlight
+  ctx.fillStyle = GROUND_LIGHT;
+  ctx.beginPath();
+  ctx.moveTo(CUP_X - CUP_HALF_W, CUP_RIM_Y);
+  ctx.lineTo(CUP_X - CUP_HALF_W + CUP_WALL_INSET, CUP_BOT_Y);
+  ctx.lineTo(CUP_X + CUP_HALF_W - CUP_WALL_INSET, CUP_BOT_Y);
+  ctx.lineTo(CUP_X + CUP_HALF_W, CUP_RIM_Y);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawFlag() {
+  if (inCup) return;
+  var poleX = CUP_X + CUP_HALF_W + 2;
+  var sy = terrainYAt(poleX);
+  var pH = 55;
+
+  ctx.strokeStyle = '#7888a0';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(poleX, sy);
+  ctx.lineTo(poleX, sy - pH);
+  ctx.stroke();
+
+  var pT = sy - pH, pB = sy - pH + 16, pM = (pT + pB) / 2;
+  ctx.fillStyle = '#e8c840';
+  ctx.beginPath();
+  ctx.moveTo(poleX, pT);
+  ctx.lineTo(poleX + 22, pT);
+  ctx.lineTo(poleX + 32, pM);
+  ctx.lineTo(poleX + 22, pB);
+  ctx.lineTo(poleX, pB);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = '#4a3520';
+  ctx.font = '10px VT323, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('1', poleX + 11, pM + 4);
+}
+
+function drawBallFn() {
+  ctx.fillStyle = BALL_COLOR;
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 3 rotation dots
+  var dotR  = BALL_RADIUS * 0.55;
+  var dotSz = BALL_RADIUS * 0.18;
+  ctx.fillStyle = 'rgba(140, 135, 120, 0.55)';
+  for (var i = 0; i < 3; i++) {
+    var a = ball.rotation + i * (Math.PI * 2 / 3);
+    ctx.beginPath();
+    ctx.arc(ball.x + Math.cos(a) * dotR, ball.y + Math.sin(a) * dotR, dotSz, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawAimUI() {
+  if (!aiming || !ball.atRest) return;
+  var dx = aimCurrentX - aimStartX;
+  var dy = aimCurrentY - aimStartY;
+  var dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < 5) return;
+  var nx = dx / dist, ny = dy / dist;
+
+  // Pivot circle
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(aimStartX, aimStartY, 6, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Launch line (opposite of drag)
+  var lx = aimStartX - dx, ly = aimStartY - dy;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(aimStartX, aimStartY);
+  ctx.lineTo(lx, ly);
+  ctx.stroke();
+
+  // Arrowhead
+  var aLen = 10, aAng = 0.45;
+  var lAng = Math.atan2(-dy, -dx);
+  ctx.beginPath();
+  ctx.moveTo(lx, ly);
+  ctx.lineTo(lx - aLen * Math.cos(lAng - aAng), ly - aLen * Math.sin(lAng - aAng));
+  ctx.moveTo(lx, ly);
+  ctx.lineTo(lx - aLen * Math.cos(lAng + aAng), ly - aLen * Math.sin(lAng + aAng));
+  ctx.stroke();
+
+  // Scrolling dots toward cursor
+  var sp = 10;
+  aimDotPhase += 0.4;
+  if (aimDotPhase >= sp) aimDotPhase -= sp;
+  ctx.fillStyle = 'rgba(80, 70, 55, 0.5)';
+  for (var d = 15 + aimDotPhase; d < dist; d += sp) {
+    ctx.beginPath();
+    ctx.arc(aimStartX + nx * d, aimStartY + ny * d, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawHUD() {
+  // Mode label
+  var isCustom = (mode === 'custom');
+  ctx.fillStyle = isCustom ? '#88cc88' : '#88aaff';
+  ctx.font = '28px VT323, monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(isCustom ? 'CUSTOM PHYSICS' : 'BOX2D PHYSICS', 16, 34);
+
+  if (!b2Loaded) {
+    ctx.fillStyle = 'rgba(255,100,100,0.7)';
+    ctx.font = '16px VT323, monospace';
+    ctx.fillText('(Box2D not loaded — custom only)', 16, 56);
+  }
+
+  // Stroke count
+  if (strokes > 0) {
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '26px VT323, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(String(strokes), W / 2, 30);
+  }
+
+  // In-cup message
+  if (inCup) {
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '32px VT323, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('IN THE CUP!  (' + strokes + ' stroke' + (strokes !== 1 ? 's' : '') + ')', W / 2, H / 2 - 20);
+    ctx.font = '22px VT323, monospace';
+    ctx.fillText('Press R to reset', W / 2, H / 2 + 14);
+  }
+
+  // Controls
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.font = '16px VT323, monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText('T : toggle physics     R : reset ball', W - 16, H - 16);
+}
+
+// ═══════════════════════════════════════════════════════════
+// GAME LOOP
+// ═══════════════════════════════════════════════════════════
+function update() {
+  if (mode === 'custom') updateCustomPhysics();
+  else if (b2Loaded) updateBox2DPhysics();
+
+  // Out of bounds → reset
+  if (!ball.atRest && !inCup) {
+    var sx = ball.x - cameraX;
+    if (sx < -60 || sx > W + 60 || ball.y > H + 60) {
+      resetBall();
+    }
+  }
+  checkCup();
+}
+
+function draw() {
+  ctx.save();
+  ctx.scale(displayScale, displayScale);
+
+  drawSky();
+
+  ctx.save();
+  ctx.translate(-cameraX, 0);
+  drawTerrain();
+  drawFlag();
+  drawBallFn();
+  ctx.restore();
+
+  drawAimUI();
+  drawHUD();
+
+  ctx.restore();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+function init() {
+  document.getElementById('loading').style.display = 'none';
+  b2Loaded = initBox2D();
+  setupCamera();
+  resetBall();
+  requestAnimationFrame(loop);
+}
+
+// Wait for planck.js (max 3 s, then start without it)
+var _waited = 0;
+var _poll = setInterval(function() {
+  _waited++;
+  if (typeof planck !== 'undefined' || _waited > 30) {
+    clearInterval(_poll);
+    init();
+  }
+}, 100);
+
+})();
+  </script>
+</body>
+</html>
