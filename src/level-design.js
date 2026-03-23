@@ -50,93 +50,7 @@ let _difficultyOverride = null;
 //            (only the mid-hole shape — tee/cup ends are added automatically)
 //
 // After hole 10, procedural generation takes over.
-const HAND_DEFINED_HOLES = [
-  // Hole 1: Dead flat — tutorial putt
-  {
-    teeY: 350, dist: 400, cupY: 350,
-    verts: [
-      { dx: 200, y: 350 },
-    ]
-  },
-  // Hole 2: Gentle downhill slope
-  {
-    teeY: 320, dist: 500, cupY: 380,
-    verts: [
-      { dx: 250, y: 350 },
-    ]
-  },
-  // Hole 3: Gentle uphill
-  {
-    teeY: 380, dist: 450, cupY: 330,
-    verts: [
-      { dx: 220, y: 355 },
-    ]
-  },
-  // Hole 4: Small hill in the middle
-  {
-    teeY: 360, dist: 550, cupY: 360,
-    verts: [
-      { dx: 200, y: 360 },
-      { dx: 300, y: 310 },
-      { dx: 400, y: 360 },
-    ]
-  },
-  // Hole 5: Downhill with a kink
-  {
-    teeY: 300, dist: 600, cupY: 400,
-    verts: [
-      { dx: 200, y: 310 },
-      { dx: 400, y: 370 },
-    ]
-  },
-  // Hole 6: Small dip/valley
-  {
-    teeY: 340, dist: 500, cupY: 340,
-    verts: [
-      { dx: 150, y: 340 },
-      { dx: 280, y: 400 },
-      { dx: 380, y: 340 },
-    ]
-  },
-  // Hole 7: Step down — flat shelf then drop
-  {
-    teeY: 300, dist: 550, cupY: 400,
-    verts: [
-      { dx: 250, y: 300 },
-      { dx: 280, y: 300 },
-      { dx: 300, y: 400 },
-    ]
-  },
-  // Hole 8: Rolling hills — two bumps
-  {
-    teeY: 360, dist: 650, cupY: 370,
-    verts: [
-      { dx: 150, y: 360 },
-      { dx: 250, y: 310 },
-      { dx: 350, y: 370 },
-      { dx: 480, y: 320 },
-      { dx: 570, y: 370 },
-    ]
-  },
-  // Hole 9: Uphill with a plateau
-  {
-    teeY: 400, dist: 550, cupY: 300,
-    verts: [
-      { dx: 180, y: 380 },
-      { dx: 300, y: 320 },
-      { dx: 420, y: 310 },
-    ]
-  },
-  // Hole 10: Cliff drop — dramatic finish to the intro
-  {
-    teeY: 290, dist: 600, cupY: 420,
-    verts: [
-      { dx: 250, y: 290 },
-      { dx: 280, y: 290 },
-      { dx: 300, y: 420 },
-    ]
-  },
-];
+const HAND_DEFINED_HOLES = [];
 
 // ── Difficulty Curve ─────────────────────────────────────────
 // Logarithmic ramp matching real Desert Golfing's gradual progression.
@@ -149,7 +63,7 @@ function getDifficulty(holeIndex) {
   if (holeIndex <= 0) return 0;
   // ~0.32 at hole 10, ~0.52 at hole 50, ~0.61 at hole 100
   // ~0.70 at hole 200, ~0.82 at hole 500, ~0.91 at hole 1000, ~1.0 at hole 2000
-  return Math.min(1.0, Math.log(1 + holeIndex) / Math.log(1 + 2000));
+  return Math.min(5.0, 5.0 * Math.log(1 + holeIndex) / Math.log(1 + 20));
 }
 
 // ── Terrain Micro-Noise ──────────────────────────────────────
@@ -606,8 +520,11 @@ function pickArchetype(difficulty) {
     return _archetypeOverride;
   }
   // Filter to archetypes available at this difficulty, then weighted random
+  // If the current course defines an archetype subset, only pick from those
+  const courseArchetypes = currentCourse?.archetypes || null;
   const available = ARCHETYPE_TABLE.filter(
-    ([name, minD, maxD]) => difficulty >= minD && difficulty <= maxD
+    ([name, minD, maxD]) => difficulty >= minD
+      && (!courseArchetypes || courseArchetypes.includes(name))
   );
   // Apply anti-repetition: halve weight if archetype was used in last 3 holes
   const weights = available.map(([name, , , w]) =>
@@ -628,8 +545,9 @@ function pickArchetype(difficulty) {
 
 // ── Main Terrain Generation ──────────────────────────────
 function generateHoleTerrain(holeIndex) {
-  // Use hand-defined hole if available
-  if (HAND_DEFINED_HOLES[holeIndex]) {
+  // Use hand-defined hole if available (only for desert-planet courses)
+  const isDesertWorld = !currentWorld || currentWorld === WORLDS['desert-planet'];
+  if (isDesertWorld && HAND_DEFINED_HOLES[holeIndex]) {
     return generateHandDefinedHole(holeIndex);
   }
 
@@ -659,19 +577,24 @@ function generateHoleTerrain(holeIndex) {
   const dist = Math.min(rawDist, maxDist);
 
   // Determine cup target elevation
-  // Real Desert Golfing: 74% ball higher than hole (downhill to cup)
-  // (analysis of 509 ball-hole pairs from real game footage)
-  const elevRoll = random();
+  // Courses can override elevation logic (e.g. Mars has different distribution)
   let cupTargetY;
-  if (elevRoll < 0.10) {
-    // Same level (10%)
-    cupTargetY = clampY(teeY + (random() - 0.5) * 20);
-  } else if (elevRoll < 0.25) {
-    // Cup higher = uphill shot (15%)
-    cupTargetY = clampY(teeY - randRange(30, 60 + difficulty * 80));
+  if (currentCourse?.cupElevation) {
+    cupTargetY = currentCourse.cupElevation(teeY, difficulty);
   } else {
-    // Cup lower = downhill shot (75%)
-    cupTargetY = clampY(teeY + randRange(30, 60 + difficulty * 80));
+    // Real Desert Golfing: 74% ball higher than hole (downhill to cup)
+    // (analysis of 509 ball-hole pairs from real game footage)
+    const elevRoll = random();
+    if (elevRoll < 0.10) {
+      // Same level (10%)
+      cupTargetY = clampY(teeY + (random() - 0.5) * 20);
+    } else if (elevRoll < 0.25) {
+      // Cup higher = uphill shot (15%)
+      cupTargetY = clampY(teeY - randRange(30, 60 + difficulty * 80));
+    } else {
+      // Cup lower = downhill shot (75%)
+      cupTargetY = clampY(teeY + randRange(30, 60 + difficulty * 80));
+    }
   }
 
   // Pick archetype and generate vertices
@@ -681,7 +604,9 @@ function generateHoleTerrain(holeIndex) {
   const rawVerts = archFunc(startX, teeY, dist, cupTargetY, difficulty);
 
   // Add micro-noise: subdivide long segments with subtle perturbations
-  const holeVerts = addMicroNoise(rawVerts, startX, teeY, difficulty);
+  // Courses can override the noise function for different terrain character
+  const noiseFn = currentCourse?.noiseFunction || addMicroNoise;
+  const holeVerts = noiseFn(rawVerts, startX, teeY, difficulty);
 
   // The cup X is at the last feature vertex (end of hole)
   const lastVert = holeVerts[holeVerts.length - 1];
@@ -698,11 +623,13 @@ function generateHoleTerrain(holeIndex) {
   const cupSurfaceY = lastVert.y;
 
   // Add background terrain past the cup (2-3 vertices extending right)
+  // Courses can provide a backstop bias (negative = terrain rises after cup)
   const bgY = cupSurfaceY;
+  const backstop = currentCourse?.backstopBias || 0;
   const bg1X = cupX + randRange(80, 150);
-  const bg1Y = clampY(bgY + (random() - 0.5) * (40 + difficulty * 60));
+  const bg1Y = clampY(bgY + backstop + (random() - 0.5) * (40 + difficulty * 60));
   const bg2X = bg1X + randRange(100, 200);
-  const bg2Y = clampY(bg1Y + (random() - 0.5) * (40 + difficulty * 60));
+  const bg2Y = clampY(bg1Y + backstop + (random() - 0.5) * (40 + difficulty * 60));
   vertices.push({ x: bg1X, y: bg1Y });
   vertices.push({ x: bg2X, y: bg2Y });
 

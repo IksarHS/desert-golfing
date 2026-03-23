@@ -220,6 +220,7 @@
 <script src="src/shared.js"></script>
 <script src="src/worlds/desert-planet.js"></script>
 <script src="src/level-design.js"></script>
+<script src="src/worlds/mars.js"></script>
 <script src="src/modes/desert-golfing.js"></script>
 <script src="src/art.js"></script>
 <script src="src/gameplay.js"></script>
@@ -642,6 +643,11 @@ function switchCourse(worldId, courseId) {
     editorHoleCount = getCourseHoleCount(currentCourse);
   }
 
+  // Always mark hand-defined holes as custom so they show ✎ in the list
+  for (let i = 0; i < HAND_DEFINED_HOLES.length && i < editorHoleCount; i++) {
+    customHoleIndices.add(i);
+  }
+
   // Ensure at least 1 hole
   if (editorHoleCount < 1) editorHoleCount = getCourseHoleCount(currentCourse) || 9;
 
@@ -786,9 +792,10 @@ function editorInit() {
     }
   } else {
     editorHoleCount = getCourseHoleCount(currentCourse);
-    // Don't mark code-defined holes as custom — they only become custom
-    // when the user explicitly edits them. This prevents the serializer
-    // from capturing stray background vertices from adjacent holes.
+  }
+  // Always mark hand-defined holes as custom so they show ✎ in the list
+  for (let i = 0; i < HAND_DEFINED_HOLES.length && i < editorHoleCount; i++) {
+    customHoleIndices.add(i);
   }
   if (editorHoleCount < 1) editorHoleCount = getCourseHoleCount(currentCourse);
 
@@ -826,10 +833,9 @@ function switchMode(mode) {
     ed._savedCamX = camera.x;
     ed._savedZoom = ed.zoom;
     ed._savedCamY = ed.camY;
-    // Play mode — reset zoom and camera to proper hole view
+    // Play mode — keep same camera view, just reset zoom
     ed.zoom = 1.0;
     ed.camY = 0;
-    setHoleCamera(holes[currentHole]);
     resetBallToTee();
     state = STATE_AIM;
     canvas.style.cursor = 'crosshair';
@@ -1070,7 +1076,11 @@ function updateHoleList() {
     const div = document.createElement('div');
     const isCustom = customHoleIndices.has(i);
     div.className = 'hole-item' + (i === currentHole ? ' active' : '') + (isCustom ? ' custom' : '');
-    div.innerHTML = `<span>${i + 1}</span><span class="type">${isCustom ? '✎' : 'auto'}</span>`;
+    const hole = holes[i];
+    const arch = hole?.archetype || '';
+    const diff = typeof getDifficulty === 'function' ? getDifficulty(i).toFixed(2) : '';
+    const typeLabel = isCustom ? '✎' : (arch || 'auto');
+    div.innerHTML = `<span>${i + 1}</span><span class="type">${typeLabel}${diff ? ' ' + diff : ''}</span>`;
     div.onclick = () => goToHole(i);
     list.appendChild(div);
   }
@@ -1237,7 +1247,8 @@ function getHoleVertexRange(holeIdx) {
   const nextHole = holeIdx < holes.length - 1 ? holes[holeIdx + 1] : null;
 
   const startX = prevHole ? prevHole.cupX : hole.teeX - 200;
-  const endX = nextHole ? nextHole.cupX : hole.cupX + 400;
+  // Only show vertices up to a margin past the current cup — not into the next hole
+  const endX = hole.cupX + 300;
 
   let start = 0, end = vertices.length - 1;
   for (let i = 0; i < vertices.length; i++) {
@@ -1555,6 +1566,12 @@ function moveCupTo(newCupX, newCupY) {
   hole.cupLeftY = rimY;
   hole.cupRightY = rimY;
   hole.cupBottomY = bottomY;
+
+  // The next hole's tee IS this hole's cup — keep them in sync
+  const nextIdx = currentHole + 1;
+  if (nextIdx < holes.length && holes[nextIdx]) {
+    holes[nextIdx].teeX = newCupX;
+  }
 }
 
 // ── Shape Creation ────────────────────────────────────────
@@ -2283,33 +2300,8 @@ function drawEditorObjects() {
     }
     ctx.closePath();
 
-    // Draw object fill — sprite image or terrain-colored shape
-    if (ov.sprite && SPRITES[ov.sprite]) {
-      // Sprite object: draw the image within the bounding box
-      ctx.save();
-      const bounds = getObjectBounds(ov);
-      if (ov.rotation) {
-        const cx = (bounds.minX + bounds.maxX) / 2;
-        const cy = (bounds.minY + bounds.maxY) / 2;
-        ctx.translate(cx, cy);
-        ctx.rotate(ov.rotation);
-        ctx.drawImage(SPRITES[ov.sprite],
-          -(bounds.maxX - bounds.minX) / 2,
-          -(bounds.maxY - bounds.minY) / 2,
-          bounds.maxX - bounds.minX,
-          bounds.maxY - bounds.minY);
-      } else {
-        ctx.drawImage(SPRITES[ov.sprite],
-          bounds.minX, bounds.minY,
-          bounds.maxX - bounds.minX,
-          bounds.maxY - bounds.minY);
-      }
-      ctx.restore();
-    } else {
-      // Non-sprite object: fill with terrain color
-      ctx.fillStyle = GROUND || '#d68841';
-      ctx.fill();
-    }
+    // Object fills are already drawn by drawObjects() in art.js (inside draw()),
+    // which renders before the ball and aim UI. No need to redraw fills here.
 
     // Editor-only overlays and handles
     if (editMode) {
@@ -2484,6 +2476,16 @@ function drawEditorObjects() {
     ctx.font = "8px 'Departure Mono', monospace";
     ctx.textAlign = 'center';
     ctx.fillText('C', hole.cupX, hole.cupY + 3);
+
+    // Show archetype + difficulty near the tee (edit mode only)
+    if (ed.mode === 'edit') {
+      const diff = typeof getDifficulty === 'function' ? getDifficulty(currentHole).toFixed(2) : '?';
+      const arch = hole.archetype || 'hand-defined';
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.font = "9px 'Departure Mono', monospace";
+      ctx.textAlign = 'left';
+      ctx.fillText(`${arch}  d=${diff}`, hole.teeX + 30, teeY - 12);
+    }
   }
 
   // ── Knife Tool Preview ──────────────────────────────────
@@ -2639,6 +2641,10 @@ function clearCustomHoles() {
   // Reset to defaults
   customHoleIndices.clear();
   editorHoleCount = getCourseHoleCount(currentCourse);
+  // Re-mark hand-defined holes as custom
+  for (let i = 0; i < HAND_DEFINED_HOLES.length && i < editorHoleCount; i++) {
+    customHoleIndices.add(i);
+  }
   buildHoleList();
   const btn = document.getElementById('btn-clear');
   btn.textContent = 'Cleared!';

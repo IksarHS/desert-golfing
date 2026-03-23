@@ -82,7 +82,6 @@ function collideWithTerrain() {
     }
   }
 
-  ball.onGround = collided;
   return collided;
 }
 
@@ -185,7 +184,8 @@ function isBallOffScreen() {
   const sx = ball.x - camera.x;
   const sy = ball.y;
   const margin = BALL_RADIUS + 10;
-  return sx < -margin || sx > W + margin || sy < -margin || sy > H + margin;
+  // Only OOB on left, right, and bottom — not top (ball can fly upward freely)
+  return sx < -margin || sx > W + margin || sy > H + margin;
 }
 
 // ── Drawing ────────────────────────────────────────────────
@@ -270,6 +270,8 @@ MODE = {
   collide() {
     const terrain = collideWithTerrain();
     const obj = collideWithObjects();
+    // onGround if touching terrain OR an object surface
+    ball.onGround = terrain || obj;
     return terrain || obj;
   },
 
@@ -285,8 +287,8 @@ MODE = {
   },
 
   onRest() {
-    // Snap Y to terrain surface
-    ball.y = terrainYAt(ball.x) - BALL_RADIUS;
+    // Trust the collision system — ball is already positioned correctly
+    // whether on terrain or an object surface
   },
 
   isGoalReached() {

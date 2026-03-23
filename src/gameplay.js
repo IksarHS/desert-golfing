@@ -9,14 +9,14 @@ canvas.addEventListener('mousedown', (e) => {
   aimCurrentY = pos.y;
 });
 
-canvas.addEventListener('mousemove', (e) => {
+window.addEventListener('mousemove', (e) => {
   if (!aiming) return;
   const pos = toGameCoords(e.clientX, e.clientY);
   aimCurrentX = pos.x;
   aimCurrentY = pos.y;
 });
 
-canvas.addEventListener('mouseup', (e) => {
+window.addEventListener('mouseup', (e) => {
   if (!aiming) return;
   aiming = false;
   if (showTitle) showTitle = false;
@@ -35,6 +35,7 @@ canvas.addEventListener('mouseup', (e) => {
   ball.atRest = false;
   ball.onGround = false;
   ball.slowFrames = 0;
+  ball.flightFrames = 0;
   ball.spinRate = 0;  // No forced spin on launch — ground contact drives rotation
   state = STATE_FLIGHT;
   strokes++;
@@ -80,6 +81,7 @@ canvas.addEventListener('touchend', (e) => {
   ball.atRest = false;
   ball.onGround = false;
   ball.slowFrames = 0;
+  ball.flightFrames = 0;
   ball.spinRate = 0;  // No forced spin on launch — ground contact drives rotation
   state = STATE_FLIGHT;
   strokes++;
@@ -148,6 +150,23 @@ function updatePhysics() {
   } else {
     // In the air: maintain spin from last ground contact
     ball.rotation += ball.spinRate || 0;
+
+    // Stuck-in-air failsafe: if ball has near-zero speed while airborne,
+    // it's trapped in geometry. Snap to terrain and rest.
+    const airSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+    if (airSpeed < 0.1) {
+      ball.stuckFrames = (ball.stuckFrames || 0) + 1;
+      if (ball.stuckFrames > 60) { // ~1 second stuck
+        ball.vx = 0;
+        ball.vy = 0;
+        ball.atRest = true;
+        ball.onGround = true;
+        ball.stuckFrames = 0;
+        _logBall('stuck-rest');
+      }
+    } else {
+      ball.stuckFrames = 0;
+    }
   }
 }
 
