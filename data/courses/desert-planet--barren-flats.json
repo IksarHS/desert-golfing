@@ -1,7 +1,7 @@
 {
   "worldId": "desert-planet",
   "courseId": "barren-flats",
-  "holeCount": 36,
+  "holeCount": 40,
   "courseName": "Barren Flats",
   "holes": {
     "0": {
