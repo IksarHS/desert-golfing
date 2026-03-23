@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Autoplay — Desert Golfing</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=VT323&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #d5ad72; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; cursor: crosshair; }
+
+  #panel {
+    position: fixed; top: 10px; right: 10px; z-index: 10;
+    background: rgba(0,0,0,0.78); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 6px; padding: 12px 14px; color: #ccc; width: 210px;
+    user-select: none; font-family: 'VT323', monospace;
+  }
+  #panel h3 { font-size: 16px; margin-bottom: 8px; font-weight: normal; letter-spacing: 1px; }
+  #toggleBtn {
+    width: 100%; padding: 8px 0; border-radius: 4px; font: 16px 'VT323', monospace;
+    cursor: pointer; letter-spacing: 1px; border: 2px solid;
+    transition: all 0.15s;
+  }
+  #toggleBtn.off { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); color: #aaa; }
+  #toggleBtn.on  { background: rgba(100,200,120,0.2); border-color: #6c6; color: #8e8; }
+  .speed-row { display: flex; gap: 4px; margin-top: 10px; }
+  .speed-btn {
+    flex: 1; padding: 4px 0; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 3px; color: #aaa; font: 13px 'VT323', monospace; cursor: pointer; text-align: center;
+  }
+  .speed-btn.active { border-color: #6c6; color: #fff; background: rgba(100,200,120,0.15); }
+  .speed-btn:hover { background: rgba(255,255,255,0.1); }
+  .stat { margin-top: 6px; font-size: 14px; color: #999; }
+  .stat span { color: #ddd; }
+  .sep { border-top: 1px solid rgba(255,255,255,0.08); margin-top: 10px; padding-top: 8px; }
+  #skillRow { margin-top: 8px; }
+  #skillRow label { font-size: 13px; color: #aaa; }
+  #skillRow .val { color: #fff; float: right; }
+  #skillRow input[type=range] { width: 100%; margin-top: 2px; accent-color: #6c6; }
+  #hints { color: #666; font-size: 12px; margin-top: 8px; line-height: 1.4; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="panel">
+  <h3 style="color:#8e8">AUTOPLAY</h3>
+  <button id="toggleBtn" class="off">OFF — CLICK TO START</button>
+
+  <div class="speed-row">
+    <div class="speed-btn active" data-speed="1">1x</div>
+    <div class="speed-btn" data-speed="2">2x</div>
+    <div class="speed-btn" data-speed="4">4x</div>
+    <div class="speed-btn" data-speed="8">8x</div>
+  </div>
+
+  <div id="skillRow">
+    <label>Skill <span class="val" id="vSkill">80</span>%</label>
+    <input type="range" id="sSkill" min="20" max="100" step="5" value="80">
+  </div>
+
+  <div class="sep"></div>
+  <div class="stat">Holes: <span id="statHoles">0</span></div>
+  <div class="stat">Total strokes: <span id="statTotal">0</span></div>
+  <div class="stat">Average: <span id="statAvg">—</span></div>
+  <div class="stat">Best hole: <span id="statBest">—</span></div>
+
+  <div class="sep"></div>
+  <div id="hints">
+    A: toggle autoplay<br>
+    1-4: speed &middot; [ ] skip holes<br>
+    You can still play manually when off
+  </div>
+</div>
+
+<!-- Load the REAL game scripts -->
+<script src="src/shared.js"></script>
+<script src="src/worlds/desert-planet.js"></script>
+<script src="src/level-design.js"></script>
+<script src="src/modes/desert-golfing.js"></script>
+<script src="src/art.js"></script>
+<script src="src/gameplay.js"></script>
+<script src="src/debug.js"></script>
+
+<!-- Autoplay AI layer (replaces main.js) -->
+<script>
+(function() {
+'use strict';
+
+// ═══════════════════════════════════════════════════════════
+// AI STATE
+// ═══════════════════════════════════════════════════════════
+var AI_IDLE    = 0;
+var AI_AIMING  = 1;
+var AI_WAITING = 2;
+
+var aiState   = AI_IDLE;
+var aiTimer   = 0;
+var aiShot    = null;
+var aiEnabled = false;
+var aiSpeed   = 1;
+var aiSkill   = 0.8;
+
+// Stats
+var aiHolesPlayed  = 0;
+var aiTotalStrokes = 0;
+var aiBestHole     = Infinity;
+var aiLastHole     = -1;
+var aiHoleStrokes  = 0;
+
+// ═══════════════════════════════════════════════════════════
+// SHOT CALCULATION
+// ═══════════════════════════════════════════════════════════
+function calculateShot() {
+  var hole = holes[currentHole];
+  if (!hole) return null;
+
+  var dx = hole.cupX - ball.x;
+  var dy = hole.cupY - ball.y;
+  var hdist = Math.abs(dx);
+  var dir = dx > 0 ? 1 : -1;
+
+  // Scan terrain for obstacles between ball and cup
+  var maxObstacle = 0;
+  var steps = Math.max(5, Math.ceil(hdist / 30));
+  for (var i = 1; i < steps; i++) {
+    var t = i / steps;
+    var sx = ball.x + dx * t;
+    var lineY = ball.y + dy * t;
+    var tY = terrainYAt(sx);
+    var blockage = lineY - tY;
+    if (blockage > maxObstacle) maxObstacle = blockage;
+  }
+
+  // Choose launch angle (loft above horizontal)
+  var loft;
+  if (hdist < 80) {
+    loft = 0.15 + Math.random() * 0.15;
+  } else if (hdist < 250) {
+    loft = 0.35 + (hdist / 600) * 0.2;
+  } else {
+    loft = 0.45 + (hdist / 1200) * 0.35;
+  }
+
+  if (dy < -20) loft += Math.min(0.3, Math.abs(dy) / 300);
+  if (maxObstacle > 10) loft += Math.min(0.5, maxObstacle / 150);
+  loft = Math.min(loft, 1.2);
+
+  var angle = dir > 0 ? -loft : (Math.PI + loft);
+
+  // Calculate speed using projectile formula
+  var cosA = Math.cos(angle), sinA = Math.sin(angle);
+  var tanA = sinA / cosA;
+  var denom = dy - dx * tanA;
+  var speed;
+
+  if (denom > 0.5) {
+    var vSq = GRAVITY * dx * dx / (2 * cosA * cosA * denom);
+    speed = Math.sqrt(Math.max(0, vSq));
+  } else {
+    speed = hdist * 0.013 + 2;
+  }
+
+  if (hdist < 80) {
+    speed = Math.min(speed, hdist * 0.03 + 0.5);
+  }
+
+  speed = Math.max(1.0, Math.min(MAX_POWER, speed));
+
+  // Imperfection based on skill
+  var imperfection = (1 - aiSkill) * 1.5;
+  angle += (Math.random() - 0.5) * imperfection * 0.3;
+  speed *= (1 - imperfection * 0.2 + Math.random() * imperfection * 0.4);
+  speed = Math.max(1.0, Math.min(MAX_POWER, speed));
+
+  return {
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    power: speed,
+    angle: angle,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════
+// AI UPDATE
+// ═══════════════════════════════════════════════════════════
+function aiUpdate() {
+  if (!aiEnabled) return;
+
+  // Track hole transitions
+  if (currentHole !== aiLastHole) {
+    if (aiLastHole >= 0 && aiHoleStrokes > 0) {
+      aiHolesPlayed++;
+      aiTotalStrokes += aiHoleStrokes;
+      if (aiHoleStrokes < aiBestHole) aiBestHole = aiHoleStrokes;
+      updateStats();
+    }
+    aiLastHole = currentHole;
+    aiHoleStrokes = 0;
+  }
+
+  if (state === STATE_PAUSE || state === STATE_TRANSITION || state === STATE_OOB) {
+    aiState = AI_WAITING;
+    return;
+  }
+
+  switch (aiState) {
+    case AI_IDLE:
+      if (state === STATE_AIM && ball.atRest) {
+        aiTimer++;
+        var idleFrames = aiSpeed >= 8 ? 5 : aiSpeed >= 4 ? 10 : aiSpeed >= 2 ? 25 : 50;
+        if (aiTimer >= idleFrames) {
+          aiShot = calculateShot();
+          if (!aiShot) break;
+
+          if (showTitle) showTitle = false;
+
+          var bsx = ball.x - camera.x, bsy = ball.y;
+          var dragDist = aiShot.power / POWER_SCALE;
+          aiming = true;
+          aimStartX = bsx;
+          aimStartY = bsy;
+          aimCurrentX = bsx - Math.cos(aiShot.angle) * dragDist;
+          aimCurrentY = bsy - Math.sin(aiShot.angle) * dragDist;
+          aiState = AI_AIMING;
+          aiTimer = 0;
+        }
+      } else {
+        aiTimer = 0;
+      }
+      break;
+
+    case AI_AIMING:
+      aiTimer++;
+      var aimFrames = aiSpeed >= 8 ? 3 : aiSpeed >= 4 ? 6 : aiSpeed >= 2 ? 15 : 30;
+      if (aiTimer >= aimFrames) {
+        aiming = false;
+        ball.vx = aiShot.vx;
+        ball.vy = aiShot.vy;
+        ball.atRest = false;
+        ball.onGround = false;
+        ball.slowFrames = 0;
+        ball.lastCollidedMat = null;
+        ball.lastCollisionSource = 'terrain';
+        ball.spinRate = -Math.sign(ball.vx) * (aiShot.power / MAX_POWER) * 0.4;
+        state = STATE_FLIGHT;
+        strokes++;
+        aiHoleStrokes++;
+        _logBall('shot');
+
+        aiState = AI_WAITING;
+        aiTimer = 0;
+      }
+      break;
+
+    case AI_WAITING:
+      if (state === STATE_AIM && ball.atRest) {
+        aiState = AI_IDLE;
+        aiTimer = 0;
+      }
+      break;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// STATS
+// ═══════════════════════════════════════════════════════════
+function updateStats() {
+  document.getElementById('statHoles').textContent = aiHolesPlayed;
+  document.getElementById('statTotal').textContent = aiTotalStrokes;
+  document.getElementById('statAvg').textContent = aiHolesPlayed > 0
+    ? (aiTotalStrokes / aiHolesPlayed).toFixed(1) : '—';
+  document.getElementById('statBest').textContent = aiBestHole < Infinity
+    ? (aiBestHole + (aiBestHole === 1 ? ' (hole in one!)' : '')) : '—';
+}
+
+// ═══════════════════════════════════════════════════════════
+// HOOK: Wrap draw for autoplay HUD
+// ═══════════════════════════════════════════════════════════
+var _origDraw = draw;
+draw = function() {
+  _origDraw();
+
+  if (!aiEnabled) return;
+
+  ctx.save();
+  ctx.scale(displayScale, displayScale);
+
+  ctx.fillStyle = 'rgba(100, 200, 120, 0.6)';
+  ctx.font = '14px VT323, monospace';
+  ctx.textAlign = 'left';
+  var dot = Math.sin(Date.now() * 0.004) > 0 ? ' \u25CF' : ' \u25CB';
+  ctx.fillText('AUTOPLAY' + dot, 16, H - 10);
+
+  if (aiHoleStrokes > 0 && state === STATE_FLIGHT) {
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '13px VT323, monospace';
+    ctx.fillText('Shot ' + aiHoleStrokes, 16, H - 24);
+  }
+
+  if (aiSpeed > 1) {
+    ctx.fillStyle = 'rgba(100, 200, 120, 0.4)';
+    ctx.font = '13px VT323, monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(aiSpeed + 'x', W - 16, H - 10);
+  }
+
+  ctx.restore();
+};
+
+// ═══════════════════════════════════════════════════════════
+// INPUT
+// ═══════════════════════════════════════════════════════════
+window.addEventListener('keydown', function(e) {
+  if (e.key === 'a' || e.key === 'A') {
+    toggleAutoplay();
+    e.preventDefault();
+  }
+  if (e.key === '1' && !e.ctrlKey) setSpeed(1);
+  if (e.key === '2' && !e.ctrlKey) setSpeed(2);
+  if (e.key === '3' && !e.ctrlKey) setSpeed(4);
+  if (e.key === '4' && !e.ctrlKey) setSpeed(8);
+});
+
+function toggleAutoplay() {
+  aiEnabled = !aiEnabled;
+  aiState = AI_IDLE;
+  aiTimer = 0;
+  aiming = false;
+
+  var btn = document.getElementById('toggleBtn');
+  if (aiEnabled) {
+    btn.textContent = 'ON — PLAYING';
+    btn.className = 'on';
+    document.getElementById('panel').querySelector('h3').style.color = '#8e8';
+  } else {
+    btn.textContent = 'OFF — CLICK TO START';
+    btn.className = 'off';
+    document.getElementById('panel').querySelector('h3').style.color = '#888';
+  }
+}
+
+function setSpeed(s) {
+  aiSpeed = s;
+  document.querySelectorAll('.speed-btn').forEach(function(el) {
+    el.classList.toggle('active', parseInt(el.dataset.speed) === s);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// PANEL WIRING
+// ═══════════════════════════════════════════════════════════
+document.getElementById('toggleBtn').addEventListener('click', toggleAutoplay);
+
+document.querySelectorAll('.speed-btn').forEach(function(el) {
+  el.addEventListener('click', function() {
+    setSpeed(parseInt(el.dataset.speed));
+  });
+});
+
+document.getElementById('sSkill').addEventListener('input', function() {
+  aiSkill = parseFloat(this.value) / 100;
+  document.getElementById('vSkill').textContent = Math.round(aiSkill * 100);
+});
+
+// ═══════════════════════════════════════════════════════════
+// INIT (replaces main.js)
+// ═══════════════════════════════════════════════════════════
+function gameLoop() {
+  _ballLogFrame++;
+  var steps = aiEnabled ? aiSpeed : 1;
+  for (var i = 0; i < steps; i++) {
+    aiUpdate();
+    update();
+  }
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+MODE.init();
+gameLoop();
+
+})();
+</script>
+</body>
+</html>

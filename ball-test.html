@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ball Concepts — Desert Golfing Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=VT323&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #d5ad72; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; cursor: crosshair; }
+
+  #panel {
+    position: fixed; top: 10px; right: 10px; z-index: 10;
+    background: rgba(0,0,0,0.78); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 6px; padding: 12px 14px; color: #ccc; width: 220px;
+    user-select: none; font-family: 'VT323', monospace;
+  }
+  #panel h3 { color: #fff; font-size: 16px; margin-bottom: 6px; font-weight: normal; letter-spacing: 1px; }
+  .ball-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .ball-btn {
+    padding: 5px 4px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 4px; color: #aaa; font: 13px 'VT323', monospace; cursor: pointer; text-align: center;
+    transition: background 0.1s;
+  }
+  .ball-btn:hover { background: rgba(255,255,255,0.12); }
+  .ball-btn.active { border-width: 2px; color: #fff; }
+  .ball-btn .key { opacity: 0.4; font-size: 11px; }
+  #desc { color: #999; font-size: 13px; margin-top: 8px; line-height: 1.3; min-height: 32px; }
+  .ctrl { margin-top: 6px; }
+  .ctrl label { display: block; font-size: 13px; color: #aaa; margin-top: 6px; }
+  .ctrl .val { color: #fff; float: right; }
+  .ctrl input[type=range] { width: 100%; margin-top: 2px; }
+  .ctrl .row { display: flex; gap: 4px; margin-top: 6px; }
+  .ctrl .row button {
+    flex: 1; padding: 3px 0; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 3px; color: #aaa; font: 12px 'VT323', monospace; cursor: pointer;
+  }
+  .ctrl .row button.active { border-color: #c488ff; color: #fff; background: rgba(196,136,255,0.2); }
+  .sep { border-top: 1px solid rgba(255,255,255,0.08); margin-top: 10px; padding-top: 6px; }
+  .ctrl .cb-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 13px; }
+  .ctrl .cb-row input { accent-color: #c488ff; }
+  #hints { color: #666; font-size: 12px; margin-top: 8px; line-height: 1.4; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="panel">
+  <h3>BALL CONCEPTS</h3>
+  <div class="ball-grid">
+    <div class="ball-btn active" data-type="normal" style="border-color:#fff">
+      <span class="key">1</span> Normal</div>
+    <div class="ball-btn" data-type="magnetic" style="border-color:#c488ff">
+      <span class="key">2</span> Magnet</div>
+    <div class="ball-btn" data-type="heavy" style="border-color:#998877">
+      <span class="key">3</span> Heavy</div>
+    <div class="ball-btn" data-type="helium" style="border-color:#88ddff">
+      <span class="key">4</span> Helium</div>
+    <div class="ball-btn" data-type="sticky" style="border-color:#88cc44">
+      <span class="key">5</span> Sticky</div>
+    <div class="ball-btn" data-type="rocket" style="border-color:#ff8844">
+      <span class="key">6</span> Rocket</div>
+    <div class="ball-btn" data-type="ghost" style="border-color:#8899bb">
+      <span class="key">7</span> Ghost</div>
+  </div>
+  <div id="desc">Standard ball. No special properties.</div>
+
+  <!-- Magnetic controls -->
+  <div class="ctrl" id="ctrl-magnetic" style="display:none">
+    <label>Strength <span class="val" id="vStr">0.15</span></label>
+    <input type="range" id="sStr" min="0" max="1" step="0.01" value="0.15" style="accent-color:#c488ff">
+    <label>Range (px) <span class="val" id="vRange">200</span></label>
+    <input type="range" id="sRange" min="30" max="500" step="5" value="200" style="accent-color:#c488ff">
+    <label>Falloff</label>
+    <div class="row">
+      <button id="bLinear" class="active">Linear</button>
+      <button id="bInverse">1/d</button>
+      <button id="bInvSq">1/d&sup2;</button>
+    </div>
+    <div class="cb-row">
+      <input type="checkbox" id="cbVis" checked>
+      <label for="cbVis" style="margin:0">Show field</label>
+    </div>
+  </div>
+
+  <!-- Heavy controls -->
+  <div class="ctrl" id="ctrl-heavy" style="display:none">
+    <label>Gravity <span class="val" id="vGrav">2.5</span>x</label>
+    <input type="range" id="sGrav" min="1.5" max="5" step="0.1" value="2.5" style="accent-color:#998877">
+  </div>
+
+  <!-- Helium controls -->
+  <div class="ctrl" id="ctrl-helium" style="display:none">
+    <label>Float <span class="val" id="vFloat">0.25</span>x gravity</label>
+    <input type="range" id="sFloat" min="0.05" max="0.8" step="0.05" value="0.25" style="accent-color:#88ddff">
+  </div>
+
+  <!-- Rocket controls -->
+  <div class="ctrl" id="ctrl-rocket" style="display:none">
+    <label>Boost power <span class="val" id="vBoost">5.0</span></label>
+    <input type="range" id="sBoost" min="1" max="12" step="0.5" value="5" style="accent-color:#ff8844">
+    <div id="rocketStatus" style="color:#ff8844; font-size:13px; margin-top:6px;">SPACE to boost mid-flight</div>
+  </div>
+
+  <!-- Ghost controls -->
+  <div class="ctrl" id="ctrl-ghost" style="display:none">
+    <label>Phase duration <span class="val" id="vGhost">1.0</span>s</label>
+    <input type="range" id="sGhost" min="0.3" max="3" step="0.1" value="1.0" style="accent-color:#8899bb">
+  </div>
+
+  <div class="sep"></div>
+  <div id="hints">
+    1-7: select ball &middot; R: reset<br>
+    [ ] skip holes &middot; ~: debug
+  </div>
+</div>
+
+<!-- Load the REAL game scripts (identical to index.html) -->
+<script src="src/shared.js"></script>
+<script src="src/worlds/desert-planet.js"></script>
+<script src="src/level-design.js"></script>
+<script src="src/modes/desert-golfing.js"></script>
+<script src="src/art.js"></script>
+<script src="src/gameplay.js"></script>
+<script src="src/debug.js"></script>
+
+<!-- Ball concepts layer (replaces main.js) -->
+<script>
+(function() {
+'use strict';
+
+// ═══════════════════════════════════════════════════════════
+// BALL TYPE DEFINITIONS
+// ═══════════════════════════════════════════════════════════
+var TYPES = {
+  normal:   { name: 'Normal',  color: '#ffffff', desc: 'Standard ball. No special properties.' },
+  magnetic: { name: 'Magnet',  color: '#d4aaff', desc: 'Pulled toward the cup when in range.' },
+  heavy:    { name: 'Heavy',   color: '#aa9988', desc: 'Higher gravity, less bounce. Plows downhill.' },
+  helium:   { name: 'Helium',  color: '#aaddff', desc: 'Low gravity, very bouncy. Floats and drifts.' },
+  sticky:   { name: 'Sticky',  color: '#99dd55', desc: 'Zero bounce. Sticks to the first surface it hits.' },
+  rocket:   { name: 'Rocket',  color: '#ffaa55', desc: 'Press SPACE for one mid-air boost per shot.' },
+  ghost:    { name: 'Ghost',   color: '#99aabb', desc: 'Phases through terrain briefly after each shot.' },
+};
+var TYPE_KEYS = ['normal','magnetic','heavy','helium','sticky','rocket','ghost'];
+
+var activeBall = 'normal';
+
+// ═══════════════════════════════════════════════════════════
+// PER-TYPE STATE
+// ═══════════════════════════════════════════════════════════
+
+// Magnetic
+var magStrength = 0.15, magRange = 200, magFalloff = 'linear';
+var magShowField = true, magForceMag = 0, magDistToHole = Infinity;
+var magParticles = [], magParticleTimer = 0;
+
+// Heavy
+var heavyGravMult = 2.5;
+
+// Helium
+var heliumGravMult = 0.25;
+var heliumBubbles = [];
+
+// Rocket
+var rocketBoostPower = 5.0;
+var rocketUsed = false;
+var rocketFlash = 0;
+var rocketTrail = [];
+
+// Ghost
+var ghostDuration = 60;
+var ghostFramesLeft = 0;
+
+// Shot tracking
+var lastStrokes = 0;
+
+var showEffects = true;
+
+// ═══════════════════════════════════════════════════════════
+// MAGNETIC FORCE
+// ═══════════════════════════════════════════════════════════
+function applyMagneticForce() {
+  var hole = holes[currentHole];
+  if (!hole) { magForceMag = 0; return; }
+
+  var dx = hole.cupX - ball.x, dy = hole.cupY - ball.y;
+  var dist = Math.sqrt(dx * dx + dy * dy);
+  magDistToHole = dist;
+  if (dist > magRange || dist < 1) { magForceMag = 0; return; }
+
+  var nx = dx / dist, ny = dy / dist;
+  var t = dist / magRange;
+  var force = 0;
+
+  switch (magFalloff) {
+    case 'linear':        force = magStrength * (1 - t); break;
+    case 'inverse':       force = magStrength * (magRange / dist) * 0.1; break;
+    case 'inverse-square': force = magStrength * (magRange * magRange) / (dist * dist) * 0.01; break;
+  }
+  force = Math.min(force, magStrength * 3);
+  magForceMag = force;
+  ball.vx += nx * force;
+  ball.vy += ny * force;
+}
+
+// ═══════════════════════════════════════════════════════════
+// HOOK: Wrap MODE.collide for ghost ball
+// ═══════════════════════════════════════════════════════════
+var _origCollide = MODE.collide;
+MODE.collide = function() {
+  if (activeBall === 'ghost' && ghostFramesLeft > 0) {
+    ball.onGround = false;
+    return false;
+  }
+  return _origCollide();
+};
+
+// ═══════════════════════════════════════════════════════════
+// HOOK: Wrap updatePhysics for all ball types
+// ═══════════════════════════════════════════════════════════
+var _origUpdatePhysics = updatePhysics;
+updatePhysics = function() {
+  if (ball.atRest) { _origUpdatePhysics(); return; }
+
+  // Detect new shot
+  if (strokes !== lastStrokes) {
+    lastStrokes = strokes;
+    rocketUsed = false;
+    rocketFlash = 0;
+    ghostFramesLeft = ghostDuration;
+    rocketTrail.length = 0;
+  }
+
+  // Ghost: decrement once per frame
+  if (activeBall === 'ghost' && ghostFramesLeft > 0) {
+    ghostFramesLeft--;
+    if (ghostFramesLeft === 0) {
+      var ty = terrainYAt(ball.x);
+      if (ball.y > ty - BALL_RADIUS) {
+        ball.y = ty - BALL_RADIUS;
+        if (ball.vy > 0) ball.vy = 0;
+        ball.onGround = true;
+      }
+    }
+  }
+
+  // Save physics constants
+  var sG = GRAVITY, sR = RESTITUTION, sRF = ROLLING_FRICTION, sSF = SURFACE_FRICTION, sBT = BOUNCE_THRESHOLD;
+
+  switch (activeBall) {
+    case 'magnetic':
+      applyMagneticForce();
+      break;
+    case 'heavy':
+      GRAVITY *= heavyGravMult;
+      RESTITUTION *= 0.4;
+      break;
+    case 'helium':
+      GRAVITY *= heliumGravMult;
+      RESTITUTION = Math.min(0.85, RESTITUTION * 1.8);
+      ROLLING_FRICTION = 0.995;
+      SURFACE_FRICTION = 0.001;
+      break;
+    case 'sticky':
+      RESTITUTION = 0;
+      BOUNCE_THRESHOLD = 999;
+      ROLLING_FRICTION = 0.92;
+      SURFACE_FRICTION = 0.012;
+      break;
+  }
+
+  _origUpdatePhysics();
+
+  GRAVITY = sG; RESTITUTION = sR; ROLLING_FRICTION = sRF;
+  SURFACE_FRICTION = sSF; BOUNCE_THRESHOLD = sBT;
+
+  // Rocket trail
+  if (activeBall === 'rocket' && !ball.atRest) {
+    rocketTrail.push({ x: ball.x, y: ball.y, age: 0 });
+    if (rocketTrail.length > 25) rocketTrail.shift();
+  }
+  if (rocketFlash > 0) rocketFlash--;
+
+  // Helium bubbles
+  if (activeBall === 'helium' && !ball.atRest && Math.random() < 0.3) {
+    heliumBubbles.push({
+      x: ball.x + (Math.random() - 0.5) * 6,
+      y: ball.y + BALL_RADIUS,
+      life: 1.0,
+    });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════
+// HOOK: Wrap drawBall for custom ball visuals
+// ═══════════════════════════════════════════════════════════
+var _origDrawBall = drawBall;
+drawBall = function() {
+  if (activeBall === 'normal') { _origDrawBall(); return; }
+
+  var col = TYPES[activeBall].color;
+
+  if (activeBall === 'ghost' && ghostFramesLeft > 0) {
+    ctx.globalAlpha = 0.25 + 0.15 * Math.sin(Date.now() * 0.015);
+  }
+
+  if (activeBall === 'rocket' && rocketFlash > 0) {
+    col = '#ffffff';
+  }
+
+  var glowColor = null;
+  if (activeBall === 'magnetic' && magForceMag > 0 && !ball.atRest) {
+    var a = Math.min(0.5, 0.15 + magForceMag * 2);
+    glowColor = 'rgba(196, 136, 255, ' + a + ')';
+  } else if (activeBall === 'helium') {
+    glowColor = 'rgba(136, 221, 255, 0.25)';
+  } else if (activeBall === 'rocket' && !rocketUsed && !ball.atRest) {
+    glowColor = 'rgba(255, 136, 68, 0.3)';
+  } else if (activeBall === 'ghost' && ghostFramesLeft > 0) {
+    glowColor = 'rgba(136, 153, 187, 0.3)';
+  }
+
+  if (glowColor) {
+    ctx.strokeStyle = glowColor;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, BALL_RADIUS + 3, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = col;
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
+  ctx.fill();
+
+  var dotR = BALL_RADIUS * 0.55, dotSz = BALL_RADIUS * 0.18;
+  ctx.fillStyle = 'rgba(140, 135, 120, 0.55)';
+  for (var i = 0; i < 3; i++) {
+    var ang = ball.rotation + i * (Math.PI * 2 / 3);
+    ctx.beginPath();
+    ctx.arc(ball.x + Math.cos(ang) * dotR, ball.y + Math.sin(ang) * dotR, dotSz, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.globalAlpha = 1;
+};
+
+// ═══════════════════════════════════════════════════════════
+// HOOK: Wrap draw for world-space effects + HUD
+// ═══════════════════════════════════════════════════════════
+var _origDraw = draw;
+draw = function() {
+  _origDraw();
+
+  if (!showEffects) return;
+
+  ctx.save();
+  ctx.scale(displayScale, displayScale);
+
+  ctx.save();
+  MODE.applyCameraTransform(ctx);
+  drawWorldEffects();
+  ctx.restore();
+
+  drawBallHUD();
+
+  ctx.restore();
+};
+
+function drawWorldEffects() {
+  switch (activeBall) {
+    case 'magnetic': drawMagneticFieldVis(); break;
+    case 'rocket':   drawRocketTrail(); break;
+    case 'helium':   drawHeliumBubbles(); break;
+    case 'ghost':    drawGhostAfterimage(); break;
+  }
+}
+
+function drawMagneticFieldVis() {
+  if (!magShowField) return;
+  var hole = holes[currentHole];
+  if (!hole) return;
+  var cx = hole.cupX, cy = hole.cupY;
+
+  var pulse = 0.15 + 0.1 * Math.sin(Date.now() * 0.003);
+  ctx.strokeStyle = 'rgba(196,136,255,' + pulse + ')';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([6, 8]);
+  ctx.beginPath();
+  ctx.arc(cx, cy, magRange, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  var grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, magRange * 0.4);
+  grad.addColorStop(0, 'rgba(196,136,255,0.12)');
+  grad.addColorStop(1, 'rgba(196,136,255,0.0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, magRange * 0.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  for (var i = 0; i < magParticles.length; i++) {
+    var p = magParticles[i];
+    ctx.fillStyle = 'rgba(196,136,255,' + (p.life * 0.5) + ')';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (!ball.atRest && magForceMag > 0) {
+    ctx.strokeStyle = 'rgba(196,136,255,' + Math.min(0.6, magForceMag * 4) + ')';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 5]);
+    ctx.beginPath();
+    ctx.moveTo(ball.x, ball.y);
+    ctx.lineTo(cx, cy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+function drawRocketTrail() {
+  for (var i = 0; i < rocketTrail.length; i++) {
+    var p = rocketTrail[i];
+    var t = i / rocketTrail.length;
+    var size = 1 + t * 2;
+    var r = 255, g = Math.round(120 + t * 50), b = Math.round(30 + t * 20);
+    ctx.fillStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + (t * 0.5) + ')';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (rocketFlash > 0) {
+    var fa = rocketFlash / 20;
+    ctx.strokeStyle = 'rgba(255,255,200,' + fa + ')';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, BALL_RADIUS + 6 + (20 - rocketFlash), 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+function drawHeliumBubbles() {
+  for (var i = 0; i < heliumBubbles.length; i++) {
+    var b = heliumBubbles[i];
+    ctx.strokeStyle = 'rgba(136,221,255,' + (b.life * 0.4) + ')';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, 1 + (1 - b.life) * 2, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+function drawGhostAfterimage() {
+  if (ghostFramesLeft <= 0 || ball.atRest) return;
+
+  var t = Date.now() * 0.008;
+  for (var i = 0; i < 4; i++) {
+    var ang = t + i * (Math.PI / 2);
+    var ox = Math.cos(ang) * (BALL_RADIUS + 5);
+    var oy = Math.sin(ang) * (BALL_RADIUS + 5);
+    ctx.fillStyle = 'rgba(136,153,187,0.25)';
+    ctx.beginPath();
+    ctx.arc(ball.x + ox, ball.y + oy, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  var pct = ghostFramesLeft / ghostDuration;
+  ctx.strokeStyle = 'rgba(136,153,187,0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, BALL_RADIUS + 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pct);
+  ctx.stroke();
+}
+
+function drawBallHUD() {
+  var info = TYPES[activeBall];
+
+  ctx.fillStyle = info.color;
+  ctx.font = '20px VT323, monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(info.name.toUpperCase() + ' BALL', 16, H - 20);
+
+  ctx.font = '14px VT323, monospace';
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+
+  if (activeBall === 'magnetic' && !ball.atRest && state === STATE_FLIGHT) {
+    var txt = Math.round(magDistToHole) + 'px to hole';
+    if (magDistToHole <= magRange) txt += '  |  pull: ' + magForceMag.toFixed(3);
+    ctx.fillStyle = 'rgba(196,136,255,0.5)';
+    ctx.fillText(txt, 16, H - 4);
+  }
+
+  if (activeBall === 'rocket' && state === STATE_FLIGHT && !ball.atRest) {
+    if (!rocketUsed) {
+      ctx.fillStyle = '#ff8844';
+      ctx.font = '18px VT323, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('[ SPACE ] BOOST', W / 2, H - 20);
+    } else {
+      ctx.fillStyle = 'rgba(255,136,68,0.3)';
+      ctx.font = '16px VT323, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('BOOST USED', W / 2, H - 20);
+    }
+  }
+
+  if (activeBall === 'ghost' && ghostFramesLeft > 0 && !ball.atRest) {
+    ctx.fillStyle = 'rgba(136,153,187,0.6)';
+    ctx.fillText('PHASING  ' + (ghostFramesLeft / 60).toFixed(1) + 's', 16, H - 4);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// HOOK: Wrap update for particles / bubbles
+// ═══════════════════════════════════════════════════════════
+var _origUpdate = update;
+update = function() {
+  _origUpdate();
+
+  // Magnetic particles
+  if (activeBall === 'magnetic' && magShowField) {
+    var hole = holes[currentHole];
+    if (hole) {
+      magParticleTimer++;
+      var rate = Math.max(1, Math.floor(8 - magStrength * 20));
+      if (magParticleTimer % rate === 0) {
+        var a = Math.random() * Math.PI * 2;
+        magParticles.push({
+          x: hole.cupX + Math.cos(a) * magRange,
+          y: hole.cupY + Math.sin(a) * magRange,
+          life: 1.0, speed: 0.8 + Math.random() * 0.6,
+        });
+      }
+      for (var i = magParticles.length - 1; i >= 0; i--) {
+        var p = magParticles[i];
+        var dx = hole.cupX - p.x, dy = hole.cupY - p.y;
+        var d = Math.sqrt(dx * dx + dy * dy);
+        if (d > 1) { p.x += (dx / d) * p.speed * 2; p.y += (dy / d) * p.speed * 2; }
+        p.life -= 0.012;
+        if (p.life <= 0 || d < 10) magParticles.splice(i, 1);
+      }
+    }
+  } else {
+    magParticles.length = 0;
+  }
+
+  // Helium bubbles
+  for (var j = heliumBubbles.length - 1; j >= 0; j--) {
+    var b = heliumBubbles[j];
+    b.y -= 0.5;
+    b.x += (Math.random() - 0.5) * 0.3;
+    b.life -= 0.02;
+    if (b.life <= 0) heliumBubbles.splice(j, 1);
+  }
+
+  // Age rocket trail
+  for (var k = rocketTrail.length - 1; k >= 0; k--) {
+    rocketTrail[k].age++;
+  }
+
+  // Rocket HUD status
+  if (activeBall === 'rocket') {
+    var el = document.getElementById('rocketStatus');
+    if (el) {
+      if (state === STATE_FLIGHT && !ball.atRest && !rocketUsed) {
+        el.textContent = 'SPACE to boost!';
+        el.style.color = '#ff8844';
+      } else if (rocketUsed) {
+        el.textContent = 'Boost used this shot';
+        el.style.color = '#886644';
+      } else {
+        el.textContent = 'SPACE to boost mid-flight';
+        el.style.color = '#ff8844';
+      }
+    }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════
+// INPUT
+// ═══════════════════════════════════════════════════════════
+window.addEventListener('keydown', function(e) {
+  // Rocket boost
+  if (e.code === 'Space' && activeBall === 'rocket' && !rocketUsed
+      && state === STATE_FLIGHT && !ball.atRest) {
+    var speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+    if (speed > 0.1) {
+      ball.vx += (ball.vx / speed) * rocketBoostPower;
+      ball.vy += (ball.vy / speed) * rocketBoostPower;
+    } else {
+      ball.vy -= rocketBoostPower;
+    }
+    rocketUsed = true;
+    rocketFlash = 20;
+    e.preventDefault();
+    return;
+  }
+
+  // Number keys 1-7
+  var num = parseInt(e.key);
+  if (num >= 1 && num <= 7) {
+    switchBall(TYPE_KEYS[num - 1]);
+    e.preventDefault();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// BALL TYPE SWITCHING
+// ═══════════════════════════════════════════════════════════
+function switchBall(type) {
+  if (!TYPES[type]) return;
+  activeBall = type;
+
+  rocketUsed = false;
+  rocketFlash = 0;
+  rocketTrail.length = 0;
+  ghostFramesLeft = 0;
+  magParticles.length = 0;
+  magForceMag = 0;
+  heliumBubbles.length = 0;
+
+  document.getElementById('desc').textContent = TYPES[type].desc;
+
+  document.querySelectorAll('.ball-btn').forEach(function(el) {
+    el.classList.toggle('active', el.dataset.type === type);
+  });
+
+  document.querySelectorAll('.ctrl').forEach(function(el) {
+    el.style.display = 'none';
+  });
+  var ctrl = document.getElementById('ctrl-' + type);
+  if (ctrl) ctrl.style.display = '';
+}
+
+// ═══════════════════════════════════════════════════════════
+// PANEL WIRING
+// ═══════════════════════════════════════════════════════════
+document.querySelectorAll('.ball-btn').forEach(function(el) {
+  el.addEventListener('click', function() { switchBall(el.dataset.type); });
+});
+
+document.getElementById('sStr').addEventListener('input', function() {
+  magStrength = parseFloat(this.value);
+  document.getElementById('vStr').textContent = magStrength.toFixed(2);
+});
+document.getElementById('sRange').addEventListener('input', function() {
+  magRange = parseFloat(this.value);
+  document.getElementById('vRange').textContent = String(Math.round(magRange));
+});
+var bLin = document.getElementById('bLinear');
+var bInv = document.getElementById('bInverse');
+var bISq = document.getElementById('bInvSq');
+function setFalloff(t) {
+  magFalloff = t;
+  bLin.className = t === 'linear' ? 'active' : '';
+  bInv.className = t === 'inverse' ? 'active' : '';
+  bISq.className = t === 'inverse-square' ? 'active' : '';
+}
+bLin.addEventListener('click', function() { setFalloff('linear'); });
+bInv.addEventListener('click', function() { setFalloff('inverse'); });
+bISq.addEventListener('click', function() { setFalloff('inverse-square'); });
+document.getElementById('cbVis').addEventListener('change', function() {
+  magShowField = this.checked;
+});
+
+document.getElementById('sGrav').addEventListener('input', function() {
+  heavyGravMult = parseFloat(this.value);
+  document.getElementById('vGrav').textContent = heavyGravMult.toFixed(1);
+});
+
+document.getElementById('sFloat').addEventListener('input', function() {
+  heliumGravMult = parseFloat(this.value);
+  document.getElementById('vFloat').textContent = heliumGravMult.toFixed(2);
+});
+
+document.getElementById('sBoost').addEventListener('input', function() {
+  rocketBoostPower = parseFloat(this.value);
+  document.getElementById('vBoost').textContent = rocketBoostPower.toFixed(1);
+});
+
+document.getElementById('sGhost').addEventListener('input', function() {
+  ghostDuration = Math.round(parseFloat(this.value) * 60);
+  document.getElementById('vGhost').textContent = (ghostDuration / 60).toFixed(1);
+});
+
+// ═══════════════════════════════════════════════════════════
+// INIT (replaces main.js)
+// ═══════════════════════════════════════════════════════════
+function gameLoop() {
+  _ballLogFrame++;
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+MODE.init();
+gameLoop();
+
+})();
+</script>
+</body>
+</html>
