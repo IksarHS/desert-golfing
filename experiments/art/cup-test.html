@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Cup Fill Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #2a2a2a; color: #eee; font-family: 'VT323', monospace; }
+  #controls {
+    padding: 12px 20px;
+    display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+    background: #333; border-bottom: 1px solid #555;
+  }
+  #controls label { font-size: 16px; }
+  #controls input[type=range] { width: 120px; vertical-align: middle; }
+  #controls button {
+    padding: 6px 16px; font: 16px 'VT323', monospace;
+    background: #d68841; border: none; color: #fff; cursor: pointer;
+  }
+  #controls button:hover { background: #e09955; }
+  .val { display: inline-block; width: 36px; text-align: right; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="controls">
+  <button id="btn-reset">Reset</button>
+  <button id="btn-play">Play Fill</button>
+  <button id="btn-step">Step</button>
+  <label>Speed: <input type="range" id="speed" min="1" max="10" value="3"> <span class="val" id="speed-val">3</span></label>
+  <label>Cup Width: <input type="range" id="cup-w" min="20" max="60" value="36"> <span class="val" id="cup-w-val">36</span></label>
+  <label>Cup Depth: <input type="range" id="cup-d" min="8" max="40" value="20"> <span class="val" id="cup-d-val">20</span></label>
+  <label>Wall Inset: <input type="range" id="wall-inset" min="0" max="12" value="3"> <span class="val" id="wall-inset-val">3</span></label>
+</div>
+<canvas id="c"></canvas>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+const SKY = '#d5ad72';
+const GROUND = '#d68841';
+const BALL_COLOR = '#ffffff';
+const BALL_RADIUS = 4;
+
+// --- Test scenarios ---
+// Each scenario: { label, rimY, slopeLeft, slopeRight }
+// slopeLeft/slopeRight: height offset from rimY at the cup edges
+const scenarios = [
+  { label: 'Flat (ideal)', slopeL: 0, slopeR: 0 },
+  { label: 'Slight slope R', slopeL: 0, slopeR: 8 },
+  { label: 'Slight slope L', slopeL: 8, slopeR: 0 },
+  { label: 'Steep slope R', slopeL: 0, slopeR: 20 },
+  { label: 'V-valley', slopeL: 15, slopeR: 15 },
+  { label: 'Inverted (hill)', slopeL: -10, slopeR: -10 },
+];
+
+let cups = [];
+let playing = false;
+let animFrame = null;
+
+// Controls
+const speedSlider = document.getElementById('speed');
+const cupWSlider = document.getElementById('cup-w');
+const cupDSlider = document.getElementById('cup-d');
+const wallInsetSlider = document.getElementById('wall-inset');
+
+function getParams() {
+  return {
+    cupWidth: parseInt(cupWSlider.value),
+    cupDepth: parseInt(cupDSlider.value),
+    wallInset: parseInt(wallInsetSlider.value),
+    speed: parseInt(speedSlider.value),
+  };
+}
+
+// Update value displays
+for (const [id, valId] of [['speed','speed-val'],['cup-w','cup-w-val'],['cup-d','cup-d-val'],['wall-inset','wall-inset-val']]) {
+  const el = document.getElementById(id);
+  const valEl = document.getElementById(valId);
+  el.addEventListener('input', () => { valEl.textContent = el.value; });
+}
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = window.innerWidth * dpr;
+  canvas.height = (window.innerHeight - 50) * dpr;
+  canvas.style.width = window.innerWidth + 'px';
+  canvas.style.height = (window.innerHeight - 50) + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', () => { resize(); draw(); });
+resize();
+
+function buildCups() {
+  const p = getParams();
+  const cols = scenarios.length;
+  const cellW = window.innerWidth / cols;
+  const cellH = window.innerHeight - 50;
+  const rimBaseY = cellH * 0.5;
+
+  cups = scenarios.map((s, i) => {
+    const cx = cellW * i + cellW / 2;
+    const leftY = rimBaseY + s.slopeL;
+    const rightY = rimBaseY + s.slopeR;
+    const rimY = (leftY + rightY) / 2;
+
+    return {
+      label: s.label,
+      cx, // center x
+      cellX: cellW * i,
+      cellW,
+      // Cup geometry
+      leftX: cx - p.cupWidth / 2,
+      rightX: cx + p.cupWidth / 2,
+      leftY,
+      rightY,
+      rimY,
+      bottomY: Math.max(leftY, rightY) + p.cupDepth,
+      wallInset: p.wallInset,
+      // Fill state
+      fillProgress: 0, // 0 = empty, 1 = full
+      // Ball
+      ballY: rimBaseY - 60,
+      ballVY: 0,
+      ballAtRest: false,
+      ballInCup: false,
+      // Terrain around cup
+      terrainY: rimBaseY,
+      slopeL: s.slopeL,
+      slopeR: s.slopeR,
+    };
+  });
+}
+
+function drawOne(cup) {
+  const p = getParams();
+  const hw = p.cupWidth / 2;
+  const wi = p.wallInset;
+
+  // --- Terrain (ground behind cup) ---
+  ctx.fillStyle = GROUND;
+  ctx.beginPath();
+  // Slope from left edge to cup left rim
+  ctx.moveTo(cup.cellX, cup.terrainY + cup.slopeL * 2);
+  ctx.lineTo(cup.leftX, cup.leftY);
+  // Cup notch
+  ctx.lineTo(cup.leftX + wi, cup.bottomY);
+  ctx.lineTo(cup.rightX - wi, cup.bottomY);
+  ctx.lineTo(cup.rightX, cup.rightY);
+  // Slope from cup right rim to right edge
+  ctx.lineTo(cup.cellX + cup.cellW, cup.terrainY + cup.slopeR * 2);
+  // Close along bottom
+  ctx.lineTo(cup.cellX + cup.cellW, cup.terrainY + 200);
+  ctx.lineTo(cup.cellX, cup.terrainY + 200);
+  ctx.closePath();
+  ctx.fill();
+
+  // --- Cup fill (sand rising) ---
+  if (cup.fillProgress > 0) {
+    const topRim = Math.min(cup.leftY, cup.rightY);
+    const fillTopY = cup.bottomY + (topRim - cup.bottomY) * cup.fillProgress;
+
+    if (fillTopY < cup.bottomY) {
+      // Find where fillTopY intersects left wall
+      let flx;
+      if (fillTopY <= cup.leftY) {
+        flx = cup.leftX;
+      } else {
+        const t = (cup.bottomY - fillTopY) / (cup.bottomY - cup.leftY);
+        flx = (cup.leftX + wi) + (cup.leftX - (cup.leftX + wi)) * t;
+      }
+
+      // Find where fillTopY intersects right wall
+      let frx;
+      if (fillTopY <= cup.rightY) {
+        frx = cup.rightX;
+      } else {
+        const t = (cup.bottomY - fillTopY) / (cup.bottomY - cup.rightY);
+        frx = (cup.rightX - wi) + (cup.rightX - (cup.rightX - wi)) * t;
+      }
+
+      const overdraw = 1;
+      ctx.fillStyle = GROUND;
+      ctx.beginPath();
+      ctx.moveTo(flx - overdraw, fillTopY);
+      ctx.lineTo(cup.leftX + wi - overdraw, cup.bottomY + overdraw);
+      ctx.lineTo(cup.rightX - wi + overdraw, cup.bottomY + overdraw);
+      ctx.lineTo(frx + overdraw, fillTopY);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  // --- Ball ---
+  {
+    let ballDrawY;
+    if (!cup.ballInCup) {
+      // Falling — use physics Y
+      ballDrawY = cup.ballY;
+    } else {
+      // In cup — sit on top of the sand fill surface
+      // The fill top is the same as the fill polygon: rises from bottomY to topRim
+      const topRim = Math.min(cup.leftY, cup.rightY);
+      const fillTopY = cup.bottomY + (topRim - cup.bottomY) * cup.fillProgress;
+      ballDrawY = fillTopY - BALL_RADIUS;
+    }
+
+    ctx.fillStyle = BALL_COLOR;
+    ctx.beginPath();
+    ctx.arc(cup.cx, ballDrawY, BALL_RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // --- Label ---
+  ctx.fillStyle = '#fff';
+  ctx.font = '16px VT323, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(cup.label, cup.cx, 30);
+
+  // Fill % indicator
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.font = '14px VT323, monospace';
+  ctx.fillText(Math.round(cup.fillProgress * 100) + '%', cup.cx, cup.terrainY + 80);
+
+  // Show rim heights
+  if (cup.leftY !== cup.rightY) {
+    ctx.fillStyle = 'rgba(255,100,100,0.7)';
+    ctx.font = '12px VT323, monospace';
+    ctx.fillText('L:' + Math.round(cup.leftY) + ' R:' + Math.round(cup.rightY), cup.cx, cup.terrainY + 100);
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, window.innerWidth, window.innerHeight - 50);
+
+  // Sky
+  ctx.fillStyle = SKY;
+  ctx.fillRect(0, 0, window.innerWidth, window.innerHeight - 50);
+
+  // Separator lines
+  const cellW = window.innerWidth / scenarios.length;
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+  ctx.lineWidth = 1;
+  for (let i = 1; i < scenarios.length; i++) {
+    ctx.beginPath();
+    ctx.moveTo(cellW * i, 0);
+    ctx.lineTo(cellW * i, window.innerHeight);
+    ctx.stroke();
+  }
+
+  cups.forEach(drawOne);
+}
+
+function stepPhysics() {
+  const p = getParams();
+  const dt = p.speed * 0.005; // fill increment per frame
+
+  cups.forEach(cup => {
+    // Simple ball drop physics
+    if (!cup.ballAtRest) {
+      cup.ballVY += 0.15;
+      cup.ballY += cup.ballVY;
+
+      // Collide with cup bottom
+      if (cup.ballY + BALL_RADIUS > cup.bottomY) {
+        cup.ballY = cup.bottomY - BALL_RADIUS;
+        cup.ballVY *= -0.3;
+        if (Math.abs(cup.ballVY) < 0.5) {
+          cup.ballVY = 0;
+          cup.ballAtRest = true;
+          cup.ballInCup = true;
+        }
+      }
+    }
+
+    // Fill animation (only after ball rests)
+    if (cup.ballAtRest && cup.ballInCup && cup.fillProgress < 1) {
+      cup.fillProgress = Math.min(1, cup.fillProgress + dt);
+    }
+  });
+}
+
+function animate() {
+  stepPhysics();
+  draw();
+  if (playing) animFrame = requestAnimationFrame(animate);
+}
+
+// --- Controls ---
+document.getElementById('btn-reset').addEventListener('click', () => {
+  playing = false;
+  if (animFrame) cancelAnimationFrame(animFrame);
+  buildCups();
+  draw();
+});
+
+document.getElementById('btn-play').addEventListener('click', () => {
+  if (!playing) {
+    playing = true;
+    animate();
+  } else {
+    playing = false;
+    if (animFrame) cancelAnimationFrame(animFrame);
+  }
+});
+
+document.getElementById('btn-step').addEventListener('click', () => {
+  playing = false;
+  if (animFrame) cancelAnimationFrame(animFrame);
+  stepPhysics();
+  draw();
+});
+
+// Rebuild on parameter change
+for (const id of ['cup-w', 'cup-d', 'wall-inset']) {
+  document.getElementById(id).addEventListener('input', () => {
+    buildCups();
+    draw();
+  });
+}
+
+// Init
+buildCups();
+draw();
+</script>
+</body>
+</html>
