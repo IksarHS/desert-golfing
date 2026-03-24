@@ -126,6 +126,29 @@
     font: 11px 'Departure Mono', monospace; color: #e8a030;
     z-index: 10; pointer-events: none;
   }
+
+  /* Dropdown for Set Custom */
+  .dropdown-item {
+    padding: 6px 12px; cursor: pointer; color: #ddd;
+    font: 11px 'Departure Mono', monospace;
+  }
+  .dropdown-item:hover { background: rgba(232,160,48,0.3); color: #e8a030; }
+
+  /* Library panel */
+  #library-panel {
+    display: none; position: fixed; right: 0; top: 0; width: 280px; height: 100%;
+    background: rgba(30,25,20,0.95); border-left: 2px solid #555; z-index: 200;
+    overflow-y: auto; padding: 10px;
+    font: 12px 'Departure Mono', monospace; color: #ddd;
+  }
+  .lib-item {
+    padding: 6px 8px; margin-bottom: 4px; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 4px; background: rgba(255,255,255,0.03);
+  }
+  .lib-item:hover { background: rgba(255,255,255,0.06); }
+  .lib-item-name { color: #e8a030; font-size: 11px; margin-bottom: 4px; }
+  .lib-item-meta { color: #777; font-size: 9px; margin-bottom: 4px; }
+  .lib-item-actions { display: flex; gap: 4px; }
 </style>
 </head>
 <body>
@@ -164,7 +187,15 @@
     <!-- Hole type + preset -->
     <div class="tb-group">
       <span class="tb-label">HOLE</span>
-      <button class="ed-btn" id="btn-toggle-type" onclick="toggleHoleType()"></button>
+      <div style="position:relative; display:inline-block;" id="type-toggle-wrapper">
+        <button class="ed-btn" id="btn-toggle-type" onclick="onToggleTypeClick()"></button>
+        <div id="custom-dropdown" style="display:none; position:absolute; top:100%; left:0; z-index:100; background:rgba(30,25,20,0.95); border:1px solid #555; border-radius:4px; min-width:140px;">
+          <div class="dropdown-item" onclick="makeCustomNew()">New Custom</div>
+          <div class="dropdown-item" onclick="openLibraryPicker()">From Library...</div>
+        </div>
+      </div>
+      <input class="ed-input" id="hole-name-input" type="text" placeholder="Hole name..."
+             style="width:140px; display:none;" onchange="onHoleNameChange(this.value)" />
       <div id="preset-bar">
         <button class="ed-btn sm" onclick="cyclePreset(-1)">◀</button>
         <span class="preset-name" id="preset-name">Flat</span>
@@ -203,6 +234,7 @@
 
     <!-- File ops — pushed right -->
     <div class="tb-group" style="margin-left:auto">
+      <button class="ed-btn" onclick="toggleLibraryPanel(true)">Library</button>
       <button class="ed-btn" onclick="resetBallToTee()">Reset</button>
       <button class="ed-btn" id="btn-save" onclick="saveCustomHoles()">Save</button>
       <button class="ed-btn danger" id="btn-clear" onclick="clearCustomHoles()">Clear</button>
@@ -215,6 +247,16 @@
 </div>
 
 <div id="mode-badge"></div>
+
+<!-- Library Panel (right-side overlay) -->
+<div id="library-panel">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+    <span style="color:#e8a030; font:14px 'Departure Mono', monospace;">Hole Library</span>
+    <button class="ed-btn" onclick="toggleLibraryPanel(false)">✕</button>
+  </div>
+  <div id="library-list"></div>
+  <button class="ed-btn" style="width:100%; margin-top:10px;" onclick="saveCurrentToLibrary()">Save Current to Library</button>
+</div>
 
 <!-- Load the REAL game scripts (same repo, same branch) -->
 <script src="src/shared.js"></script>
@@ -236,6 +278,12 @@ let editorHoleCount = 9;
 // Track which holes are hand-designed (vs procedural)
 let customHoleIndices = new Set();
 let currentPresetIndex = 0;
+
+// Hole Library — persistent named hole collection
+let holeLibrary = {};           // slug -> {name, createdFrom, teeY, dist, cupY, verts, objects}
+let customHoleMeta = {};        // holeIndex -> {name, libraryRef}
+let nextCustomNumber = 1;       // for "Custom Hole N" auto-naming
+let libraryPickMode = false;    // true when library panel is open for picking
 
 const TERRAIN_PRESETS = [
   { name: 'Flat', verts: (dist) => [{ dx: Math.round(dist / 2), y: 350 }] },
@@ -631,13 +679,29 @@ function switchCourse(worldId, courseId) {
 
   // Load saved course data
   customHoleIndices.clear();
+  customHoleMeta = {};
   const saved = loadCourseData();
   if (saved) {
     editorHoleCount = saved.holeCount || getCourseHoleCount(currentCourse);
     if (saved.holes) {
+      let maxCustomNum = 0;
       for (const key of Object.keys(saved.holes)) {
-        customHoleIndices.add(Number(key));
+        const idx = Number(key);
+        customHoleIndices.add(idx);
+        // Reconstruct customHoleMeta from saved hole data
+        const holeData = saved.holes[key];
+        if (holeData.name || holeData.libraryRef) {
+          customHoleMeta[idx] = {};
+          if (holeData.name) customHoleMeta[idx].name = holeData.name;
+          if (holeData.libraryRef) customHoleMeta[idx].libraryRef = holeData.libraryRef;
+        }
+        // Track highest "Custom Hole N" for auto-naming
+        if (holeData.name) {
+          const m = holeData.name.match(/^Custom Hole (\d+)$/);
+          if (m) maxCustomNum = Math.max(maxCustomNum, parseInt(m[1]));
+        }
       }
+      if (maxCustomNum >= nextCustomNumber) nextCustomNumber = maxCustomNum + 1;
     }
   } else {
     editorHoleCount = getCourseHoleCount(currentCourse);
@@ -788,14 +852,31 @@ async function editorInit() {
     ensureHolesAhead(currentHole + 2);
   };
 
+  // Load hole library
+  await loadHoleLibrary();
+
   // Load course data from localStorage
+  customHoleMeta = {};
   const saved = loadCourseData();
   if (saved) {
     editorHoleCount = saved.holeCount || getCourseHoleCount(currentCourse);
     if (saved.holes) {
+      let maxCustomNum = 0;
       for (const key of Object.keys(saved.holes)) {
-        customHoleIndices.add(Number(key));
+        const idx = Number(key);
+        customHoleIndices.add(idx);
+        const holeData = saved.holes[key];
+        if (holeData.name || holeData.libraryRef) {
+          customHoleMeta[idx] = {};
+          if (holeData.name) customHoleMeta[idx].name = holeData.name;
+          if (holeData.libraryRef) customHoleMeta[idx].libraryRef = holeData.libraryRef;
+        }
+        if (holeData.name) {
+          const m = holeData.name.match(/^Custom Hole (\d+)$/);
+          if (m) maxCustomNum = Math.max(maxCustomNum, parseInt(m[1]));
+        }
       }
+      if (maxCustomNum >= nextCustomNumber) nextCustomNumber = maxCustomNum + 1;
     }
   } else {
     editorHoleCount = getCourseHoleCount(currentCourse);
@@ -816,6 +897,15 @@ async function editorInit() {
   buildHoleList();
   updateModeBadge();
   updatePropsPanel();
+
+  // Close custom dropdown when clicking outside
+  document.addEventListener('click', function(e) {
+    const wrapper = document.getElementById('type-toggle-wrapper');
+    const dd = document.getElementById('custom-dropdown');
+    if (dd && dd.style.display !== 'none' && wrapper && !wrapper.contains(e.target)) {
+      dd.style.display = 'none';
+    }
+  });
 }
 
 // ── Mode Switching ────────────────────────────────────────
@@ -1086,7 +1176,15 @@ function updateHoleList() {
     const hole = holes[i];
     const arch = hole?.archetype || '';
     const diff = typeof getDifficulty === 'function' ? getDifficulty(i).toFixed(2) : '';
-    const typeLabel = isCustom ? '✎' : (arch || 'auto');
+    let typeLabel;
+    if (isCustom) {
+      const meta = customHoleMeta[i];
+      const holeName = meta && meta.name ? meta.name : '';
+      const truncName = holeName.length > 14 ? holeName.slice(0, 13) + '…' : holeName;
+      typeLabel = truncName ? '✎ ' + truncName : '✎';
+    } else {
+      typeLabel = arch || 'auto';
+    }
     div.innerHTML = `<span>${i + 1}</span><span class="type">${typeLabel}${diff ? ' ' + diff : ''}</span>`;
     div.onclick = () => goToHole(i);
     list.appendChild(div);
@@ -1099,31 +1197,24 @@ function updateHoleList() {
 function updateToggleButton() {
   const btn = document.getElementById('btn-toggle-type');
   const presetBar = document.getElementById('preset-bar');
+  const nameInput = document.getElementById('hole-name-input');
   const isCustom = customHoleIndices.has(currentHole);
   btn.textContent = isCustom ? 'Set Auto' : 'Set Custom';
   btn.className = 'ed-btn' + (isCustom ? ' active' : '');
   presetBar.classList.toggle('visible', isCustom);
-}
-
-function toggleHoleType() {
-  const isCustom = customHoleIndices.has(currentHole);
-  pushUndo();
-
+  // Show/hide name input
   if (isCustom) {
-    // Switch to procedural
-    customHoleIndices.delete(currentHole);
-    // Regenerate this hole procedurally — need to remove old vertices and regenerate
-    regenerateCurrentHole();
+    nameInput.style.display = '';
+    nameInput.value = (customHoleMeta[currentHole] && customHoleMeta[currentHole].name) || '';
   } else {
-    // Switch to hand-designed with flat preset
-    customHoleIndices.add(currentHole);
-    currentPresetIndex = 0;
-    applyPreset(currentPresetIndex);
+    nameInput.style.display = 'none';
   }
-
-  buildHoleList();
-  goToHole(currentHole);
+  // Always close dropdown when updating
+  document.getElementById('custom-dropdown').style.display = 'none';
 }
+
+// Legacy — redirects to new dropdown-based toggle
+function toggleHoleType() { onToggleTypeClick(); }
 
 function applyPreset(presetIdx) {
   const preset = TERRAIN_PRESETS[presetIdx];
@@ -2612,7 +2703,15 @@ function serializeAllCustomHoles() {
   for (const idx of customHoleIndices) {
     if (idx < holes.length) {
       const def = serializeHole(idx);
-      if (def) obj[String(idx)] = def;
+      if (def) {
+        // Include name and libraryRef from customHoleMeta
+        const meta = customHoleMeta[idx];
+        if (meta) {
+          if (meta.name) def.name = meta.name;
+          if (meta.libraryRef) def.libraryRef = meta.libraryRef;
+        }
+        obj[String(idx)] = def;
+      }
     }
   }
   return obj;
@@ -2669,6 +2768,8 @@ function clearCustomHoles() {
   invalidateCustomHolesCache();
   // Reset to defaults
   customHoleIndices.clear();
+  customHoleMeta = {};
+  nextCustomNumber = 1;
   editorHoleCount = getCourseHoleCount(currentCourse);
   // Re-mark hand-defined holes as custom
   for (let i = 0; i < HAND_DEFINED_HOLES.length && i < editorHoleCount; i++) {
@@ -2680,6 +2781,322 @@ function clearCustomHoles() {
   btn.style.background = '#a44';
   setTimeout(() => { btn.textContent = 'Clear'; btn.style.background = ''; }, 1200);
   console.log('Cleared course data from localStorage');
+}
+
+// ── Hole Library ──────────────────────────────────────────
+
+async function loadHoleLibrary() {
+  // Try server file first
+  try {
+    const res = await fetch('data/hole-library.json');
+    if (res.ok) {
+      holeLibrary = await res.json();
+      // Also cache in localStorage
+      localStorage.setItem('dg-hole-library', JSON.stringify(holeLibrary));
+      console.log('Loaded hole library from server:', Object.keys(holeLibrary).length, 'holes');
+      return;
+    }
+  } catch (e) { /* ignore fetch errors */ }
+  // Fallback to localStorage
+  try {
+    const raw = localStorage.getItem('dg-hole-library');
+    if (raw) {
+      holeLibrary = JSON.parse(raw);
+      console.log('Loaded hole library from localStorage:', Object.keys(holeLibrary).length, 'holes');
+      return;
+    }
+  } catch (e) { /* ignore */ }
+  holeLibrary = {};
+  console.log('No hole library found, starting empty');
+}
+
+function saveHoleLibrary() {
+  // Save to server
+  fetch('/api/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file: 'data/hole-library.json', data: holeLibrary }),
+  }).then(r => r.json()).then(result => {
+    if (result.ok) {
+      console.log('Hole library saved to', result.path);
+    } else {
+      console.error('Hole library server save failed:', result.error);
+    }
+  }).catch(err => {
+    console.error('Hole library server save failed:', err.message);
+  });
+  // Also write to localStorage as backup
+  localStorage.setItem('dg-hole-library', JSON.stringify(holeLibrary));
+}
+
+function generateSlug(name) {
+  let base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  if (!base) base = 'hole';
+  let slug = base;
+  let n = 2;
+  while (holeLibrary[slug]) {
+    slug = base + '-' + n;
+    n++;
+  }
+  return slug;
+}
+
+function generateAutoName() {
+  const name = 'Custom Hole ' + nextCustomNumber;
+  nextCustomNumber++;
+  return name;
+}
+
+function onHoleNameChange(val) {
+  if (!customHoleIndices.has(currentHole)) return;
+  if (!customHoleMeta[currentHole]) customHoleMeta[currentHole] = {};
+  customHoleMeta[currentHole].name = val;
+  buildHoleList();
+}
+
+function onToggleTypeClick() {
+  const isCustom = customHoleIndices.has(currentHole);
+  if (isCustom) {
+    // Revert to auto
+    pushUndo();
+    customHoleIndices.delete(currentHole);
+    delete customHoleMeta[currentHole];
+    // Remove objects for this hole
+    for (let i = objects.length - 1; i >= 0; i--) {
+      if (objects[i].holeIndex === currentHole) objects.splice(i, 1);
+    }
+    regenerateCurrentHole();
+    buildHoleList();
+    goToHole(currentHole);
+  } else {
+    // Show dropdown
+    const dd = document.getElementById('custom-dropdown');
+    dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+function makeCustomNew() {
+  document.getElementById('custom-dropdown').style.display = 'none';
+  pushUndo();
+  customHoleIndices.add(currentHole);
+  const name = generateAutoName();
+  customHoleMeta[currentHole] = { name: name };
+  currentPresetIndex = 0;
+  applyPreset(currentPresetIndex);
+  buildHoleList();
+  goToHole(currentHole);
+}
+
+function openLibraryPicker() {
+  document.getElementById('custom-dropdown').style.display = 'none';
+  libraryPickMode = true;
+  toggleLibraryPanel(true);
+}
+
+function toggleLibraryPanel(show) {
+  const panel = document.getElementById('library-panel');
+  if (show) {
+    buildLibraryPanel();
+    panel.style.display = 'block';
+  } else {
+    panel.style.display = 'none';
+    libraryPickMode = false;
+  }
+}
+
+function buildLibraryPanel() {
+  const list = document.getElementById('library-list');
+  const slugs = Object.keys(holeLibrary);
+  if (slugs.length === 0) {
+    list.innerHTML = '<div style="color:#777; font-size:10px; padding:8px 0;">No holes saved yet. Use "Save Current to Library" below.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  for (const slug of slugs) {
+    const entry = holeLibrary[slug];
+    const div = document.createElement('div');
+    div.className = 'lib-item';
+
+    const nameDiv = document.createElement('div');
+    nameDiv.className = 'lib-item-name';
+    nameDiv.textContent = entry.name || slug;
+    div.appendChild(nameDiv);
+
+    const metaDiv = document.createElement('div');
+    metaDiv.className = 'lib-item-meta';
+    const dist = entry.dist || '?';
+    const objCount = entry.objects ? entry.objects.length : 0;
+    let metaText = `dist:${dist}`;
+    if (objCount > 0) metaText += ` objs:${objCount}`;
+    if (entry.createdFrom) metaText += ` fork:${entry.createdFrom}`;
+    metaDiv.textContent = metaText;
+    div.appendChild(metaDiv);
+
+    const actions = document.createElement('div');
+    actions.className = 'lib-item-actions';
+
+    if (libraryPickMode) {
+      const useBtn = document.createElement('button');
+      useBtn.className = 'ed-btn sm';
+      useBtn.textContent = 'Use';
+      useBtn.onclick = (e) => { e.stopPropagation(); useLibraryHole(slug); };
+      actions.appendChild(useBtn);
+    }
+
+    const forkBtn = document.createElement('button');
+    forkBtn.className = 'ed-btn sm';
+    forkBtn.textContent = 'Fork';
+    forkBtn.onclick = (e) => { e.stopPropagation(); forkLibraryHole(slug); };
+    actions.appendChild(forkBtn);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'ed-btn sm danger';
+    delBtn.textContent = 'Del';
+    delBtn.onclick = (e) => { e.stopPropagation(); deleteLibraryHole(slug); };
+    actions.appendChild(delBtn);
+
+    div.appendChild(actions);
+    list.appendChild(div);
+  }
+}
+
+function saveCurrentToLibrary() {
+  if (!customHoleIndices.has(currentHole)) {
+    // Auto-convert to custom first
+    customHoleIndices.add(currentHole);
+    if (!customHoleMeta[currentHole]) {
+      customHoleMeta[currentHole] = { name: generateAutoName() };
+    }
+  }
+  const meta = customHoleMeta[currentHole] || {};
+  const defaultName = meta.name || generateAutoName();
+  const name = prompt('Name for this library hole:', defaultName);
+  if (!name) return;
+
+  const slug = generateSlug(name);
+  const def = serializeHole(currentHole);
+  if (!def) { alert('Could not serialize current hole.'); return; }
+
+  holeLibrary[slug] = {
+    name: name,
+    createdFrom: meta.libraryRef || null,
+    teeY: def.teeY,
+    dist: def.dist,
+    cupY: def.cupY,
+    verts: def.verts,
+    objects: def.objects || [],
+  };
+  if (def.cupMat) holeLibrary[slug].cupMat = def.cupMat;
+
+  // Update the current hole's libraryRef
+  if (!customHoleMeta[currentHole]) customHoleMeta[currentHole] = {};
+  customHoleMeta[currentHole].name = name;
+  customHoleMeta[currentHole].libraryRef = slug;
+
+  saveHoleLibrary();
+  buildLibraryPanel();
+  buildHoleList();
+  console.log('Saved hole to library as:', slug);
+}
+
+function deleteLibraryHole(slug) {
+  const entry = holeLibrary[slug];
+  if (!entry) return;
+  if (!confirm('Delete library hole "' + (entry.name || slug) + '"?')) return;
+  delete holeLibrary[slug];
+  saveHoleLibrary();
+  buildLibraryPanel();
+}
+
+function useLibraryHole(slug) {
+  const entry = holeLibrary[slug];
+  if (!entry) return;
+
+  pushUndo();
+
+  // Mark as custom
+  customHoleIndices.add(currentHole);
+  customHoleMeta[currentHole] = {
+    name: entry.name,
+    libraryRef: slug,
+  };
+
+  // Apply the library hole's terrain to the current slot
+  // We do this by injecting into HAND_DEFINED_HOLES temporarily and regenerating
+  const holeDef = {
+    teeY: entry.teeY,
+    dist: entry.dist,
+    cupY: entry.cupY,
+    verts: entry.verts ? entry.verts.map(v => ({...v})) : [],
+    objects: entry.objects ? entry.objects.map(o => ({
+      mat: o.mat,
+      verts: o.verts.map(v => ({...v})),
+      sprite: o.sprite,
+      rotation: o.rotation,
+    })) : [],
+  };
+  if (entry.cupMat) holeDef.cupMat = entry.cupMat;
+
+  // Store in localStorage custom holes so the generator picks it up
+  const customHolesRaw = localStorage.getItem('desert-golfing-custom-holes');
+  let customHoles = {};
+  try { if (customHolesRaw) customHoles = JSON.parse(customHolesRaw); } catch(e) {}
+  customHoles[String(currentHole)] = holeDef;
+  localStorage.setItem('desert-golfing-custom-holes', JSON.stringify(customHoles));
+  invalidateCustomHolesCache();
+
+  // Regenerate terrain for this hole
+  const savedLength = holes.length;
+  const hole = holes[currentHole];
+  if (hole) {
+    // Remove vertices in this hole's range
+    const teeX = hole.teeX;
+    const startX = teeX + 40;
+    const nextHole = currentHole < holes.length - 1 ? holes[currentHole + 1] : null;
+    const endX = nextHole ? nextHole.teeX + 40 : hole.cupX + 200;
+    vertices = vertices.filter(v => v.x < startX || v.x > endX);
+  }
+  holes.length = currentHole;
+  generateHoleTerrain(currentHole);
+  if (savedLength > currentHole + 1) {
+    ensureHolesAhead(savedLength - 1);
+  }
+
+  toggleLibraryPanel(false);
+  buildHoleList();
+  goToHole(currentHole);
+}
+
+function forkLibraryHole(slug) {
+  const entry = holeLibrary[slug];
+  if (!entry) return;
+  const name = prompt('Name for forked hole:', entry.name + ' (fork)');
+  if (!name) return;
+
+  const newSlug = generateSlug(name);
+  holeLibrary[newSlug] = {
+    name: name,
+    createdFrom: slug,
+    teeY: entry.teeY,
+    dist: entry.dist,
+    cupY: entry.cupY,
+    verts: entry.verts ? entry.verts.map(v => ({...v})) : [],
+    objects: entry.objects ? entry.objects.map(o => ({
+      mat: o.mat,
+      verts: o.verts.map(v => ({...v})),
+      sprite: o.sprite,
+      rotation: o.rotation,
+    })) : [],
+  };
+  if (entry.cupMat) holeLibrary[newSlug].cupMat = entry.cupMat;
+
+  saveHoleLibrary();
+  buildLibraryPanel();
+
+  // If in pick mode, use the fork immediately
+  if (libraryPickMode) {
+    useLibraryHole(newSlug);
+  }
 }
 
 // ── Shot Loop — ghost ball management ─────────────────────
