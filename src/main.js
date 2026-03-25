@@ -24,6 +24,8 @@ function initSeed() {
 
 // ── Init ───────────────────────────────────────────────────
 async function init() {
+  // Initialize Firebase (auth + cloud saves)
+  if (typeof initFirebase === 'function') initFirebase();
   // Initialize seed before anything generates terrain
   initSeed();
   // Preload course data from server JSON before game init

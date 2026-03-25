@@ -1,0 +1,169 @@
+// ── Firebase Integration ─────────────────────────────────────
+// Google Auth + Firestore cloud saves for cross-device progression.
+// Loads via CDN script tags (no bundler needed).
+
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCECzhZ8aX8jTNtIuP2SJLmASV2842hon0",
+  authDomain: "terrain-golf.firebaseapp.com",
+  projectId: "terrain-golf",
+  storageBucket: "terrain-golf.firebasestorage.app",
+  messagingSenderId: "868829319435",
+  appId: "1:868829319435:web:0bf9b449d60362848f120e"
+};
+
+// Globals set after Firebase loads
+let firebaseApp = null;
+let firebaseAuth = null;
+let firebaseDb = null;
+let currentUser = null;
+
+// ── Initialize Firebase ──────────────────────────────────────
+function initFirebase() {
+  if (!window.firebase) {
+    console.warn('Firebase SDK not loaded');
+    return;
+  }
+  firebaseApp = firebase.initializeApp(FIREBASE_CONFIG);
+  firebaseAuth = firebase.auth();
+  firebaseDb = firebase.firestore();
+
+  // Listen for auth state changes
+  firebaseAuth.onAuthStateChanged(user => {
+    currentUser = user;
+    if (user) {
+      console.log('Signed in as', user.displayName);
+      loadPlayerData();
+    } else {
+      console.log('Not signed in');
+    }
+    updateAuthUI();
+  });
+}
+
+// ── Auth ─────────────────────────────────────────────────────
+function signInWithGoogle() {
+  if (!firebaseAuth) return;
+  const provider = new firebase.auth.GoogleAuthProvider();
+  firebaseAuth.signInWithPopup(provider).catch(err => {
+    console.error('Sign-in failed:', err);
+  });
+}
+
+function signOut() {
+  if (!firebaseAuth) return;
+  firebaseAuth.signOut();
+}
+
+// ── Player Data ──────────────────────────────────────────────
+// Data model:
+// {
+//   currentCourse: "desert-world-1/desert-course-1",
+//   currentHole: 0,
+//   currentStrokes: 0,
+//   totalStrokes: 0,
+//   completed: {
+//     "desert-world-1/desert-course-1": { best: 47, attempts: 3 },
+//     ...
+//   }
+// }
+
+let playerData = {
+  currentCourse: null,
+  currentHole: 0,
+  currentStrokes: 0,
+  totalStrokes: 0,
+  completed: {}
+};
+
+function getPlayerDocRef() {
+  if (!firebaseDb || !currentUser) return null;
+  return firebaseDb.collection('players').doc(currentUser.uid);
+}
+
+async function loadPlayerData() {
+  const ref = getPlayerDocRef();
+  if (!ref) return;
+  try {
+    const doc = await ref.get();
+    if (doc.exists) {
+      playerData = { ...playerData, ...doc.data() };
+      console.log('Loaded cloud save:', playerData);
+    } else {
+      // First time player — save initial data
+      await savePlayerData();
+      console.log('Created new cloud save');
+    }
+  } catch (err) {
+    console.error('Failed to load player data:', err);
+  }
+}
+
+async function savePlayerData() {
+  const ref = getPlayerDocRef();
+  if (!ref) {
+    // Not signed in — save to localStorage as fallback
+    localStorage.setItem('dg-player-data', JSON.stringify(playerData));
+    return;
+  }
+  try {
+    await ref.set(playerData, { merge: true });
+    // Also save locally for fast access
+    localStorage.setItem('dg-player-data', JSON.stringify(playerData));
+  } catch (err) {
+    console.error('Failed to save player data:', err);
+    // Fallback to localStorage
+    localStorage.setItem('dg-player-data', JSON.stringify(playerData));
+  }
+}
+
+function recordCourseComplete(worldId, courseId, strokes) {
+  const key = worldId + '/' + courseId;
+  const existing = playerData.completed[key];
+  if (!existing) {
+    playerData.completed[key] = { best: strokes, attempts: 1 };
+  } else {
+    existing.attempts++;
+    if (strokes < existing.best) existing.best = strokes;
+  }
+  playerData.totalStrokes += strokes;
+  savePlayerData();
+}
+
+function updateProgress(worldId, courseId, holeIndex, strokes) {
+  playerData.currentCourse = worldId + '/' + courseId;
+  playerData.currentHole = holeIndex;
+  playerData.currentStrokes = strokes;
+  // Don't save on every stroke — save periodically or on hole complete
+}
+
+function isCourseCompleted(worldId, courseId) {
+  return !!playerData.completed[worldId + '/' + courseId];
+}
+
+function getCourseBest(worldId, courseId) {
+  const data = playerData.completed[worldId + '/' + courseId];
+  return data ? data.best : null;
+}
+
+// ── Auth UI ──────────────────────────────────────────────────
+function updateAuthUI() {
+  const btn = document.getElementById('auth-btn');
+  const nameEl = document.getElementById('auth-name');
+  if (!btn) return;
+
+  if (currentUser) {
+    btn.textContent = 'Sign Out';
+    btn.onclick = signOut;
+    if (nameEl) nameEl.textContent = currentUser.displayName || 'Player';
+  } else {
+    btn.textContent = 'Sign In';
+    btn.onclick = signInWithGoogle;
+    if (nameEl) nameEl.textContent = '';
+  }
+}
+
+// Load local data on startup (before Firebase loads)
+try {
+  const local = JSON.parse(localStorage.getItem('dg-player-data'));
+  if (local) playerData = { ...playerData, ...local };
+} catch (e) {}
