@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Desert Golfing — Editor</title>
+<title>Desert Golfing — Editor v2b (Mario Maker Style)</title>
 <style>
   @font-face {
     font-family: 'Departure Mono';
@@ -18,101 +18,247 @@
   html, body { width: 100%; height: 100%; overflow: hidden; background: #d5ad72; }
   canvas { display: block; cursor: crosshair; }
 
-  /* ── Editor chrome — one connected L-shaped frame ── */
-  #editor-chrome {
-    position: fixed; top: 0; left: 0; z-index: 10;
-    color: #eee; font: 13px 'Departure Mono', monospace;
-    pointer-events: none;
+  /* ── V2B: Mario Maker Style — Floating UI ── */
+
+  /* ── Floating Edit/Play toggle pill — bottom-left in Edit, tiny corner btn in Play ── */
+  #mode-pill {
+    position: fixed; bottom: 24px; left: 24px;
+    z-index: 100; pointer-events: auto;
+    display: flex; border-radius: 20px; overflow: hidden;
+    border: 1.5px solid rgba(255,255,255,0.18);
+    background: rgba(30,25,20,0.75); backdrop-filter: blur(12px);
+    box-shadow: 0 2px 16px rgba(0,0,0,0.35);
+    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  #mode-pill .mode-btn {
+    border: none; border-radius: 0; padding: 9px 28px;
+    font: bold 13px 'Departure Mono', monospace; letter-spacing: 1.5px;
+    background: transparent; color: rgba(255,255,255,0.45);
+    cursor: pointer; transition: all 0.2s ease;
+  }
+  #mode-pill .mode-btn:hover { background: rgba(255,255,255,0.08); color: #ccc; }
+  #mode-pill .mode-btn.active {
+    background: #e8a030; color: #1a1510;
+    box-shadow: inset 0 0 12px rgba(0,0,0,0.1);
+  }
+  #mode-pill .mode-btn + .mode-btn { border-left: 1px solid rgba(255,255,255,0.1); }
+
+  /* Play mode: pill shrinks to a tiny "EDIT" button in top-right corner */
+  body.play-mode #mode-pill {
+    bottom: auto; top: 16px; right: 16px; left: auto;
+    border-radius: 16px; opacity: 0.5;
+    border-color: rgba(255,255,255,0.1);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+  body.play-mode #mode-pill:hover {
+    opacity: 1;
+  }
+  body.play-mode #mode-pill .mode-btn {
+    padding: 6px 16px; font-size: 11px;
+  }
+  /* Hide the PLAY button in play mode — only show EDIT to go back */
+  body.play-mode #mode-pill #btn-play { display: none; }
+
+  /* ── Floating hole navigator — top left ── */
+  #hole-navigator {
+    position: fixed; top: 16px; left: 16px; z-index: 90;
+    pointer-events: auto;
+    font: 12px 'Departure Mono', monospace; color: #eee;
+    transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  #hole-nav-bar {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(30,25,20,0.75); backdrop-filter: blur(12px);
+    border-radius: 20px; padding: 8px 16px;
+    border: 1.5px solid rgba(255,255,255,0.1);
+    cursor: pointer; user-select: none;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.3);
+    transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+  }
+  #hole-nav-bar:hover { background: rgba(30,25,20,0.88); border-color: rgba(255,255,255,0.15); box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+  #hole-nav-bar .nav-arrow {
+    background: none; border: none; color: #e8a030; font-size: 14px;
+    cursor: pointer; padding: 4px 8px; border-radius: 6px;
+    font-family: 'Departure Mono', monospace;
+    transition: background 0.15s, transform 0.1s;
+  }
+  #hole-nav-bar .nav-arrow:hover { background: rgba(232,160,48,0.2); }
+  #hole-nav-bar .nav-arrow:active { transform: scale(0.9); }
+  #hole-nav-label {
+    font-size: 12px; color: #ddd; min-width: 90px; text-align: center;
+    font-weight: bold; cursor: pointer; letter-spacing: 0.5px;
   }
 
-  /* Top bar row */
-  #top-bar {
-    display: flex; align-items: center; padding: 4px 8px; gap: 4px;
-    width: 100vw;
-    background: rgba(30,25,20,0.7); backdrop-filter: blur(4px);
-    pointer-events: auto;
+  /* Expanded hole list dropdown */
+  #hole-list-dropdown {
+    display: none; position: absolute; top: 100%; left: 0; margin-top: 8px;
+    background: rgba(30,25,20,0.92); backdrop-filter: blur(16px);
+    border-radius: 14px; border: 1.5px solid rgba(255,255,255,0.1);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.2);
+    min-width: 200px; max-height: 60vh; overflow-y: auto;
+    padding: 6px 0;
+    animation: slideDown 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
-
-  /* Bottom section: hole list sits below the top bar, flush with course group */
-  #hole-nav {
-    display: flex; flex-direction: column;
-    padding: 2px 0 4px;
-    background: rgba(30,25,20,0.7); backdrop-filter: blur(4px);
-    border-radius: 0 0 8px 0;
-    pointer-events: auto;
+  /* Custom scrollbar for dropdown */
+  #hole-list-dropdown::-webkit-scrollbar { width: 6px; }
+  #hole-list-dropdown::-webkit-scrollbar-track { background: transparent; margin: 8px 0; }
+  #hole-list-dropdown::-webkit-scrollbar-thumb {
+    background: rgba(232,160,48,0.3); border-radius: 3px;
+  }
+  #hole-list-dropdown::-webkit-scrollbar-thumb:hover { background: rgba(232,160,48,0.5); }
+  #hole-list-dropdown.open { display: block; }
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
   }
   #hole-list {
-    display: flex; flex-direction: column;
+    display: flex; flex-direction: column; gap: 1px;
   }
   .hole-item {
-    padding: 3px 10px; cursor: pointer; font-size: 12px;
-    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 14px 8px 12px; cursor: pointer; font-size: 11px;
+    display: grid; grid-template-columns: 24px 1fr;
+    align-items: baseline;
     border-left: 3px solid transparent;
+    transition: background 0.15s, border-color 0.15s;
   }
-  .hole-item:hover { background: rgba(255,255,255,0.1); }
-  .hole-item.active { border-left-color: #e8a030; background: rgba(232,160,48,0.2); }
-  .hole-item .type { font-size: 9px; color: #777; }
-  .hole-item.custom .type { color: #e8a030; }
-  .hole-item.active.custom .type { color: #fff; }
+  .hole-item:hover { background: rgba(255,255,255,0.07); }
+  .hole-item.active { border-left-color: #e8a030; background: rgba(232,160,48,0.12); }
+  .hole-item .hole-num { font-size: 10px; color: #555; font-variant-numeric: tabular-nums; }
+  .hole-item.active .hole-num { color: #e8a030; font-weight: bold; }
+  .hole-item .hole-info { display: flex; flex-direction: column; gap: 1px; overflow: hidden; }
+  .hole-item .type { font-size: 9px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hole-item.custom .type { color: #c08020; }
+  .hole-item.active .type { color: #999; }
+  .hole-item.active.custom .type { color: #e8a030; }
+  .hole-item .hole-name { font-size: 10px; color: #aaa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hole-item.custom .hole-name { color: #e8a030; }
+  .hole-item.active .hole-name { color: #fff; }
 
+  /* Hole name input inside dropdown */
+  #hole-name-bar {
+    display: none; padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+
+  /* ── Floating gear button — top right ── */
+  #gear-btn {
+    position: fixed; top: 16px; right: 16px; z-index: 90;
+    pointer-events: auto;
+    background: rgba(30,25,20,0.75); backdrop-filter: blur(12px);
+    border: 1.5px solid rgba(255,255,255,0.1); border-radius: 50%; width: 42px; height: 42px;
+    color: #bbb; font-size: 20px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.3);
+    transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.2s, opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    font-family: 'Departure Mono', monospace;
+  }
+  #gear-btn:hover { background: rgba(30,25,20,0.9); color: #e8a030; border-color: rgba(232,160,48,0.3); transform: rotate(30deg); }
+
+  /* ── Settings overlay — from gear button ── */
+  #settings-overlay {
+    position: fixed; top: 68px; right: 16px; z-index: 200;
+    background: rgba(28,24,18,0.92); backdrop-filter: blur(20px);
+    border-radius: 16px; border: 1.5px solid rgba(255,255,255,0.1);
+    box-shadow: 0 12px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.15);
+    padding: 20px 24px; min-width: 300px;
+    font: 12px 'Departure Mono', monospace; color: #ddd;
+    /* CSS-driven open/close with opacity+transform */
+    opacity: 0; transform: translateY(-10px) scale(0.97);
+    pointer-events: none;
+    transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  #settings-overlay.open {
+    opacity: 1; transform: translateY(0) scale(1);
+    pointer-events: auto;
+  }
+  .settings-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin: -4px -4px 12px; padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .settings-header-title {
+    font-size: 13px; font-weight: bold; color: #e8a030; letter-spacing: 1px;
+  }
+  .settings-close-btn {
+    background: none; border: none; color: #666; font-size: 16px;
+    cursor: pointer; padding: 4px 8px; border-radius: 6px;
+    font-family: 'Departure Mono', monospace;
+    transition: color 0.15s, background 0.15s;
+  }
+  .settings-close-btn:hover { color: #e8a030; background: rgba(255,255,255,0.06); }
+  .settings-section-title {
+    font-size: 8px; letter-spacing: 1.5px; text-transform: uppercase;
+    color: rgba(232,160,48,0.45); margin: 14px 0 6px; padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .settings-section-title:first-of-type { margin-top: 0; }
+  .settings-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 0;
+  }
+  .settings-row + .settings-row { border-top: 1px solid rgba(255,255,255,0.03); }
+  .settings-label {
+    color: #e8a030; font-size: 9px; letter-spacing: 0.5px;
+    text-transform: uppercase; min-width: 60px;
+  }
+  .settings-row .ed-btn { margin-left: auto; }
+
+  /* ── Bottom floating toolbar — tool icons ── */
+  #bottom-toolbar {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    z-index: 90; pointer-events: auto;
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(28,24,18,0.78); backdrop-filter: blur(16px);
+    border-radius: 16px; padding: 10px 20px;
+    border: 1.5px solid rgba(255,255,255,0.1);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(0,0,0,0.12);
+    font: 11px 'Departure Mono', monospace; color: #ddd;
+    transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1), transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  #bottom-toolbar.hidden {
+    opacity: 0; transform: translateX(-50%) translateY(24px);
+    pointer-events: none;
+  }
+  .tb-sep { width: 1px; height: 28px; background: rgba(255,255,255,0.08); margin: 0 8px; flex-shrink: 0; }
   .tb-group {
-    display: flex; align-items: center; gap: 4px;
-    padding: 4px 8px;
-    background: rgba(255,255,255,0.04);
-    border-radius: 4px;
+    display: flex; align-items: center; gap: 5px;
   }
-  .tb-group + .tb-group { margin-left: 2px; }
-  .tb-label { color: #e8a030; font-size: 9px; letter-spacing: 0.5px; margin-right: 2px; }
-  .tb-sep { width: 1px; height: 20px; background: rgba(255,255,255,0.1); margin: 0 2px; }
+  .tb-label { color: rgba(232,160,48,0.55); font-size: 8px; letter-spacing: 1.2px; margin-right: 6px; text-transform: uppercase; font-weight: bold; }
 
+  /* ── Shared button styles ── */
   .ed-btn {
-    background: rgba(255,255,255,0.08); color: #ccc; border: 1px solid rgba(255,255,255,0.12);
-    padding: 4px 8px; border-radius: 3px;
+    background: rgba(255,255,255,0.07); color: #bbb; border: 1px solid rgba(255,255,255,0.1);
+    padding: 6px 12px; border-radius: 8px;
     font: 11px 'Departure Mono', monospace; cursor: pointer; text-align: center;
-    white-space: nowrap; transition: background 0.1s;
+    white-space: nowrap; transition: all 0.15s ease;
+    min-width: 36px;
   }
-  .ed-btn:hover { background: rgba(255,255,255,0.16); color: #fff; }
-  .ed-btn.active { background: #e8a030; color: #222; border-color: #e8a030; }
-  .ed-btn.danger { background: rgba(180,50,50,0.5); border-color: rgba(200,70,70,0.5); }
-  .ed-btn.danger:hover { background: rgba(200,70,70,0.7); }
-  .ed-btn.sm { padding: 2px 6px; font-size: 10px; }
-
-  /* Edit/Play mode toggle — prominent segmented pill */
-  .mode-toggle {
-    display: flex; border-radius: 5px; overflow: hidden;
-    border: 1px solid rgba(255,255,255,0.15);
-    margin: 0 4px;
-  }
-  .mode-toggle .ed-btn {
-    border: none; border-radius: 0; padding: 6px 16px;
-    font-size: 13px; letter-spacing: 0.5px;
-    background: rgba(255,255,255,0.06); color: #888;
-  }
-  .mode-toggle .ed-btn:hover { background: rgba(255,255,255,0.12); color: #ccc; }
-  .mode-toggle .ed-btn.active {
-    background: #e8a030; color: #1a1510; font-weight: bold;
-    box-shadow: 0 0 8px rgba(232,160,48,0.3);
-  }
-  .mode-toggle .ed-btn + .ed-btn { border-left: 1px solid rgba(255,255,255,0.1); }
+  .ed-btn:hover { background: rgba(255,255,255,0.14); color: #fff; border-color: rgba(255,255,255,0.18); }
+  .ed-btn:active { transform: scale(0.95); }
+  .ed-btn.active { background: #e8a030; color: #1a1510; border-color: #e8a030; font-weight: bold; }
+  .ed-btn.danger { background: rgba(180,50,50,0.4); border-color: rgba(200,70,70,0.4); color: #e88; }
+  .ed-btn.danger:hover { background: rgba(200,70,70,0.6); color: #fff; }
+  .ed-btn.sm { padding: 4px 8px; font-size: 10px; min-width: 28px; }
 
   .ed-select {
-    background: rgba(255,255,255,0.08); color: #ddd; border: 1px solid rgba(255,255,255,0.12);
-    padding: 3px 4px; border-radius: 3px;
-    font: 10px 'Departure Mono', monospace;
+    background: rgba(255,255,255,0.07); color: #ddd; border: 1px solid rgba(255,255,255,0.1);
+    padding: 5px 8px; border-radius: 8px;
+    font: 11px 'Departure Mono', monospace;
+    transition: border-color 0.15s;
   }
   .ed-input {
-    background: rgba(255,255,255,0.06); color: #ddd; border: 1px solid rgba(255,255,255,0.1);
-    padding: 3px 6px; border-radius: 3px;
-    font: 10px 'Departure Mono', monospace;
+    background: rgba(255,255,255,0.05); color: #ddd; border: 1px solid rgba(255,255,255,0.08);
+    padding: 5px 10px; border-radius: 8px;
+    font: 11px 'Departure Mono', monospace;
+    transition: border-color 0.15s;
   }
-  .ed-input:focus, .ed-select:focus { outline: none; border-color: #e8a030; }
+  .ed-input:focus, .ed-select:focus { outline: none; border-color: #e8a030; box-shadow: 0 0 0 2px rgba(232,160,48,0.15); }
 
   #preset-bar {
-    display: none; align-items: center; gap: 2px;
+    display: none; align-items: center; gap: 4px;
   }
   #preset-bar.visible { display: flex; }
   #preset-bar .preset-name {
-    font-size: 9px; color: #ccc; min-width: 50px; text-align: center;
+    font-size: 10px; color: #ccc; min-width: 56px; text-align: center;
   }
 
   #props-group { display: none; }
@@ -122,140 +268,228 @@
   #asset-picker option { color: #ddd; background: #444; padding: 2px 8px; }
 
   #mode-badge {
-    position: fixed; top: 38px; right: 10px;
-    font: 11px 'Departure Mono', monospace; color: #e8a030;
-    z-index: 10; pointer-events: none;
+    position: fixed; bottom: 68px; left: 28px;
+    font: 9px 'Departure Mono', monospace; color: rgba(232,160,48,0.4);
+    letter-spacing: 0.5px;
+    z-index: 90; pointer-events: none;
+    transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   /* Dropdown for Set Custom */
+  #custom-dropdown {
+    margin-top: 4px; padding: 4px 0;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    border-radius: 6px !important;
+    border-color: rgba(255,255,255,0.12) !important;
+    overflow: hidden;
+  }
   .dropdown-item {
-    padding: 6px 12px; cursor: pointer; color: #ddd;
+    padding: 9px 16px; cursor: pointer; color: #bbb;
     font: 11px 'Departure Mono', monospace;
+    transition: background 0.15s, color 0.15s;
   }
-  .dropdown-item:hover { background: rgba(232,160,48,0.3); color: #e8a030; }
+  .dropdown-item:hover { background: rgba(232,160,48,0.2); color: #e8a030; }
+  .dropdown-item:active { background: rgba(232,160,48,0.35); transform: scale(0.98); }
 
-  /* Library panel */
+  /* ── Library panel ── */
   #library-panel {
-    display: none; position: fixed; right: 0; top: 0; width: 280px; height: 100%;
-    background: rgba(30,25,20,0.95); border-left: 2px solid #555; z-index: 200;
-    overflow-y: auto; padding: 10px;
+    display: none; position: fixed; right: 0; top: 0; width: 320px; height: 100%;
+    background: rgba(28,24,18,0.96); backdrop-filter: blur(20px);
+    border-left: 1px solid rgba(232,160,48,0.1); z-index: 200;
+    overflow-y: auto; padding: 0;
     font: 12px 'Departure Mono', monospace; color: #ddd;
+    box-shadow: -12px 0 48px rgba(0,0,0,0.45);
+    transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
+  #library-panel.open { display: block; transform: translateX(0); }
+  /* Custom scrollbar for library */
+  #library-panel::-webkit-scrollbar { width: 6px; }
+  #library-panel::-webkit-scrollbar-track { background: transparent; }
+  #library-panel::-webkit-scrollbar-thumb { background: rgba(232,160,48,0.25); border-radius: 3px; }
+  #library-panel::-webkit-scrollbar-thumb:hover { background: rgba(232,160,48,0.4); }
+  .lib-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    position: sticky; top: 0; background: rgba(26,22,18,0.98); backdrop-filter: blur(12px); z-index: 1;
+  }
+  .lib-header-title { color: #e8a030; font-size: 13px; font-weight: bold; letter-spacing: 1px; }
+  .lib-header .ed-btn { background: none; border: none; color: #555; font-size: 16px; padding: 4px 8px; border-radius: 6px; }
+  .lib-header .ed-btn:hover { color: #e8a030; background: rgba(255,255,255,0.05); }
+  .lib-body { padding: 12px 16px; }
+  .lib-empty { color: #555; font-size: 10px; padding: 24px 12px; text-align: center; line-height: 1.8; }
   .lib-item {
-    padding: 6px 8px; margin-bottom: 4px; border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 4px; background: rgba(255,255,255,0.03);
+    padding: 12px 14px; margin-bottom: 8px;
+    border: 1px solid rgba(255,255,255,0.05);
+    border-left: 3px solid rgba(232,160,48,0.25);
+    border-radius: 10px; background: rgba(255,255,255,0.02);
+    transition: all 0.2s ease;
   }
-  .lib-item:hover { background: rgba(255,255,255,0.06); }
-  .lib-item-name { color: #e8a030; font-size: 11px; margin-bottom: 4px; }
-  .lib-item-meta { color: #777; font-size: 9px; margin-bottom: 4px; }
-  .lib-item-actions { display: flex; gap: 4px; }
+  .lib-item:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); border-left-color: #e8a030; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+  .lib-item-name { color: #e8a030; font-size: 12px; margin-bottom: 4px; font-weight: bold; }
+  .lib-item-meta { color: #666; font-size: 9px; margin-bottom: 10px; letter-spacing: 0.3px; }
+  .lib-item-actions { display: flex; gap: 6px; justify-content: flex-end; }
+  .lib-save-btn {
+    display: block; width: calc(100% - 24px); margin: 16px auto;
+    padding: 10px 14px; text-align: center;
+    background: rgba(232,160,48,0.08); color: #e8a030;
+    border: 1px dashed rgba(232,160,48,0.25); border-radius: 10px;
+    font: 11px 'Departure Mono', monospace; cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .lib-save-btn:hover { background: rgba(232,160,48,0.18); border-color: rgba(232,160,48,0.5); border-style: solid; }
+
+  /* ── Play mode: gracefully fade away all editor chrome ── */
+  body.play-mode #hole-navigator,
+  body.play-mode #gear-btn,
+  body.play-mode #bottom-toolbar,
+  body.play-mode #mode-badge {
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  body.play-mode #bottom-toolbar {
+    transform: translateX(-50%) translateY(30px);
+  }
+  body.play-mode #hole-navigator {
+    transform: translateX(-20px);
+  }
+  body.play-mode #gear-btn {
+    transform: translateX(20px);
+  }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 
-<!-- One connected L-shaped editor chrome -->
-<div id="editor-chrome">
-  <!-- Top bar row -->
-  <div id="top-bar">
-    <!-- Course: selection + name + hole count — one cohesive section -->
-    <div class="tb-group">
-      <span class="tb-label">COURSE</span>
-      <select class="ed-select" id="course-picker" onchange="onCoursePick()" style="min-width:80px"></select>
-      <button class="ed-btn sm" onclick="createNewCourse()" title="New course">+</button>
-      <button class="ed-btn sm" onclick="deleteCourse()" title="Delete course" style="color:#e55">✕</button>
-      <div class="tb-sep"></div>
-      <input class="ed-input" id="course-name" type="text" value="" style="width:90px" onchange="onMetadataChange()" title="Display name" />
-      <div class="tb-sep"></div>
-      <button class="ed-btn sm" onclick="adjustHoleCount(-1)">◀</button>
-      <span id="hole-count-label" style="font-size:10px; color:#999; min-width:40px; text-align:center">10</span>
-      <button class="ed-btn sm" onclick="adjustHoleCount(1)">▶</button>
-    </div>
+<!-- V2B: Floating Edit/Play pill — always visible -->
+<div id="mode-pill">
+  <button class="mode-btn active" id="btn-edit" onclick="switchMode('edit')">EDIT</button>
+  <button class="mode-btn" id="btn-play" onclick="switchMode('play')">PLAY</button>
+</div>
 
-    <!-- World -->
-    <div class="tb-group">
-      <span class="tb-label">WORLD</span>
-      <select class="ed-select" id="world-picker" onchange="onWorldPick()" style="min-width:90px"></select>
-    </div>
+<!-- V2B: Floating mode badge — below pill -->
+<div id="mode-badge"></div>
 
-    <!-- Mode toggle — primary interaction -->
-    <div class="mode-toggle">
-      <button class="ed-btn active" id="btn-edit" onclick="switchMode('edit')">Edit</button>
-      <button class="ed-btn" id="btn-play" onclick="switchMode('play')">Play</button>
-    </div>
-
-    <!-- Hole type + preset -->
-    <div class="tb-group">
-      <span class="tb-label">HOLE</span>
-      <div style="position:relative; display:inline-block;" id="type-toggle-wrapper">
-        <button class="ed-btn" id="btn-toggle-type" onclick="onToggleTypeClick()"></button>
-        <div id="custom-dropdown" style="display:none; position:absolute; top:100%; left:0; z-index:100; background:rgba(30,25,20,0.95); border:1px solid #555; border-radius:4px; min-width:140px;">
-          <div class="dropdown-item" onclick="makeCustomNew()">New Custom</div>
-          <div class="dropdown-item" onclick="openLibraryPicker()">From Library...</div>
-        </div>
-      </div>
-      <input class="ed-input" id="hole-name-input" type="text" placeholder="Hole name..."
-             style="width:140px; display:none;" onchange="onHoleNameChange(this.value)" />
-      <div id="preset-bar">
-        <button class="ed-btn sm" onclick="cyclePreset(-1)">◀</button>
-        <span class="preset-name" id="preset-name">Flat</span>
-        <button class="ed-btn sm" onclick="cyclePreset(1)">▶</button>
-      </div>
-    </div>
-
-    <!-- Add objects -->
-    <div class="tb-group">
-      <span class="tb-label">ADD</span>
-      <button class="ed-btn" onclick="addObject('square')">Sq</button>
-      <button class="ed-btn" onclick="addObject('rect')">Rect</button>
-      <button class="ed-btn" onclick="addObject('tri')">Tri</button>
-      <button class="ed-btn" onclick="addObject('circle')">Cir</button>
-      <div class="tb-sep"></div>
-      <select class="ed-select" id="asset-picker" style="min-width:80px"></select>
-      <button class="ed-btn" onclick="placeSelectedAsset()">Place</button>
-    </div>
-
-    <!-- Tools + selection props -->
-    <div class="tb-group">
-      <button class="ed-btn" id="btn-knife" onclick="toggleKnifeTool()">Knife</button>
-      <button class="ed-btn" onclick="editorUndo()">Undo</button>
-    </div>
-    <div class="tb-group" id="props-group">
-      <span class="tb-label">MAT</span>
-      <select class="ed-select" id="mat-picker" onchange="onMaterialChange()">
-        <option value="sand">Sand</option>
-        <option value="grass">Grass</option>
-        <option value="ice">Ice</option>
-        <option value="rock">Rock</option>
-        <option value="mud">Mud</option>
-      </select>
-      <button class="ed-btn danger" id="btn-delete" onclick="deleteSelected()">Del</button>
-    </div>
-
-    <!-- File ops — pushed right -->
-    <div class="tb-group" style="margin-left:auto">
-      <button class="ed-btn" onclick="toggleLibraryPanel(true)">Library</button>
-      <button class="ed-btn" onclick="resetBallToTee()">Reset</button>
-      <button class="ed-btn" id="btn-save" onclick="saveCustomHoles()">Save</button>
-      <button class="ed-btn danger" id="btn-clear" onclick="clearCustomHoles()">Clear</button>
-    </div>
+<!-- V2B: Floating hole navigator — top left -->
+<div id="hole-navigator">
+  <div id="hole-nav-bar">
+    <button class="nav-arrow" onclick="event.stopPropagation(); goToHole(currentHole - 1)">&#9664;</button>
+    <span id="hole-nav-label" onclick="toggleHoleListDropdown()">Hole 1/9</span>
+    <button class="nav-arrow" onclick="event.stopPropagation(); goToHole(currentHole + 1)">&#9654;</button>
   </div>
-  <!-- Hole list below top bar -->
-  <div id="hole-nav">
-    <div id="hole-list" style="overflow-y:auto; max-height:calc(100vh - 60px)"></div>
+  <!-- Expandable hole list -->
+  <div id="hole-list-dropdown">
+    <div id="hole-name-bar" style="display:none; padding:6px 10px; border-bottom:1px solid rgba(255,255,255,0.06);">
+      <input class="ed-input" id="hole-name-input" type="text" placeholder="Hole name..."
+             style="width:100%; font-size:11px; padding:4px 8px;" onchange="onHoleNameChange(this.value)" />
+    </div>
+    <div id="hole-list"></div>
   </div>
 </div>
 
-<div id="mode-badge"></div>
+<!-- V2B: Floating gear button — top right -->
+<button id="gear-btn" onclick="toggleSettingsOverlay()">&#9881;</button>
+
+<!-- V2B: Settings overlay (course/world/hole config) -->
+<div id="settings-overlay">
+  <div class="settings-header">
+    <span class="settings-header-title">Settings</span>
+    <button class="settings-close-btn" onclick="toggleSettingsOverlay()">&#10005;</button>
+  </div>
+  <div class="settings-section-title">Course</div>
+  <div class="settings-row">
+    <span class="settings-label">COURSE</span>
+    <select class="ed-select" id="course-picker" onchange="onCoursePick()" style="min-width:80px"></select>
+    <button class="ed-btn sm" onclick="createNewCourse()" title="New course">+</button>
+    <button class="ed-btn sm danger" onclick="deleteCourse()" title="Delete course">&#10005;</button>
+  </div>
+  <div class="settings-row">
+    <span class="settings-label">NAME</span>
+    <input class="ed-input" id="course-name" type="text" value="" style="width:120px" onchange="onMetadataChange()" title="Display name" />
+  </div>
+  <div class="settings-row">
+    <span class="settings-label">WORLD</span>
+    <select class="ed-select" id="world-picker" onchange="onWorldPick()" style="min-width:100px"></select>
+  </div>
+  <div class="settings-section-title">Current Hole</div>
+  <div class="settings-row">
+    <span class="settings-label">HOLES</span>
+    <button class="ed-btn sm" onclick="adjustHoleCount(-1)">&#9664;</button>
+    <span id="hole-count-label" style="font-size:11px; color:#999; min-width:36px; text-align:center">10</span>
+    <button class="ed-btn sm" onclick="adjustHoleCount(1)">&#9654;</button>
+  </div>
+  <div class="settings-row">
+    <span class="settings-label">TYPE</span>
+    <div style="position:relative; display:inline-block;" id="type-toggle-wrapper">
+      <button class="ed-btn" id="btn-toggle-type" onclick="onToggleTypeClick()"></button>
+      <div id="custom-dropdown" style="display:none; position:absolute; top:100%; left:0; z-index:300; background:rgba(26,22,18,0.96); border:1px solid rgba(255,255,255,0.12); border-radius:8px; min-width:170px; box-shadow:0 8px 24px rgba(0,0,0,0.5); padding:4px 0;">
+        <div class="dropdown-item" onclick="makeCustomNew()">New Custom</div>
+        <div class="dropdown-item" onclick="openLibraryPicker()">From Library...</div>
+      </div>
+    </div>
+    <div id="preset-bar">
+      <button class="ed-btn sm" onclick="cyclePreset(-1)">&#9664;</button>
+      <span class="preset-name" id="preset-name">Flat</span>
+      <button class="ed-btn sm" onclick="cyclePreset(1)">&#9654;</button>
+    </div>
+  </div>
+  <div class="settings-section-title">Library</div>
+  <div class="settings-row">
+    <span class="settings-label">LIB</span>
+    <button class="ed-btn sm" onclick="toggleLibraryPanel(true)">Open Library</button>
+    <button class="ed-btn sm danger" id="btn-clear" onclick="clearCustomHoles()">Clear All</button>
+  </div>
+</div>
+
+<!-- V2B: Bottom floating toolbar — shapes, knife, undo, save, reset -->
+<div id="bottom-toolbar">
+  <div class="tb-group">
+    <span class="tb-label">ADD</span>
+    <button class="ed-btn" onclick="addObject('square')">Sq</button>
+    <button class="ed-btn" onclick="addObject('rect')">Rect</button>
+    <button class="ed-btn" onclick="addObject('tri')">Tri</button>
+    <button class="ed-btn" onclick="addObject('circle')">Cir</button>
+  </div>
+  <div class="tb-sep"></div>
+  <div class="tb-group">
+    <select class="ed-select" id="asset-picker" style="min-width:80px"></select>
+    <button class="ed-btn" onclick="placeSelectedAsset()">Place</button>
+  </div>
+  <div class="tb-sep"></div>
+  <div class="tb-group">
+    <button class="ed-btn" id="btn-knife" onclick="toggleKnifeTool()">Knife</button>
+    <button class="ed-btn" onclick="editorUndo()">Undo</button>
+  </div>
+  <div class="tb-sep"></div>
+  <div class="tb-group" id="props-group">
+    <span class="tb-label">MAT</span>
+    <select class="ed-select" id="mat-picker" onchange="onMaterialChange()">
+      <option value="sand">Sand</option>
+      <option value="grass">Grass</option>
+      <option value="ice">Ice</option>
+      <option value="rock">Rock</option>
+      <option value="mud">Mud</option>
+    </select>
+    <button class="ed-btn danger" id="btn-delete" onclick="deleteSelected()">Del</button>
+  </div>
+  <div class="tb-sep"></div>
+  <div class="tb-group">
+    <button class="ed-btn" onclick="resetBallToTee()">Reset</button>
+    <button class="ed-btn" id="btn-save" onclick="saveCustomHoles()">Save</button>
+  </div>
+</div>
 
 <!-- Library Panel (right-side overlay) -->
 <div id="library-panel">
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-    <span style="color:#e8a030; font:14px 'Departure Mono', monospace;">Hole Library</span>
-    <button class="ed-btn" onclick="toggleLibraryPanel(false)">✕</button>
+  <div class="lib-header">
+    <span class="lib-header-title">LIBRARY</span>
+    <button class="ed-btn" onclick="toggleLibraryPanel(false)">&#10005;</button>
   </div>
-  <div id="library-list"></div>
-  <button class="ed-btn" style="width:100%; margin-top:10px;" onclick="saveCurrentToLibrary()">Save Current to Library</button>
+  <div class="lib-body">
+    <div id="library-list"></div>
+    <button class="lib-save-btn" onclick="saveCurrentToLibrary()">+ Save Current Hole</button>
+  </div>
 </div>
 
 <!-- Load the REAL game scripts (same repo, same branch) -->
@@ -905,6 +1139,8 @@ async function editorInit() {
     if (dd && dd.style.display !== 'none' && wrapper && !wrapper.contains(e.target)) {
       dd.style.display = 'none';
     }
+
+    // V2B: Settings and hole list are now sticky toggles — no click-outside-to-close
   });
 }
 
@@ -940,6 +1176,24 @@ function switchMode(mode) {
 
   document.getElementById('btn-edit').classList.toggle('active', mode === 'edit');
   document.getElementById('btn-play').classList.toggle('active', mode === 'play');
+
+  // V2B: Toggle play-mode class on body for CSS-driven UI hiding
+  document.body.classList.toggle('play-mode', mode === 'play');
+
+  // V2B: Add pulsing glow to mode pill in play mode
+  document.getElementById('mode-pill').classList.toggle('play-glow', mode === 'play');
+
+  // V2B: Hide bottom toolbar in play mode
+  document.getElementById('bottom-toolbar').classList.toggle('hidden', mode === 'play');
+
+  // V2B: Close settings overlay when switching modes
+  document.getElementById('settings-overlay').classList.remove('open');
+
+  // V2B: Close hole list dropdown
+  const holeDropdown = document.getElementById('hole-list-dropdown');
+  holeDropdown.classList.remove('open');
+  holeDropdown.style.display = 'none';
+
   updateModeBadge();
 }
 
@@ -955,6 +1209,24 @@ function updateModeBadge() {
   } else {
     badge.textContent = '';
   }
+}
+
+// ── V2B: Floating Panel Toggles ──────────────────────────
+function toggleHoleListDropdown() {
+  const dd = document.getElementById('hole-list-dropdown');
+  const isOpen = dd.classList.contains('open');
+  if (isOpen) {
+    dd.classList.remove('open');
+    dd.style.display = 'none';
+  } else {
+    dd.classList.add('open');
+    dd.style.display = 'block';
+  }
+}
+
+function toggleSettingsOverlay() {
+  const overlay = document.getElementById('settings-overlay');
+  overlay.classList.toggle('open');
 }
 
 function deselectAll() {
@@ -1148,19 +1420,30 @@ function goToHole(idx) {
   deselectAll();
   _lastTrackedHole = currentHole;
   buildHoleList();
+
+  // V2B: Close hole list dropdown after navigation
+  const holeDropdown = document.getElementById('hole-list-dropdown');
+  if (holeDropdown) {
+    holeDropdown.classList.remove('open');
+    holeDropdown.style.display = 'none';
+  }
 }
 
 function buildHoleList() {
   updateHoleList();
-  syncHoleNavWidth();
+  updateHoleNavLabel();
+}
+
+function updateHoleNavLabel() {
+  // V2B: Update the floating hole navigator label
+  const label = document.getElementById('hole-nav-label');
+  if (label) {
+    label.textContent = `Hole ${currentHole + 1}/${editorHoleCount}`;
+  }
 }
 
 function syncHoleNavWidth() {
-  // Fixed width for the hole nav sidebar
-  const holeNav = document.getElementById('hole-nav');
-  if (holeNav) {
-    holeNav.style.width = '200px';
-  }
+  // V2B: No longer needed — kept as no-op for compatibility
 }
 
 function updateHoleList() {
@@ -1176,16 +1459,14 @@ function updateHoleList() {
     const hole = holes[i];
     const arch = hole?.archetype || '';
     const diff = typeof getDifficulty === 'function' ? getDifficulty(i).toFixed(2) : '';
-    let typeLabel;
     if (isCustom) {
       const meta = customHoleMeta[i];
       const holeName = meta && meta.name ? meta.name : '';
-      const truncName = holeName.length > 14 ? holeName.slice(0, 13) + '…' : holeName;
-      typeLabel = truncName ? '✎ ' + truncName : '✎';
+      const truncName = holeName.length > 16 ? holeName.slice(0, 15) + '\u2026' : holeName;
+      div.innerHTML = `<span class="hole-num">${i + 1}</span><div class="hole-info"><span class="hole-name">${truncName || 'custom'}</span><span class="type">${diff}</span></div>`;
     } else {
-      typeLabel = arch || 'auto';
+      div.innerHTML = `<span class="hole-num">${i + 1}</span><div class="hole-info"><span class="type">${arch || 'auto'} ${diff}</span></div>`;
     }
-    div.innerHTML = `<span>${i + 1}</span><span class="type">${typeLabel}${diff ? ' ' + diff : ''}</span>`;
     div.onclick = () => goToHole(i);
     list.appendChild(div);
   }
@@ -1198,16 +1479,17 @@ function updateToggleButton() {
   const btn = document.getElementById('btn-toggle-type');
   const presetBar = document.getElementById('preset-bar');
   const nameInput = document.getElementById('hole-name-input');
+  const nameBar = document.getElementById('hole-name-bar');
   const isCustom = customHoleIndices.has(currentHole);
   btn.textContent = isCustom ? 'Set Auto' : 'Set Custom';
   btn.className = 'ed-btn' + (isCustom ? ' active' : '');
   presetBar.classList.toggle('visible', isCustom);
-  // Show/hide name input
+  // Show/hide name input in sidebar
   if (isCustom) {
-    nameInput.style.display = '';
+    nameBar.style.display = '';
     nameInput.value = (customHoleMeta[currentHole] && customHoleMeta[currentHole].name) || '';
   } else {
-    nameInput.style.display = 'none';
+    nameBar.style.display = 'none';
   }
   // Always close dropdown when updating
   document.getElementById('custom-dropdown').style.display = 'none';
@@ -2348,20 +2630,35 @@ document.addEventListener('keydown', (e) => {
       ed.camY = 0;
       setHoleCamera(holes[currentHole]);
       break;
-    case 'escape':
-      if (ed.knifeActive) {
-        if (ed.knifeStart) {
-          // Cancel pending cut, stay in knife mode
-          ed.knifeStart = null;
-          ed.knifePreviewEnd = null;
-          ed.knifeTargetObject = -1;
+    case 'escape': {
+      // V2B: Close floating overlays first
+      const settingsOvl = document.getElementById('settings-overlay');
+      const holeDd = document.getElementById('hole-list-dropdown');
+      let closedSomething = false;
+      if (settingsOvl && settingsOvl.classList.contains('open')) {
+        settingsOvl.classList.remove('open');
+        closedSomething = true;
+      }
+      if (holeDd && holeDd.classList.contains('open')) {
+        holeDd.classList.remove('open');
+        holeDd.style.display = 'none';
+        closedSomething = true;
+      }
+      if (!closedSomething) {
+        if (ed.knifeActive) {
+          if (ed.knifeStart) {
+            ed.knifeStart = null;
+            ed.knifePreviewEnd = null;
+            ed.knifeTargetObject = -1;
+          } else {
+            clearKnifeState();
+          }
         } else {
-          clearKnifeState();
+          deselectAll();
         }
-      } else {
-        deselectAll();
       }
       break;
+    }
     case 'delete':
     case 'backspace':
       if (ed.selectedObject >= 0) {
@@ -2875,6 +3172,21 @@ function onToggleTypeClick() {
   }
 }
 
+// Close dropdown/library when clicking outside
+document.addEventListener('mousedown', function(e) {
+  const dd = document.getElementById('custom-dropdown');
+  const wrapper = document.getElementById('type-toggle-wrapper');
+  if (dd && dd.style.display !== 'none' && wrapper && !wrapper.contains(e.target)) {
+    dd.style.display = 'none';
+  }
+  // Close library panel when clicking on canvas
+  const libPanel = document.getElementById('library-panel');
+  if (libPanel && libPanel.style.display !== 'none' && e.target.tagName === 'CANVAS') {
+    toggleLibraryPanel(false);
+  }
+  // V2B: Settings and hole list are now sticky toggles — no click-outside-to-close
+});
+
 function makeCustomNew() {
   document.getElementById('custom-dropdown').style.display = 'none';
   pushUndo();
@@ -2908,7 +3220,7 @@ function buildLibraryPanel() {
   const list = document.getElementById('library-list');
   const slugs = Object.keys(holeLibrary);
   if (slugs.length === 0) {
-    list.innerHTML = '<div style="color:#777; font-size:10px; padding:8px 0;">No holes saved yet. Use "Save Current to Library" below.</div>';
+    list.innerHTML = '<div class="lib-empty">No holes saved yet.<br>Design a hole and save it here.</div>';
     return;
   }
   list.innerHTML = '';
