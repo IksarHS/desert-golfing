@@ -64,11 +64,11 @@ for (const [key, info] of Object.entries(SPRITE_CATALOG)) {
 // ── Materials ─────────────────────────────────────────────
 const DEFAULT_MAT = 'sand';
 const MATERIALS = {
-  sand:  { restitution: 0.47, rollingFriction: 0.98,  surfaceFriction: 0.004 },
-  grass: { restitution: 0.35, rollingFriction: 0.95,  surfaceFriction: 0.008 },
-  ice:   { restitution: 0.55, rollingFriction: 0.998, surfaceFriction: 0.001 },
-  rock:  { restitution: 0.75, rollingFriction: 0.97,  surfaceFriction: 0.003 },
-  mud:   { restitution: 0.15, rollingFriction: 0.90,  surfaceFriction: 0.015 },
+  sand:  { restitution: 0.47, rollingFriction: 0.98,  surfaceFriction: 0.004, color: '#d68841', colorLight: '#dea050' },
+  grass: { restitution: 0.35, rollingFriction: 0.95,  surfaceFriction: 0.008, color: '#5a9e4b', colorLight: '#6db85a' },
+  ice:   { restitution: 0.55, rollingFriction: 0.998, surfaceFriction: 0.001, color: '#6ba8c7', colorLight: '#82bdd8' },
+  rock:  { restitution: 0.75, rollingFriction: 0.97,  surfaceFriction: 0.003, color: '#c45c4a', colorLight: '#d4705f' },
+  mud:   { restitution: 0.15, rollingFriction: 0.90,  surfaceFriction: 0.015, color: '#8b6b4a', colorLight: '#a07d5a' },
 };
 
 function getMaterialAt(worldX) {

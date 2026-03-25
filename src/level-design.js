@@ -545,8 +545,8 @@ function pickArchetype(difficulty) {
 
 // ── Main Terrain Generation ──────────────────────────────
 function generateHoleTerrain(holeIndex) {
-  // Use hand-defined hole if available (only for desert-planet courses)
-  const isDesertWorld = !currentWorld || currentWorld === WORLDS['desert-planet'];
+  // Use hand-defined hole if available
+  const isDesertWorld = !currentWorld || currentWorld === WORLDS['desert-world-1'];
   if (isDesertWorld && HAND_DEFINED_HOLES[holeIndex]) {
     return generateHandDefinedHole(holeIndex);
   }
@@ -615,6 +615,22 @@ function generateHoleTerrain(holeIndex) {
   // that fall within this hole's terrain range, to maintain X-order
   vertices = vertices.filter(v => v.x <= startX || v.x >= lastVert.x);
 
+  // Assign materials from course palette to vertex segments
+  const courseMats = currentCourse?.materials || [DEFAULT_MAT];
+  if (courseMats.length > 1) {
+    // Divide hole into 2-4 material zones
+    const zoneCount = 2 + Math.floor(random() * Math.min(3, courseMats.length));
+    const vertsPerZone = Math.ceil(holeVerts.length / zoneCount);
+    for (let z = 0; z < zoneCount; z++) {
+      const mat = courseMats[Math.floor(random() * courseMats.length)];
+      const start = z * vertsPerZone;
+      const end = Math.min((z + 1) * vertsPerZone, holeVerts.length);
+      for (let vi = start; vi < end; vi++) {
+        if (!holeVerts[vi].mat) holeVerts[vi].mat = mat;
+      }
+    }
+  }
+
   // Append hole vertices to global array
   for (const v of holeVerts) {
     vertices.push(v);
@@ -622,16 +638,26 @@ function generateHoleTerrain(holeIndex) {
   const cupX = lastVert.x;
   const cupSurfaceY = lastVert.y;
 
-  // Add background terrain past the cup (2-3 vertices extending right)
-  // Courses can provide a backstop bias (negative = terrain rises after cup)
-  const bgY = cupSurfaceY;
-  const backstop = currentCourse?.backstopBias || 0;
-  const bg1X = cupX + randRange(80, 150);
-  const bg1Y = clampY(bgY + backstop + (random() - 0.5) * (40 + difficulty * 60));
-  const bg2X = bg1X + randRange(100, 200);
-  const bg2Y = clampY(bg1Y + backstop + (random() - 0.5) * (40 + difficulty * 60));
-  vertices.push({ x: bg1X, y: bg1Y });
-  vertices.push({ x: bg2X, y: bg2Y });
+  // Add background terrain past the cup
+  const maxHoles = currentCourse?.holeCount ?? Infinity;
+  const isLastHole = (holeIndex === maxHoles - 1);
+
+  if (isLastHole) {
+    // Last hole: cliff edge — terrain drops off sharply
+    const cliffX = cupX + 80;
+    vertices.push({ x: cliffX, y: cupSurfaceY });
+    vertices.push({ x: cliffX + 10, y: H + 200 }); // straight down
+  } else {
+    // Normal: gentle background terrain extending right
+    const bgY = cupSurfaceY;
+    const backstop = currentCourse?.backstopBias || 0;
+    const bg1X = cupX + randRange(80, 150);
+    const bg1Y = clampY(bgY + backstop + (random() - 0.5) * (40 + difficulty * 60));
+    const bg2X = bg1X + randRange(100, 200);
+    const bg2Y = clampY(bg1Y + backstop + (random() - 0.5) * (40 + difficulty * 60));
+    vertices.push({ x: bg1X, y: bg1Y });
+    vertices.push({ x: bg2X, y: bg2Y });
+  }
 
   // Now place the cup into the terrain at cupX
   placeCup(holeIndex, cupX, teeX, teeY);

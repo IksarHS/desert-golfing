@@ -2,6 +2,8 @@
 
 A Desert Golfing clone built as a browser game with procedural terrain generation.
 
+**Read `GAME.md` first** — it contains the game vision, design direction, and prototype goals. Every agent should understand the vision before making changes.
+
 ## How to Run
 
 ```bash
