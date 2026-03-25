@@ -28,8 +28,8 @@ WORLDS['desert-planet'] = {
 // ── Course: Barren Flats ────────────────────────────────────
 // Intro course. Simple terrain, sparse vegetation, easy difficulty.
 // The first thing players see — gentle and approachable.
-WORLDS['desert-planet'].courses['barren-flats'] = {
-  name: 'Barren Flats',
+WORLDS['desert-planet'].courses['desert-course-1'] = {
+  name: 'Desert Course 1',
 
   // Material subset + default
   materials: ['sand', 'rock'],

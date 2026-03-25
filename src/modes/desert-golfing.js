@@ -12,7 +12,7 @@ let _preloadedCourseData = null;
 
 // Call this before MODE.init() — fetches course JSON from server
 async function preloadCourseData() {
-  let worldId = 'desert-planet', courseId = 'barren-flats';
+  let worldId = 'desert-planet', courseId = 'desert-course-1';
   try {
     const active = JSON.parse(localStorage.getItem('dg-active-course'));
     if (active?.worldId && active?.courseId) {
@@ -283,7 +283,7 @@ MODE = {
 
   init() {
     // Set current world/course
-    let worldId = 'desert-planet', courseId = 'barren-flats';
+    let worldId = 'desert-planet', courseId = 'desert-course-1';
     try {
       const active = JSON.parse(localStorage.getItem('dg-active-course'));
       if (active && active.worldId && active.courseId) {
