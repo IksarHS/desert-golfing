@@ -35,12 +35,8 @@ WORLDS['desert-planet'].courses['desert-course-1'] = {
   materials: ['sand', 'rock'],
   defaultMaterial: 'sand',
 
-  // Archetype subset — which terrain shapes this course uses
-  archetypes: [
-    'flat_run', 'gentle_slope', 'gentle_hill',
-    'downhill', 'uphill', 'rolling_hills',
-    'cliff_drop', 'valley', 'shelf', 'mesa',
-  ],
+  // Use all archetypes — difficulty gating handles progression
+  archetypes: null,
 
   // Difficulty range — maps the global 0→1 curve into this window
   difficultyRange: [0.0, 0.5],
