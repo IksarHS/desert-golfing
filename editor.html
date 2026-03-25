@@ -1002,6 +1002,12 @@ function updateMaterialPicker() {
 
 // ── Editor Init ───────────────────────────────────────────
 async function editorInit() {
+  // Use same shared seed as the game (seed 42, stored in localStorage)
+  const DEFAULT_GAME_SEED = 42;
+  const storedSeed = localStorage.getItem('dg-seed');
+  setSeed(storedSeed !== null ? parseInt(storedSeed, 10) : DEFAULT_GAME_SEED);
+  if (storedSeed === null) localStorage.setItem('dg-seed', String(DEFAULT_GAME_SEED));
+
   // Load editor-created courses before anything reads WORLDS
   loadCustomCourses();
 

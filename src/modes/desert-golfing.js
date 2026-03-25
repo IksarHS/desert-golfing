@@ -366,6 +366,10 @@ MODE = {
     } catch (e) {}
     currentWorld = WORLDS[worldId] || WORLDS['desert-world-1'];
     currentCourse = currentWorld.courses[courseId] || Object.values(currentWorld.courses)[0];
+    _currentWorldId = worldId;
+
+    // Apply per-course seed offset so each course has unique but deterministic terrain
+    setSeed((getSeed() || 42) + hashString(worldId + courseId));
 
     // Load saved course data (sync — checks _preloadedCourseData first, then localStorage)
     _applyCourseData(worldId, courseId);
