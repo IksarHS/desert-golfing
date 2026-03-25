@@ -2545,8 +2545,8 @@ canvas.addEventListener('contextmenu', (e) => {
 
 // Mouse wheel for camera pan/zoom in edit mode
 canvas.addEventListener('wheel', (e) => {
+  e.preventDefault(); // Always prevent — stops browser zoom in play mode
   if (ed.mode !== 'edit') return;
-  e.preventDefault();
   if (e.shiftKey) {
     // Horizontal pan (shift+scroll)
     camera.x += e.deltaY * 0.5 / ed.zoom;
@@ -2554,13 +2554,16 @@ canvas.addEventListener('wheel', (e) => {
     // Zoom — centered on mouse position (plain scroll)
     const oldZoom = ed.zoom;
     const factor = e.deltaY > 0 ? 0.9 : 1.1;
-    ed.zoom = Math.max(0.15, Math.min(3, ed.zoom * factor));
-    // Adjust camera so the point under the mouse stays fixed
+    const newZoom = Math.max(0.15, Math.min(3, ed.zoom * factor));
+    // World point under mouse before zoom
     const pos = toGameCoords(e.clientX, e.clientY);
-    const worldXBefore = pos.x / oldZoom + camera.x;
-    const worldYBefore = pos.y / oldZoom + ed.camY;
-    camera.x = worldXBefore - pos.x / ed.zoom;
-    ed.camY  = worldYBefore - pos.y / ed.zoom;
+    const worldX = pos.x / oldZoom + camera.x;
+    const worldY = pos.y / oldZoom + ed.camY;
+    // Apply zoom
+    ed.zoom = newZoom;
+    // Adjust camera so same world point stays under mouse
+    camera.x = worldX - pos.x / newZoom;
+    ed.camY  = worldY - pos.y / newZoom;
   }
 }, { passive: false });
 
