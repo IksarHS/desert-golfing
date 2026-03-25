@@ -545,8 +545,8 @@ function pickArchetype(difficulty) {
 
 // ── Main Terrain Generation ──────────────────────────────
 function generateHoleTerrain(holeIndex) {
-  // Use hand-defined hole if available (only for desert-planet courses)
-  const isDesertWorld = !currentWorld || currentWorld === WORLDS['desert-planet'];
+  // Use hand-defined hole if available
+  const isDesertWorld = !currentWorld || currentWorld === WORLDS['desert-world-1'];
   if (isDesertWorld && HAND_DEFINED_HOLES[holeIndex]) {
     return generateHandDefinedHole(holeIndex);
   }
@@ -614,6 +614,22 @@ function generateHoleTerrain(holeIndex) {
   // Remove any stray vertices (e.g. background verts from previous hole)
   // that fall within this hole's terrain range, to maintain X-order
   vertices = vertices.filter(v => v.x <= startX || v.x >= lastVert.x);
+
+  // Assign materials from course palette to vertex segments
+  const courseMats = currentCourse?.materials || [DEFAULT_MAT];
+  if (courseMats.length > 1) {
+    // Divide hole into 2-4 material zones
+    const zoneCount = 2 + Math.floor(random() * Math.min(3, courseMats.length));
+    const vertsPerZone = Math.ceil(holeVerts.length / zoneCount);
+    for (let z = 0; z < zoneCount; z++) {
+      const mat = courseMats[Math.floor(random() * courseMats.length)];
+      const start = z * vertsPerZone;
+      const end = Math.min((z + 1) * vertsPerZone, holeVerts.length);
+      for (let vi = start; vi < end; vi++) {
+        if (!holeVerts[vi].mat) holeVerts[vi].mat = mat;
+      }
+    }
+  }
 
   // Append hole vertices to global array
   for (const v of holeVerts) {

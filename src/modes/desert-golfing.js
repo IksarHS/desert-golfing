@@ -12,7 +12,7 @@ let _preloadedCourseData = null;
 
 // Call this before MODE.init() — fetches course JSON from server
 async function preloadCourseData() {
-  let worldId = 'desert-planet', courseId = 'desert-course-1';
+  let worldId = 'desert-world-1', courseId = 'desert-course-1'; // default first course;
   try {
     const active = JSON.parse(localStorage.getItem('dg-active-course'));
     if (active?.worldId && active?.courseId) {
@@ -250,31 +250,31 @@ function isBallOffScreen() {
 
 // ── Drawing ────────────────────────────────────────────────
 function drawTerrainDG() {
-  ctx.fillStyle = GROUND;
-  ctx.beginPath();
-
   const startX = camera.x - 50;
   const endX   = camera.x + W + 50;
+  const bottomY = camera.x + H + 200; // well below screen
 
-  let started = false;
-  for (let i = 0; i < vertices.length; i++) {
-    const v = vertices[i];
-    if (v.x < startX - 100 && i < vertices.length - 1 && vertices[i + 1].x < startX - 100) continue;
-    if (v.x > endX + 100) {
-      if (!started) { ctx.moveTo(v.x, v.y); started = true; }
-      else ctx.lineTo(v.x, v.y);
-      break;
-    }
+  // Draw each segment as a filled trapezoid with its material color
+  for (let i = 0; i < vertices.length - 1; i++) {
+    const a = vertices[i];
+    const b = vertices[i + 1];
+    // Skip segments entirely off-screen
+    if (b.x < startX - 100) continue;
+    if (a.x > endX + 100) break;
 
-    if (!started) { ctx.moveTo(v.x, v.y); started = true; }
-    else ctx.lineTo(v.x, v.y);
+    // Determine material color from the left vertex of the segment
+    const matName = a.mat || DEFAULT_MAT;
+    const mat = MATERIALS[matName] || MATERIALS[DEFAULT_MAT];
+    ctx.fillStyle = mat.color || GROUND;
+
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.lineTo(b.x, H + 200);
+    ctx.lineTo(a.x, H + 200);
+    ctx.closePath();
+    ctx.fill();
   }
-
-  // Close polygon at bottom of screen (in world coords)
-  ctx.lineTo(endX + 100, H + 10);
-  ctx.lineTo(startX - 100, H + 10);
-  ctx.closePath();
-  ctx.fill();
 }
 
 // ── MODE Object ────────────────────────────────────────────
@@ -283,7 +283,7 @@ MODE = {
 
   init() {
     // Set current world/course
-    let worldId = 'desert-planet', courseId = 'desert-course-1';
+    let worldId = 'desert-world-1', courseId = 'desert-course-1'; // default first course;
     try {
       const active = JSON.parse(localStorage.getItem('dg-active-course'));
       if (active && active.worldId && active.courseId) {
@@ -291,7 +291,7 @@ MODE = {
         courseId = active.courseId;
       }
     } catch (e) {}
-    currentWorld = WORLDS[worldId] || WORLDS['desert-planet'];
+    currentWorld = WORLDS[worldId] || WORLDS['desert-world-1'];
     currentCourse = currentWorld.courses[courseId] || Object.values(currentWorld.courses)[0];
 
     // Load saved course data (sync — checks _preloadedCourseData first, then localStorage)
