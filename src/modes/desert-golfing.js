@@ -5,6 +5,79 @@
 // ── DG-Specific Globals ──────────────────────────────────
 // vertices[] and holes[] are declared in shared.js (used by level-design.js)
 // currentHole is declared in shared.js
+let _completeBtn = null; // click target for "Next Course/World" button
+
+// Find the next course or world to play after completing the current course
+function getNextDestination() {
+  if (!currentWorld || !currentCourse) return null;
+
+  // Find current course in the world's course list
+  const courseIds = Object.keys(currentWorld.courses);
+  const currentIdx = courseIds.findIndex(id => currentWorld.courses[id] === currentCourse);
+
+  if (currentIdx < courseIds.length - 1) {
+    // More courses in this world
+    const nextId = courseIds[currentIdx + 1];
+    return { type: 'course', worldId: _currentWorldId, courseId: nextId, course: currentWorld.courses[nextId] };
+  }
+
+  // No more courses — find next world in same system
+  const worldIds = Object.keys(WORLDS);
+  const currentWorldIdx = worldIds.findIndex(id => WORLDS[id] === currentWorld);
+  for (let i = currentWorldIdx + 1; i < worldIds.length; i++) {
+    const nextWorld = WORLDS[worldIds[i]];
+    if (nextWorld.system === currentWorld.system) {
+      const firstCourseId = Object.keys(nextWorld.courses)[0];
+      if (firstCourseId) {
+        return { type: 'world', worldId: worldIds[i], courseId: firstCourseId, course: nextWorld.courses[firstCourseId], world: nextWorld };
+      }
+    }
+  }
+
+  return null; // end of system
+}
+
+// Start a new course (resets game state)
+function startCourse(worldId, courseId) {
+  currentWorld = WORLDS[worldId];
+  currentCourse = currentWorld.courses[courseId];
+  _currentWorldId = worldId;
+
+  // Reset game state
+  vertices.length = 0;
+  holes.length = 0;
+  currentHole = 0;
+  totalStrokes = 0;
+  strokes = 0;
+  courseComplete = false;
+  completeTimer = 0;
+  showTitle = true;
+  _completeBtn = null;
+
+  // Re-seed for this course so terrain is deterministic
+  setSeed((getSeed() || 42) + hashString(worldId + courseId));
+
+  ensureHolesAhead(2);
+  const firstHole = holes[0];
+  ball.x = firstHole.teeX;
+  ball.y = terrainYAt(firstHole.teeX) - BALL_RADIUS;
+  ball.vx = 0; ball.vy = 0;
+  ball.atRest = true; ball.onGround = false;
+  ball.spinRate = 0; ball.rotation = 0;
+  setHoleCamera(firstHole);
+  state = STATE_AIM;
+}
+
+// Simple string hash for seed offset per course
+function hashString(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = (h * 31 + str.charCodeAt(i)) | 0;
+  }
+  return h;
+}
+
+let _currentWorldId = 'desert-world-1';
 
 // ── Course Data Loading ──────────────────────────────────
 // Preloaded data is fetched before game init (set by preloadCourseData)
@@ -463,23 +536,50 @@ MODE = {
     // Course completion screen
     if (state === STATE_COMPLETE) {
       completeTimer++;
-      const fadeIn = Math.min(1, completeTimer / 30); // fade over ~0.5 seconds
+      const fadeIn = Math.min(1, completeTimer / 30);
       ctx.fillStyle = 'rgba(255, 255, 255, ' + fadeIn + ')';
       ctx.textAlign = 'center';
 
       ctx.font = "28px 'Departure Mono', monospace";
-      ctx.fillText('COURSE COMPLETE', W / 2, H * 0.35);
+      ctx.fillText('COURSE COMPLETE', W / 2, H * 0.30);
 
       const courseName = currentCourse ? currentCourse.name : '';
       if (courseName) {
         ctx.font = "20px 'Departure Mono', monospace";
-        ctx.fillText(courseName, W / 2, H * 0.35 + 30);
+        ctx.fillText(courseName, W / 2, H * 0.30 + 30);
       }
 
       ctx.font = "20px 'Departure Mono', monospace";
-      ctx.fillText(totalStrokes + ' strokes', W / 2, H * 0.35 + 58);
+      ctx.fillText(totalStrokes + ' strokes', W / 2, H * 0.30 + 58);
 
-      ctx.textAlign = 'left'; // restore
+      // Draw "Next Course" or "Next World" button after fade-in completes
+      if (completeTimer > 60) {
+        const next = getNextDestination();
+        if (next) {
+          const btnText = next.type === 'course' ? '▶ Next Course' : '▶ Next World';
+          const btnY = H * 0.30 + 110;
+          const btnW = 200, btnH = 40;
+          const btnX = W / 2 - btnW / 2;
+
+          // Button background
+          ctx.fillStyle = 'rgba(232, 160, 48, ' + fadeIn + ')';
+          ctx.beginPath();
+          ctx.roundRect(btnX, btnY, btnW, btnH, 8);
+          ctx.fill();
+
+          // Button text
+          ctx.fillStyle = 'rgba(26, 21, 16, ' + fadeIn + ')';
+          ctx.font = "bold 16px 'Departure Mono', monospace";
+          ctx.fillText(btnText, W / 2, btnY + 26);
+
+          // Store button bounds for click detection
+          _completeBtn = { x: btnX, y: btnY, w: btnW, h: btnH, next: next };
+        }
+      }
+
+      ctx.textAlign = 'left';
+    } else {
+      _completeBtn = null;
     }
   }
 };

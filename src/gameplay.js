@@ -1,5 +1,16 @@
 // ── Input System ──────────────────────────────────────────
 canvas.addEventListener('mousedown', (e) => {
+  // Handle "Next Course/World" button click on completion screen
+  if (state === STATE_COMPLETE && _completeBtn) {
+    const rect = canvas.getBoundingClientRect();
+    const cx = (e.clientX - rect.left) * (W / rect.width);
+    const cy = (e.clientY - rect.top) * (H / rect.height);
+    const b = _completeBtn;
+    if (cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h) {
+      startCourse(b.next.worldId, b.next.courseId);
+      return;
+    }
+  }
   if (state !== STATE_AIM) return;
   const pos = toGameCoords(e.clientX, e.clientY);
   aiming = true;

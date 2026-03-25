@@ -638,16 +638,26 @@ function generateHoleTerrain(holeIndex) {
   const cupX = lastVert.x;
   const cupSurfaceY = lastVert.y;
 
-  // Add background terrain past the cup (2-3 vertices extending right)
-  // Courses can provide a backstop bias (negative = terrain rises after cup)
-  const bgY = cupSurfaceY;
-  const backstop = currentCourse?.backstopBias || 0;
-  const bg1X = cupX + randRange(80, 150);
-  const bg1Y = clampY(bgY + backstop + (random() - 0.5) * (40 + difficulty * 60));
-  const bg2X = bg1X + randRange(100, 200);
-  const bg2Y = clampY(bg1Y + backstop + (random() - 0.5) * (40 + difficulty * 60));
-  vertices.push({ x: bg1X, y: bg1Y });
-  vertices.push({ x: bg2X, y: bg2Y });
+  // Add background terrain past the cup
+  const maxHoles = currentCourse?.holeCount ?? Infinity;
+  const isLastHole = (holeIndex === maxHoles - 1);
+
+  if (isLastHole) {
+    // Last hole: cliff edge — terrain drops off sharply
+    const cliffX = cupX + 80;
+    vertices.push({ x: cliffX, y: cupSurfaceY });
+    vertices.push({ x: cliffX + 10, y: H + 200 }); // straight down
+  } else {
+    // Normal: gentle background terrain extending right
+    const bgY = cupSurfaceY;
+    const backstop = currentCourse?.backstopBias || 0;
+    const bg1X = cupX + randRange(80, 150);
+    const bg1Y = clampY(bgY + backstop + (random() - 0.5) * (40 + difficulty * 60));
+    const bg2X = bg1X + randRange(100, 200);
+    const bg2Y = clampY(bg1Y + backstop + (random() - 0.5) * (40 + difficulty * 60));
+    vertices.push({ x: bg1X, y: bg1Y });
+    vertices.push({ x: bg2X, y: bg2Y });
+  }
 
   // Now place the cup into the terrain at cupX
   placeCup(holeIndex, cupX, teeX, teeY);
