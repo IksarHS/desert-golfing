@@ -1015,7 +1015,11 @@ async function editorInit() {
   const _origApplyCamera = MODE.applyCameraTransform.bind(MODE);
   MODE.applyCameraTransform = function(ctx) {
     if (ed.mode === 'edit') {
+      // Zoom centered on screen center, then pan
+      const cx = W / 2, cy = H / 2;
+      ctx.translate(cx, cy);
       ctx.scale(ed.zoom, ed.zoom);
+      ctx.translate(-cx, -cy);
       ctx.translate(-camera.x, -ed.camY);
     } else {
       _origApplyCamera(ctx);
@@ -2551,19 +2555,9 @@ canvas.addEventListener('wheel', (e) => {
     // Horizontal pan (shift+scroll)
     camera.x += e.deltaY * 0.5 / ed.zoom;
   } else {
-    // Zoom — centered on mouse position (plain scroll)
-    const oldZoom = ed.zoom;
+    // Zoom — pure scaling, no camera drift
     const factor = e.deltaY > 0 ? 0.9 : 1.1;
-    const newZoom = Math.max(0.15, Math.min(3, ed.zoom * factor));
-    // World point under mouse before zoom
-    const pos = toGameCoords(e.clientX, e.clientY);
-    const worldX = pos.x / oldZoom + camera.x;
-    const worldY = pos.y / oldZoom + ed.camY;
-    // Apply zoom
-    ed.zoom = newZoom;
-    // Adjust camera so same world point stays under mouse
-    camera.x = worldX - pos.x / newZoom;
-    ed.camY  = worldY - pos.y / newZoom;
+    ed.zoom = Math.max(0.15, Math.min(3, ed.zoom * factor));
   }
 }, { passive: false });
 
