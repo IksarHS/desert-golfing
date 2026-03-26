@@ -99,20 +99,17 @@ async function loadPlayerData() {
 }
 
 async function savePlayerData() {
+  // Always write localStorage FIRST (synchronous, survives browser close)
+  localStorage.setItem('dg-player-data', JSON.stringify(playerData));
+
   const ref = getPlayerDocRef();
   if (!ref) {
-    // Not signed in — save to localStorage as fallback
-    localStorage.setItem('dg-player-data', JSON.stringify(playerData));
     return;
   }
   try {
     await ref.set(playerData, { merge: true });
-    // Also save locally for fast access
-    localStorage.setItem('dg-player-data', JSON.stringify(playerData));
   } catch (err) {
-    console.error('Failed to save player data:', err);
-    // Fallback to localStorage
-    localStorage.setItem('dg-player-data', JSON.stringify(playerData));
+    console.error('Failed to save player data to cloud:', err);
   }
 }
 
