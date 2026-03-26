@@ -33,16 +33,16 @@ function initFirebase() {
     if (user) {
       console.log('Signed in as', user.displayName);
       loadPlayerData().then(() => {
-        // Restart game with loaded cloud save
-        if (typeof MODE !== 'undefined') MODE.init();
+        // Restart game with cloud save progress
+        _restartGameFromPlayerData();
       });
     } else {
       console.log('Not signed in');
       // Clear local progress on sign out — clean slate
       localStorage.removeItem('dg-player-data');
       playerData = { currentCourse: null, currentHole: 0, currentStrokes: 0, totalStrokes: 0, completed: {} };
-      // Restart game from beginning
-      if (typeof MODE !== 'undefined') MODE.init();
+      // Restart game from hole 1
+      _restartGameFromPlayerData();
     }
     updateAuthUI();
   });
@@ -148,6 +148,49 @@ function isCourseCompleted(worldId, courseId) {
 function getCourseBest(worldId, courseId) {
   const data = playerData.completed[worldId + '/' + courseId];
   return data ? data.best : null;
+}
+
+// ── Game Restart ─────────────────────────────────────────────
+function _restartGameFromPlayerData() {
+  if (typeof startCourse !== 'function' || typeof WORLDS === 'undefined') return;
+  if (typeof initSeed === 'function') initSeed(); // Reset to base seed before course offset
+
+  let worldId = 'desert-world-1', courseId = 'desert-course-1';
+  let resumeHole = 0, resumeStrokes = 0;
+
+  if (playerData.currentCourse) {
+    const parts = playerData.currentCourse.split('/');
+    if (parts.length === 2 && WORLDS[parts[0]]) {
+      worldId = parts[0];
+      courseId = parts[1];
+      resumeHole = playerData.currentHole || 0;
+      resumeStrokes = playerData.currentStrokes || 0;
+    }
+  }
+
+  startCourse(worldId, courseId);
+
+  // Resume mid-course if needed
+  if (resumeHole > 0) {
+    ensureHolesAhead(resumeHole + 2);
+    for (let i = 0; i < resumeHole; i++) {
+      holes[i].cupFilled = true;
+      holes[i].cupFillProgress = 1;
+      holes[i].flagVisible = false;
+      holes[i].flagOpacity = 0;
+      flattenCup(holes[i]);
+    }
+    currentHole = resumeHole;
+    totalStrokes = resumeStrokes;
+    showTitle = false;
+    const hole = holes[currentHole];
+    ball.x = hole.teeX;
+    ball.y = terrainYAt(hole.teeX) - BALL_RADIUS;
+    ball.vx = 0; ball.vy = 0;
+    ball.atRest = true; ball.onGround = false;
+    setHoleCamera(hole);
+    state = STATE_AIM;
+  }
 }
 
 // ── Auth UI ──────────────────────────────────────────────────
