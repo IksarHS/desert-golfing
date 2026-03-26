@@ -35,11 +35,12 @@ function initFirebase() {
     if (user) {
       console.log('Signed in as', user.displayName);
       loadPlayerData().then(() => {
-        // Save cloud data to localStorage so it survives reload
+        // Always sync cloud data to localStorage
         localStorage.setItem('dg-player-data', JSON.stringify(playerData));
-        if (!_firstAuthEvent) {
-          // User just signed in mid-session — reload to pick up cloud save
-          location.reload();
+        console.log('Cloud save synced to localStorage:', playerData.currentHole);
+        // Restart game with cloud progress (works on first load AND mid-session sign-in)
+        if (typeof startCourse === 'function') {
+          _restartGameFromPlayerData();
         }
         _firstAuthEvent = false;
         updateAuthUI();
