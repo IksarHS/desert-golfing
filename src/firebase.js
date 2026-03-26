@@ -35,6 +35,9 @@ function initFirebase() {
       loadPlayerData();
     } else {
       console.log('Not signed in');
+      // Clear local progress on sign out — clean slate
+      localStorage.removeItem('dg-player-data');
+      playerData = { currentCourse: null, currentHole: 0, currentStrokes: 0, totalStrokes: 0, completed: {} };
     }
     updateAuthUI();
   });
