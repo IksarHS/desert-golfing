@@ -28,10 +28,7 @@ async function init() {
   if (typeof initFirebase === 'function') initFirebase();
   // Initialize seed before anything generates terrain
   initSeed();
-  // Preload course data from server JSON before game init
-  if (typeof preloadCourseData === 'function') {
-    await preloadCourseData();
-  }
+  // Course data is defined in code — no preloading needed
   MODE.init();
   gameLoop();
 }

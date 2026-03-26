@@ -80,64 +80,8 @@ function hashString(str) {
 let _currentWorldId = 'desert-world-1';
 
 // ── Course Data Loading ──────────────────────────────────
-// Preloaded data is fetched before game init (set by preloadCourseData)
-let _preloadedCourseData = null;
-
-// Call this before MODE.init() — fetches course JSON from server
-async function preloadCourseData() {
-  let worldId = 'desert-world-1', courseId = 'desert-course-1'; // default first course;
-  try {
-    const active = JSON.parse(localStorage.getItem('dg-active-course'));
-    if (active?.worldId && active?.courseId) {
-      worldId = active.worldId;
-      courseId = active.courseId;
-    }
-  } catch (e) {}
-
-  const filename = `data/courses/${worldId}--${courseId}.json`;
-  try {
-    const resp = await fetch(filename);
-    if (resp.ok) {
-      _preloadedCourseData = await resp.json();
-      console.log('Preloaded course from', filename);
-    }
-  } catch (e) {}
-}
-
-// Sync function called during MODE.init() — applies preloaded or localStorage data
-function _applyCourseData(worldId, courseId) {
-  let saved = _preloadedCourseData;
-
-  // Fall back to localStorage if no server data
-  if (!saved) {
-    try {
-      const key = 'dg-course-' + worldId + '-' + courseId;
-      const raw = localStorage.getItem(key);
-      if (raw) {
-        saved = JSON.parse(raw);
-        console.log('Loaded course from localStorage');
-      }
-    } catch (e) {}
-  }
-
-  if (saved) {
-    if (saved.courseName) currentCourse.name = saved.courseName;
-    if (saved.holeCount) currentCourse.holeCount = saved.holeCount;
-    if (saved.holes) {
-      for (const [idx, holeData] of Object.entries(saved.holes)) {
-        HAND_DEFINED_HOLES[Number(idx)] = holeData;
-      }
-    }
-    // Load objects (editor also loads these via loadCourseData,
-    // but the editor clears objects first so no duplication)
-    if (saved.objects && Array.isArray(saved.objects)) {
-      objects.length = 0;
-      for (const o of saved.objects) objects.push(o);
-    }
-  }
-  // Clear preloaded data so it's not applied twice
-  _preloadedCourseData = null;
-}
+// Course data is now fully defined in code (desert-planet.js etc.)
+// No preloading or localStorage overrides needed for the game.
 
 // ── Terrain Collision ──────────────────────────────────────
 function findSegment(worldX) {
@@ -386,7 +330,7 @@ MODE = {
     setSeed((getSeed() || 42) + hashString(worldId + courseId));
 
     // Load saved course data (sync — checks _preloadedCourseData first, then localStorage)
-    _applyCourseData(worldId, courseId);
+    // Course data is defined in code — no overrides to apply
 
     // Generate all holes up to the resume point
     ensureHolesAhead(Math.max(2, resumeHole + 2));
