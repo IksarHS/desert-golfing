@@ -27,32 +27,28 @@ function initFirebase() {
   firebaseAuth = firebase.auth();
   firebaseDb = firebase.firestore();
 
-  // Track initial auth state to detect sign-in/sign-out changes (not first load)
-  let _authInitialized = false;
+  // Track if this is the first auth event (page load) vs a user action
+  let _firstAuthEvent = true;
 
   firebaseAuth.onAuthStateChanged(user => {
-    const wasSignedIn = currentUser !== null;
     currentUser = user;
 
     if (user) {
       console.log('Signed in as', user.displayName);
       loadPlayerData().then(() => {
-        if (_authInitialized) {
+        if (!_firstAuthEvent) {
           // User just signed in mid-session — reload to apply cloud save
           location.reload();
         }
-        _authInitialized = true;
+        _firstAuthEvent = false;
+        updateAuthUI();
       });
     } else {
       console.log('Not signed in');
-      if (_authInitialized && wasSignedIn) {
-        // User just signed out — clear data and reload
-        localStorage.removeItem('dg-player-data');
-        location.reload();
-      }
-      _authInitialized = true;
+      // Sign-out reload is handled by signOut() directly
+      _firstAuthEvent = false;
+      updateAuthUI();
     }
-    updateAuthUI();
   });
 }
 
@@ -67,7 +63,11 @@ function signInWithGoogle() {
 
 function signOut() {
   if (!firebaseAuth) return;
-  firebaseAuth.signOut();
+  // Clear local data FIRST, then sign out and reload
+  localStorage.removeItem('dg-player-data');
+  firebaseAuth.signOut().then(() => {
+    location.reload();
+  });
 }
 
 // ── Player Data ──────────────────────────────────────────────
