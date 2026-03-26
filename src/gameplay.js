@@ -51,8 +51,9 @@ window.addEventListener('mouseup', (e) => {
   state = STATE_FLIGHT;
   strokes++;
   _logBall('shot');
-  // Save game state after every shot
+  // Save locally + push to cloud on every shot
   if (typeof saveGameSnapshot === 'function') saveGameSnapshot();
+  if (typeof pushToCloud === 'function') pushToCloud();
 });
 
 // Touch support
@@ -100,6 +101,7 @@ canvas.addEventListener('touchend', (e) => {
   strokes++;
   _logBall('shot');
   if (typeof saveGameSnapshot === 'function') saveGameSnapshot();
+  if (typeof pushToCloud === 'function') pushToCloud();
 });
 
 // ── Physics Update ─────────────────────────────────────────

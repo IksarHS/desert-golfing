@@ -165,15 +165,21 @@ function saveGameSnapshot() {
   savePlayerData();
 }
 
-// Cloud-only push — call sparingly (hole complete, course complete)
+// Cloud-only push — on shot fired and hole complete
+// Only sends course progress, not ball physics state
 function pushToCloud() {
-  snapshotGameState();
   const ref = getPlayerDocRef();
-  if (ref) {
-    ref.set(playerData, { merge: true }).catch(err => {
-      console.error('Cloud push failed:', err);
-    });
-  }
+  if (!ref) return;
+  const cloudData = {
+    currentCourse: playerData.currentCourse,
+    currentHole: playerData.currentHole,
+    totalStrokes: playerData.totalStrokes,
+    strokes: playerData.strokes,
+    completed: playerData.completed
+  };
+  ref.set(cloudData, { merge: true }).catch(err => {
+    console.error('Cloud push failed:', err);
+  });
 }
 
 function isCourseCompleted(worldId, courseId) {
@@ -220,8 +226,8 @@ function _restartGameFromPlayerData() {
     strokes = playerData.strokes || 0;
     showTitle = false;
 
-    // Restore exact ball state if we have it
-    if (playerData.ballState) {
+    // Check if we have exact ball state from localStorage (same device)
+    if (playerData.ballState && playerData.ballState.x) {
       const bs = playerData.ballState;
       ball.x = bs.x; ball.y = bs.y;
       ball.vx = bs.vx; ball.vy = bs.vy;
@@ -230,9 +236,9 @@ function _restartGameFromPlayerData() {
       ball.spinRate = bs.spinRate || 0;
       ball.rotation = bs.rotation || 0;
       state = playerData.gameState || STATE_AIM;
-      // Camera follows ball
       setHoleCamera(holes[currentHole]);
     } else {
+      // Cross-device resume: restart current hole from tee, strokes already charged
       const hole = holes[currentHole];
       ball.x = hole.teeX;
       ball.y = terrainYAt(hole.teeX) - BALL_RADIUS;
