@@ -57,9 +57,8 @@ function initFirebase() {
 function signInWithGoogle() {
   if (!firebaseAuth) return;
   const provider = new firebase.auth.GoogleAuthProvider();
-  firebaseAuth.signInWithPopup(provider).catch(err => {
-    console.error('Sign-in failed:', err);
-  });
+  // Use redirect instead of popup to avoid Cross-Origin-Opener-Policy errors
+  firebaseAuth.signInWithRedirect(provider);
 }
 
 function signOut() {
