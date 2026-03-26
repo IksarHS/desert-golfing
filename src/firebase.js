@@ -57,8 +57,16 @@ function initFirebase() {
 function signInWithGoogle() {
   if (!firebaseAuth) return;
   const provider = new firebase.auth.GoogleAuthProvider();
-  // Use redirect instead of popup to avoid Cross-Origin-Opener-Policy errors
-  firebaseAuth.signInWithRedirect(provider);
+  // Popup works on both localhost and production
+  // COOP warnings in console are harmless Firebase internals
+  firebaseAuth.signInWithPopup(provider).catch(err => {
+    // Fallback to redirect if popup is blocked
+    if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user') {
+      firebaseAuth.signInWithRedirect(provider);
+    } else {
+      console.error('Sign-in failed:', err.code);
+    }
+  });
 }
 
 function signOut() {
