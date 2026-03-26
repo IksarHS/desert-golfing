@@ -51,6 +51,8 @@ window.addEventListener('mouseup', (e) => {
   state = STATE_FLIGHT;
   strokes++;
   _logBall('shot');
+  // Save game state after every shot
+  if (typeof saveGameSnapshot === 'function') saveGameSnapshot();
 });
 
 // Touch support
@@ -97,11 +99,17 @@ canvas.addEventListener('touchend', (e) => {
   state = STATE_FLIGHT;
   strokes++;
   _logBall('shot');
+  if (typeof saveGameSnapshot === 'function') saveGameSnapshot();
 });
 
 // ── Physics Update ─────────────────────────────────────────
 function updatePhysics() {
   if (ball.atRest) return;
+  // Save ball state to localStorage every frame (essentially free)
+  if (typeof snapshotGameState === 'function') {
+    snapshotGameState();
+    localStorage.setItem('dg-player-data', JSON.stringify(playerData));
+  }
 
   // 2 substeps for thin-surface safety
   const substeps = 2;
