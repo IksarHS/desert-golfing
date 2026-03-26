@@ -27,22 +27,30 @@ function initFirebase() {
   firebaseAuth = firebase.auth();
   firebaseDb = firebase.firestore();
 
-  // Listen for auth state changes
+  // Track initial auth state to detect sign-in/sign-out changes (not first load)
+  let _authInitialized = false;
+
   firebaseAuth.onAuthStateChanged(user => {
+    const wasSignedIn = currentUser !== null;
     currentUser = user;
+
     if (user) {
       console.log('Signed in as', user.displayName);
       loadPlayerData().then(() => {
-        // Restart game with cloud save progress
-        _restartGameFromPlayerData();
+        if (_authInitialized) {
+          // User just signed in mid-session — reload to apply cloud save
+          location.reload();
+        }
+        _authInitialized = true;
       });
     } else {
       console.log('Not signed in');
-      // Clear local progress on sign out — clean slate
-      localStorage.removeItem('dg-player-data');
-      playerData = { currentCourse: null, currentHole: 0, currentStrokes: 0, totalStrokes: 0, completed: {} };
-      // Restart game from hole 1
-      _restartGameFromPlayerData();
+      if (_authInitialized && wasSignedIn) {
+        // User just signed out — clear data and reload
+        localStorage.removeItem('dg-player-data');
+        location.reload();
+      }
+      _authInitialized = true;
     }
     updateAuthUI();
   });
