@@ -355,8 +355,21 @@ MODE = {
   name: 'desert-golfing',
 
   init() {
-    // Set current world/course
-    let worldId = 'desert-world-1', courseId = 'desert-course-1'; // default first course;
+    // Check for saved progress (resume where player left off)
+    let worldId = 'desert-world-1', courseId = 'desert-course-1';
+    let resumeHole = 0, resumeStrokes = 0;
+
+    if (typeof playerData !== 'undefined' && playerData.currentCourse) {
+      const parts = playerData.currentCourse.split('/');
+      if (parts.length === 2 && WORLDS[parts[0]]) {
+        worldId = parts[0];
+        courseId = parts[1];
+        resumeHole = playerData.currentHole || 0;
+        resumeStrokes = playerData.currentStrokes || 0;
+      }
+    }
+
+    // Also check localStorage active course (editor override)
     try {
       const active = JSON.parse(localStorage.getItem('dg-active-course'));
       if (active && active.worldId && active.courseId) {
@@ -364,6 +377,7 @@ MODE = {
         courseId = active.courseId;
       }
     } catch (e) {}
+
     currentWorld = WORLDS[worldId] || WORLDS['desert-world-1'];
     currentCourse = currentWorld.courses[courseId] || Object.values(currentWorld.courses)[0];
     _currentWorldId = worldId;
@@ -374,12 +388,34 @@ MODE = {
     // Load saved course data (sync — checks _preloadedCourseData first, then localStorage)
     _applyCourseData(worldId, courseId);
 
-    ensureHolesAhead(2);
-    const firstHole = holes[0];
-    ball.x = firstHole.teeX;
-    ball.y = terrainYAt(firstHole.teeX) - BALL_RADIUS;
-    ball.atRest = true;
-    setHoleCamera(firstHole);
+    // Generate all holes up to the resume point
+    ensureHolesAhead(Math.max(2, resumeHole + 2));
+
+    // Resume from saved hole or start at beginning
+    if (resumeHole > 0 && resumeHole < holes.length) {
+      currentHole = resumeHole;
+      totalStrokes = resumeStrokes;
+      showTitle = false;
+      // Fill/flatten all completed cups
+      for (let i = 0; i < currentHole; i++) {
+        holes[i].cupFilled = true;
+        holes[i].cupFillProgress = 1;
+        holes[i].flagVisible = false;
+        holes[i].flagOpacity = 0;
+        flattenCup(holes[i]);
+      }
+      const hole = holes[currentHole];
+      ball.x = hole.teeX;
+      ball.y = terrainYAt(hole.teeX) - BALL_RADIUS;
+      ball.atRest = true;
+      setHoleCamera(hole);
+    } else {
+      const firstHole = holes[0];
+      ball.x = firstHole.teeX;
+      ball.y = terrainYAt(firstHole.teeX) - BALL_RADIUS;
+      ball.atRest = true;
+      setHoleCamera(firstHole);
+    }
   },
 
   collide() {
@@ -436,6 +472,12 @@ MODE = {
 
     currentHole++;
 
+    // Save progress after each hole
+    if (typeof updateProgress === 'function') {
+      updateProgress(_currentWorldId, Object.keys(currentWorld.courses).find(k => currentWorld.courses[k] === currentCourse), currentHole, totalStrokes);
+    }
+    if (typeof savePlayerData === 'function') savePlayerData();
+
     // Check if this was the last hole in the course
     if (currentHole >= (currentCourse?.holeCount ?? Infinity)) {
       courseComplete = true;
@@ -471,10 +513,15 @@ MODE = {
       flattenCup(prevHole);
     }
 
-    // Course complete — enter idle end state
+    // Course complete — record and enter idle end state
     if (courseComplete) {
       state = STATE_COMPLETE;
       completeTimer = 0;
+      // Record course completion in cloud save
+      const cId = Object.keys(currentWorld.courses).find(k => currentWorld.courses[k] === currentCourse);
+      if (typeof recordCourseComplete === 'function') {
+        recordCourseComplete(_currentWorldId, cId, totalStrokes);
+      }
       return;
     }
 
