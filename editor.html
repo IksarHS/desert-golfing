@@ -1011,10 +1011,6 @@ async function editorInit() {
   // Load editor-created courses before anything reads WORLDS
   loadCustomCourses();
 
-  // Preload course data from server JSON, then init the game
-  if (typeof preloadCourseData === 'function') {
-    await preloadCourseData();
-  }
   MODE.init();
 
   // Patch camera transform for editor zoom & pan

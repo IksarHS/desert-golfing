@@ -27,7 +27,6 @@ function initFirebase() {
   firebaseAuth = firebase.auth();
   firebaseDb = firebase.firestore();
 
-  // Track if this is the first auth event (page load) vs a user action
   let _firstAuthEvent = true;
 
   firebaseAuth.onAuthStateChanged(user => {
@@ -36,8 +35,10 @@ function initFirebase() {
     if (user) {
       console.log('Signed in as', user.displayName);
       loadPlayerData().then(() => {
+        // Save cloud data to localStorage so it survives reload
+        localStorage.setItem('dg-player-data', JSON.stringify(playerData));
         if (!_firstAuthEvent) {
-          // User just signed in mid-session — reload to apply cloud save
+          // User just signed in mid-session — reload to pick up cloud save
           location.reload();
         }
         _firstAuthEvent = false;
@@ -45,7 +46,6 @@ function initFirebase() {
       });
     } else {
       console.log('Not signed in');
-      // Sign-out reload is handled by signOut() directly
       _firstAuthEvent = false;
       updateAuthUI();
     }
