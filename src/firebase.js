@@ -32,12 +32,17 @@ function initFirebase() {
     currentUser = user;
     if (user) {
       console.log('Signed in as', user.displayName);
-      loadPlayerData();
+      loadPlayerData().then(() => {
+        // Restart game with loaded cloud save
+        if (typeof MODE !== 'undefined') MODE.init();
+      });
     } else {
       console.log('Not signed in');
       // Clear local progress on sign out — clean slate
       localStorage.removeItem('dg-player-data');
       playerData = { currentCourse: null, currentHole: 0, currentStrokes: 0, totalStrokes: 0, completed: {} };
+      // Restart game from beginning
+      if (typeof MODE !== 'undefined') MODE.init();
     }
     updateAuthUI();
   });
