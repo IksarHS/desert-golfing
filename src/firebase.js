@@ -79,24 +79,15 @@ function signOut() {
 }
 
 // ── Player Data ──────────────────────────────────────────────
-// Data model:
-// {
-//   currentCourse: "desert-world-1/desert-course-1",
-//   currentHole: 0,
-//   currentStrokes: 0,
-//   totalStrokes: 0,
-//   completed: {
-//     "desert-world-1/desert-course-1": { best: 47, attempts: 3 },
-//     ...
-//   }
-// }
-
 let playerData = {
   currentCourse: null,
   currentHole: 0,
   currentStrokes: 0,
   totalStrokes: 0,
-  completed: {}
+  strokes: 0,         // strokes on current hole
+  completed: {},
+  // Full ball state for mid-flight resume
+  ballState: null      // { x, y, vx, vy, onGround, atRest, spinRate, rotation }
 };
 
 function getPlayerDocRef() {
@@ -150,11 +141,39 @@ function recordCourseComplete(worldId, courseId, strokes) {
   savePlayerData();
 }
 
-function updateProgress(worldId, courseId, holeIndex, strokes) {
-  playerData.currentCourse = worldId + '/' + courseId;
-  playerData.currentHole = holeIndex;
-  playerData.currentStrokes = strokes;
-  // Don't save on every stroke — save periodically or on hole complete
+function snapshotGameState() {
+  const worldId = typeof _currentWorldId !== 'undefined' ? _currentWorldId : 'desert-world-1';
+  const cId = (typeof currentWorld !== 'undefined' && typeof currentCourse !== 'undefined')
+    ? Object.keys(currentWorld.courses).find(k => currentWorld.courses[k] === currentCourse) || 'desert-course-1'
+    : 'desert-course-1';
+
+  playerData.currentCourse = worldId + '/' + cId;
+  playerData.currentHole = typeof currentHole !== 'undefined' ? currentHole : 0;
+  playerData.totalStrokes = typeof totalStrokes !== 'undefined' ? totalStrokes : 0;
+  playerData.strokes = typeof strokes !== 'undefined' ? strokes : 0;
+  playerData.ballState = typeof ball !== 'undefined' ? {
+    x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy,
+    onGround: ball.onGround, atRest: ball.atRest,
+    spinRate: ball.spinRate, rotation: ball.rotation
+  } : null;
+  playerData.gameState = typeof state !== 'undefined' ? state : 0;
+}
+
+// Full save (localStorage + cloud) — call on key events only
+function saveGameSnapshot() {
+  snapshotGameState();
+  savePlayerData();
+}
+
+// Cloud-only push — call sparingly (hole complete, course complete)
+function pushToCloud() {
+  snapshotGameState();
+  const ref = getPlayerDocRef();
+  if (ref) {
+    ref.set(playerData, { merge: true }).catch(err => {
+      console.error('Cloud push failed:', err);
+    });
+  }
 }
 
 function isCourseCompleted(worldId, courseId) {
@@ -197,15 +216,31 @@ function _restartGameFromPlayerData() {
       flattenCup(holes[i]);
     }
     currentHole = resumeHole;
-    totalStrokes = resumeStrokes;
+    totalStrokes = playerData.totalStrokes || 0;
+    strokes = playerData.strokes || 0;
     showTitle = false;
-    const hole = holes[currentHole];
-    ball.x = hole.teeX;
-    ball.y = terrainYAt(hole.teeX) - BALL_RADIUS;
-    ball.vx = 0; ball.vy = 0;
-    ball.atRest = true; ball.onGround = false;
-    setHoleCamera(hole);
-    state = STATE_AIM;
+
+    // Restore exact ball state if we have it
+    if (playerData.ballState) {
+      const bs = playerData.ballState;
+      ball.x = bs.x; ball.y = bs.y;
+      ball.vx = bs.vx; ball.vy = bs.vy;
+      ball.onGround = bs.onGround;
+      ball.atRest = bs.atRest;
+      ball.spinRate = bs.spinRate || 0;
+      ball.rotation = bs.rotation || 0;
+      state = playerData.gameState || STATE_AIM;
+      // Camera follows ball
+      setHoleCamera(holes[currentHole]);
+    } else {
+      const hole = holes[currentHole];
+      ball.x = hole.teeX;
+      ball.y = terrainYAt(hole.teeX) - BALL_RADIUS;
+      ball.vx = 0; ball.vy = 0;
+      ball.atRest = true; ball.onGround = false;
+      setHoleCamera(hole);
+      state = STATE_AIM;
+    }
   }
 }
 
