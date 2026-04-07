@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grass Art Test</title>
+<style>
+  * { margin: 0; padding: 0; }
+  html, body { overflow: hidden; background: #000; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// --- Resize ---
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  generateTerrain();
+  generateGrass();
+  resetBall();
+}
+window.addEventListener('resize', resize);
+
+// --- Terrain ---
+let terrainVerts = [];
+let terrainPath = [];
+
+function generateTerrain() {
+  const W = canvas.width;
+  const H = canvas.height;
+  const baseY = H * 0.75;
+  const numVerts = 12;
+  terrainVerts = [];
+  for (let i = 0; i <= numVerts; i++) {
+    const x = (i / numVerts) * W;
+    const y = baseY + Math.sin(i * 0.7 + 1.3) * (H * 0.06)
+                     + Math.sin(i * 1.9 + 0.5) * (H * 0.03)
+                     + Math.sin(i * 0.3) * (H * 0.04);
+    terrainVerts.push({ x, y });
+  }
+  terrainPath = new Float32Array(W + 1);
+  for (let px = 0; px <= W; px++) {
+    terrainPath[px] = terrainYAt(px);
+  }
+}
+
+function terrainYAt(x) {
+  if (terrainVerts.length < 2) return canvas.height * 0.6;
+  for (let i = 0; i < terrainVerts.length - 1; i++) {
+    const a = terrainVerts[i];
+    const b = terrainVerts[i + 1];
+    if (x >= a.x && x <= b.x) {
+      const t = (x - a.x) / (b.x - a.x);
+      const tt = t * t * (3 - 2 * t);
+      return a.y + (b.y - a.y) * tt;
+    }
+  }
+  return terrainVerts[terrainVerts.length - 1].y;
+}
+
+function terrainNormalAt(x) {
+  const dx = 2;
+  const y0 = terrainPath[Math.max(0, Math.floor(x - dx))] || terrainPath[0];
+  const y1 = terrainPath[Math.min(canvas.width, Math.floor(x + dx))] || terrainPath[canvas.width];
+  const dy = y1 - y0;
+  const len = Math.sqrt(dx * dx * 4 + dy * dy);
+  return { x: -dy / len, y: (dx * 2) / len };
+}
+
+// ============================================================
+// GRASS SYSTEM
+// ============================================================
+// Strategy: The grass body is rendered as solid color bands following the terrain.
+// Individual blade shapes are only drawn at the TOP edge (for silhouette) and
+// a few in the foreground (for ball-nesting depth). This creates a thick,
+// lush carpet look with pixel-art color banding.
+
+// Grass height from terrain line to tallest tips
+const GRASS_HEIGHT = 65;
+
+// Color bands for the grass body (bottom to top = dark to light)
+// Bold stepped bands — pixel art style, NOT a smooth gradient.
+// Each step is a noticeable jump in brightness.
+const BAND_COLORS = [
+  '#1c1408',  // 0: dark brown-green (root/earth transition)
+  '#142008',  // 1: very dark green (deep shadow)
+  '#1a3010',  // 2: dark green (shadow zone)
+  '#244818',  // 3: dark-mid green
+  '#306020',  // 4: mid green (body)
+  '#407828',  // 5: mid-bright green
+  '#509430',  // 6: bright green
+  '#60b03a',  // 7: vivid green (upper body)
+  '#70c844',  // 8: bright vivid (near tips)
+];
+
+// Tip blade colors (the individual blades at the top silhouette)
+const TIP_COLORS_BACK = ['#3a6e24', '#44802c', '#4e9034', '#3e7428', '#48862e'];
+const TIP_COLORS_MID = ['#4e9034', '#58a03c', '#62ac44', '#56983a'];
+const TIP_COLORS_FRONT = ['#62ac44', '#6cb84c', '#76c454', '#6ab448', '#80d05c'];
+const TIP_COLORS_HIGHLIGHT = ['#80d05c', '#8cdc64', '#96e86c', '#a0f074'];
+
+// Seeded random
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+}
+
+// Generate blade sets for the silhouette edge and foreground
+let tipBladesBack = [];    // dark tall blades behind ball — form the silhouette
+let tipBladesMid = [];     // medium blades behind ball
+let tipBladesBright = [];  // bright blades behind ball
+let fgBladesShort = [];    // short foreground blades in front of ball
+let fgBladesTips = [];     // very short bright tips in front of ball
+
+function genBlades(count, seed, opts) {
+  const W = canvas.width;
+  const rng = mulberry32(seed);
+  const blades = [];
+  for (let i = 0; i < count; i++) {
+    const x = rng() * W;
+    const ix = Math.floor(Math.max(0, Math.min(W, x)));
+    const tY = terrainPath[ix];
+    blades.push({
+      x,
+      terrainY: tY,
+      height: opts.minH + rng() * (opts.maxH - opts.minH),
+      width: opts.minW + rng() * (opts.maxW - opts.minW),
+      color: opts.colors[Math.floor(rng() * opts.colors.length)],
+      phase: (x / W) * Math.PI * 4 + rng() * 2.5,
+      lean: (rng() - 0.5) * (opts.lean || 0.4),
+      curve: (rng() - 0.5) * (opts.curve || 0.3),
+      sway: opts.sway || 1.0,
+      thick: rng() < 0.35, // 35% are thicker tuft-type
+    });
+  }
+  return blades;
+}
+
+function generateGrass() {
+  const W = canvas.width;
+  const d = W / 500; // density scale
+
+  // Back silhouette blades — tallest, darkest, form the ragged top edge
+  tipBladesBack = genBlades(Math.floor(500 * d), 1111, {
+    minH: 35, maxH: GRASS_HEIGHT + 15,
+    minW: 2.5, maxW: 5.5,
+    colors: TIP_COLORS_BACK,
+    lean: 0.45, curve: 0.4, sway: 1.3,
+  });
+
+  // Mid blades behind ball — medium height, mid colors
+  tipBladesMid = genBlades(Math.floor(550 * d), 2222, {
+    minH: 25, maxH: GRASS_HEIGHT + 5,
+    minW: 2.5, maxW: 5.5,
+    colors: TIP_COLORS_MID,
+    lean: 0.5, curve: 0.4, sway: 1.1,
+  });
+
+  // Bright blades behind ball — vivid greens, varied heights
+  tipBladesBright = genBlades(Math.floor(450 * d), 3333, {
+    minH: 15, maxH: GRASS_HEIGHT - 5,
+    minW: 2, maxW: 5,
+    colors: TIP_COLORS_FRONT,
+    lean: 0.5, curve: 0.45, sway: 1.0,
+  });
+
+  // Foreground short blades — overlap the ball
+  fgBladesShort = genBlades(Math.floor(350 * d), 4444, {
+    minH: 8, maxH: 22,
+    minW: 2.5, maxW: 5,
+    colors: [...TIP_COLORS_FRONT, ...TIP_COLORS_HIGHLIGHT],
+    lean: 0.35, curve: 0.25, sway: 0.7,
+  });
+
+  // Very short foreground tips
+  fgBladesTips = genBlades(Math.floor(280 * d), 5555, {
+    minH: 4, maxH: 14,
+    minW: 2, maxW: 4,
+    colors: TIP_COLORS_HIGHLIGHT,
+    lean: 0.2, curve: 0.15, sway: 0.5,
+  });
+}
+
+// --- Ball ---
+let ball = { x: 0, y: 0, vx: 0, vy: 0, r: 12, onGround: false };
+
+function resetBall() {
+  const bx = canvas.width * 0.25;
+  const by = terrainPath[Math.floor(bx)] - ball.r;
+  ball.x = bx;
+  ball.y = by;
+  ball.vx = 0;
+  ball.vy = 0;
+}
+
+// --- Input ---
+let dragStart = null;
+let dragging = false;
+let mousePos = { x: 0, y: 0 };
+
+canvas.addEventListener('mousedown', (e) => {
+  dragStart = { x: e.clientX, y: e.clientY };
+  dragging = true;
+});
+canvas.addEventListener('mousemove', (e) => {
+  mousePos.x = e.clientX;
+  mousePos.y = e.clientY;
+});
+canvas.addEventListener('mouseup', (e) => {
+  if (!dragging || !dragStart) return;
+  dragging = false;
+  const dx = dragStart.x - e.clientX;
+  const dy = dragStart.y - e.clientY;
+  const power = Math.min(Math.sqrt(dx * dx + dy * dy) * 0.12, 18);
+  const angle = Math.atan2(dy, dx);
+  ball.vx = Math.cos(angle) * power;
+  ball.vy = Math.sin(angle) * power;
+  ball.onGround = false;
+  dragStart = null;
+});
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const t = e.touches[0];
+  dragStart = { x: t.clientX, y: t.clientY };
+  dragging = true;
+}, { passive: false });
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  mousePos.x = e.touches[0].clientX;
+  mousePos.y = e.touches[0].clientY;
+}, { passive: false });
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  if (!dragging || !dragStart) return;
+  dragging = false;
+  const t = e.changedTouches[0];
+  const dx = dragStart.x - t.clientX;
+  const dy = dragStart.y - t.clientY;
+  const power = Math.min(Math.sqrt(dx * dx + dy * dy) * 0.12, 18);
+  const angle = Math.atan2(dy, dx);
+  ball.vx = Math.cos(angle) * power;
+  ball.vy = Math.sin(angle) * power;
+  ball.onGround = false;
+  dragStart = null;
+}, { passive: false });
+
+// --- Physics ---
+const GRAVITY = 0.25;
+const BOUNCE = 0.45;
+const FRICTION = 0.985;
+const GROUND_FRICTION = 0.96;
+
+function updateBall() {
+  ball.vy += GRAVITY;
+  ball.x += ball.vx;
+  ball.y += ball.vy;
+  ball.vx *= FRICTION;
+
+  const W = canvas.width;
+  const ix = Math.floor(Math.max(0, Math.min(W, ball.x)));
+  const surfaceY = terrainPath[ix];
+
+  if (ball.y + ball.r > surfaceY) {
+    const norm = terrainNormalAt(ball.x);
+    ball.y = surfaceY - ball.r;
+    const dot = ball.vx * norm.x + ball.vy * norm.y;
+    ball.vx -= 2 * dot * norm.x;
+    ball.vy -= 2 * dot * norm.y;
+    ball.vx *= BOUNCE;
+    ball.vy *= BOUNCE;
+    ball.vx *= GROUND_FRICTION;
+
+    if (Math.abs(ball.vy) < 0.5 && Math.abs(ball.vx) < 0.3) {
+      ball.vy = 0;
+      ball.vx = 0;
+      ball.y = surfaceY - ball.r;
+      ball.onGround = true;
+    }
+  }
+
+  if (ball.x < ball.r) { ball.x = ball.r; ball.vx *= -0.5; }
+  if (ball.x > W - ball.r) { ball.x = W - ball.r; ball.vx *= -0.5; }
+}
+
+// ============================================================
+// DRAWING
+// ============================================================
+
+function drawSky() {
+  const W = canvas.width;
+  const H = canvas.height;
+  const grad = ctx.createLinearGradient(0, 0, 0, H * 0.75);
+  grad.addColorStop(0, '#1a3a5c');
+  grad.addColorStop(0.3, '#3a6b8a');
+  grad.addColorStop(0.55, '#d4845a');
+  grad.addColorStop(0.75, '#e8a87c');
+  grad.addColorStop(1, '#f0c8a0');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawTerrain() {
+  const W = canvas.width;
+  const H = canvas.height;
+  // Fill everything below terrain with dark earth gradient
+  ctx.beginPath();
+  ctx.moveTo(0, terrainPath[0]);
+  for (let px = 1; px <= W; px++) {
+    ctx.lineTo(px, terrainPath[px]);
+  }
+  ctx.lineTo(W, H);
+  ctx.lineTo(0, H);
+  ctx.closePath();
+  // Rich dark earth — warm brown, not black. Should feel like soil visible at the base.
+  const earthGrad = ctx.createLinearGradient(0, H * 0.6, 0, H);
+  earthGrad.addColorStop(0, '#2a1e0e');   // warm dark brown at top
+  earthGrad.addColorStop(0.4, '#221808');  // darker brown
+  earthGrad.addColorStop(1, '#14100a');    // very dark brown at bottom
+  ctx.fillStyle = earthGrad;
+  ctx.fill();
+}
+
+// Draw the grass body as horizontal color bands following terrain contour.
+// Band index 0 = darkest (roots near terrain line). Band N-1 = brightest (tips, furthest from terrain).
+// Visual result: dark at the bottom, bright at the top, like light hitting the tips.
+function drawGrassBody() {
+  const W = canvas.width;
+  const H = canvas.height;
+  const numBands = BAND_COLORS.length;
+  const bandStep = GRASS_HEIGHT / numBands;
+
+  // No separate base fill needed — the terrain drawTerrain() already filled earth below,
+  // and band 0 (roots) will extend below the terrain line to cover it.
+
+  // Now draw each band as a stripe. Band 0 is at the bottom (roots, darkest).
+  // Band N-1 is at the top (tips, brightest).
+  // We draw bottom-up. Each band is a filled region between two terrain-offset lines.
+  for (let b = 0; b < numBands; b++) {
+    // Bottom edge: b * bandStep above terrain (0 for the root band)
+    const bottomOffset = b * bandStep;
+    // Top edge: (b+1) * bandStep above terrain
+    const topOffset = (b + 1) * bandStep;
+    const overlap = 2; // slight overlap to avoid seams
+
+    ctx.beginPath();
+    // Top edge (further from terrain = closer to sky)
+    ctx.moveTo(0, terrainPath[0] - topOffset - overlap);
+    for (let px = 1; px <= W; px++) {
+      ctx.lineTo(px, terrainPath[px] - topOffset - overlap);
+    }
+    // Bottom edge (closer to terrain), traced right-to-left
+    // For band 0 (roots), extend below terrain to create a smooth grass-to-earth transition
+    if (b === 0) {
+      for (let px = W; px >= 0; px--) {
+        ctx.lineTo(px, terrainPath[px] + 25);
+      }
+    } else {
+      for (let px = W; px >= 0; px--) {
+        ctx.lineTo(px, terrainPath[px] - bottomOffset + overlap);
+      }
+    }
+    ctx.closePath();
+    ctx.fillStyle = BAND_COLORS[b];
+    ctx.fill();
+  }
+}
+
+// --- Individual blade drawing ---
+let grassFrame = 0;
+const GRASS_FRAME_INTERVAL = 3;
+let currentWindTime = 0;
+
+function drawBlade(blade, t) {
+  const ballInfluenceRadius = 40;
+
+  // Wind sway
+  const windSway = Math.sin(t * 1.6 + blade.phase) * 3.2
+                 + Math.sin(t * 0.6 + blade.phase * 0.5) * 1.8
+                 + Math.sin(t * 2.5 + blade.phase * 1.3) * 0.9;
+
+  // Ball displacement
+  let ballPush = 0;
+  const dx = blade.x - ball.x;
+  const dy = blade.terrainY - ball.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < ballInfluenceRadius && dist > 0) {
+    const influence = 1 - (dist / ballInfluenceRadius);
+    const pushDir = dx > 0 ? 1 : -1;
+    ballPush = pushDir * influence * influence * 16;
+  }
+
+  const sway = windSway * blade.sway + ballPush;
+  const bx = blade.x;
+  const by = blade.terrainY;
+  const h = blade.height;
+  const hw = blade.width * 0.5;
+
+  const tipX = bx + blade.lean * h + sway * (h / 22);
+  const tipY = by - h;
+
+  if (blade.thick) {
+    // Thick tuft blade
+    const baseW = hw * 1.5;
+    const cpx = bx + blade.curve * h * 0.5 + sway * 0.3 * (h / 22);
+    const cpy = by - h * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(bx - baseW | 0, by | 0);
+    ctx.quadraticCurveTo(cpx - baseW * 0.3 | 0, cpy | 0, tipX | 0, tipY | 0);
+    ctx.quadraticCurveTo(cpx + baseW * 0.3 | 0, cpy | 0, bx + baseW | 0, by | 0);
+    ctx.closePath();
+  } else {
+    // Normal tapered blade
+    const cpx = bx + blade.curve * h * 0.5 + sway * 0.35 * (h / 22);
+    const cpy = by - h * 0.55;
+    ctx.beginPath();
+    ctx.moveTo(bx - hw | 0, by | 0);
+    ctx.quadraticCurveTo(cpx | 0, cpy | 0, tipX | 0, tipY | 0);
+    ctx.lineTo(bx + hw | 0, by | 0);
+    ctx.closePath();
+  }
+  ctx.fillStyle = blade.color;
+  ctx.fill();
+}
+
+function drawBladeSet(blades, t) {
+  for (let i = 0; i < blades.length; i++) {
+    drawBlade(blades[i], t);
+  }
+}
+
+function drawBall() {
+  const bx = Math.round(ball.x);
+  const by = Math.round(ball.y);
+  const r = ball.r;
+
+  // Ball shadow
+  ctx.beginPath();
+  ctx.ellipse(bx + 1, by + r - 1, r * 0.9, r * 0.35, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fill();
+
+  // Ball body
+  ctx.beginPath();
+  ctx.arc(bx, by, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.strokeStyle = '#cccccc';
+  ctx.lineWidth = 0.5;
+  ctx.stroke();
+
+  // Highlight
+  ctx.beginPath();
+  ctx.arc(bx - 2, by - 2, r * 0.35, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.fill();
+}
+
+function drawAim() {
+  if (!dragging || !dragStart) return;
+  const dx = dragStart.x - mousePos.x;
+  const dy = dragStart.y - mousePos.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 5) return;
+  const angle = Math.atan2(dy, dx);
+  const power = Math.min(len * 0.12, 18);
+  const lineLen = power * 8;
+  ctx.save();
+  ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(ball.x, ball.y);
+  ctx.lineTo(ball.x + Math.cos(angle) * lineLen, ball.y + Math.sin(angle) * lineLen);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// --- Main Loop ---
+function loop(time) {
+  requestAnimationFrame(loop);
+  updateBall();
+
+  grassFrame++;
+  if (grassFrame % GRASS_FRAME_INTERVAL === 0) {
+    currentWindTime = time * 0.001;
+  }
+  const t = currentWindTime;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawSky();
+  drawTerrain();
+
+  // 1. Grass body — solid color bands (the thick carpet mass)
+  drawGrassBody();
+
+  // 2. Blade silhouettes behind ball — add ragged organic edge at top
+  drawBladeSet(tipBladesBack, t);
+  drawBladeSet(tipBladesMid, t);
+  drawBladeSet(tipBladesBright, t);
+
+  // 3. Ball
+  drawBall();
+
+  // 4. Foreground blades in front of ball — creates nesting effect
+  drawBladeSet(fgBladesShort, t);
+  drawBladeSet(fgBladesTips, t);
+
+  drawAim();
+}
+
+// --- Init ---
+resize();
+resetBall();
+requestAnimationFrame(loop);
+
+</script>
+</body>
+</html>

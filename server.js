@@ -15,6 +15,30 @@ const MIME = {
 };
 
 const server = http.createServer((req, res) => {
+  // ── Save image endpoint ─────────────────────────────────
+  if (req.method === 'POST' && req.url === '/api/save-image') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { path: filePath, data } = JSON.parse(body);
+        const safePath = path.normalize(filePath).replace(/^(\.\.[\/\\])+/, '');
+        const fullPath = path.join(ROOT, safePath);
+        const dir = path.dirname(fullPath);
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(fullPath, Buffer.from(data, 'base64'));
+        console.log(`Saved image: ${safePath}`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, path: safePath }));
+      } catch (e) {
+        console.error('Save image error:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+
   // ── Save endpoint ──────────────────────────────────────
   if (req.method === 'POST' && req.url === '/api/save') {
     let body = '';

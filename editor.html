@@ -1002,7 +1002,9 @@ function updateMaterialPicker() {
 
 // ── Editor Init ───────────────────────────────────────────
 async function editorInit() {
-  // Use same shared seed as the game (seed 42, stored in localStorage)
+  // IMPORTANT: This seed logic must stay in sync with initSeed() in main.js.
+  // Both use localStorage 'dg-seed' with default 42. If you change one, change both.
+  // See CLAUDE.md "Pitfalls" section for details.
   const DEFAULT_GAME_SEED = 42;
   const storedSeed = localStorage.getItem('dg-seed');
   setSeed(storedSeed !== null ? parseInt(storedSeed, 10) : DEFAULT_GAME_SEED);

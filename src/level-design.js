@@ -1,5 +1,11 @@
 // ── Seeded PRNG ──────────────────────────────────────────────
-// Mulberry32: fast, high-quality 32-bit PRNG for reproducible terrain
+// Mulberry32: fast, high-quality 32-bit PRNG for reproducible terrain.
+//
+// IMPORTANT: random() is the seeded PRNG used for terrain generation.
+// It MUST only be called from terrain generation code (this file).
+// Never call random() from gameplay, rendering, or UI code — it will
+// shift the PRNG sequence and break terrain determinism for all
+// subsequent holes. Use Math.random() for non-terrain randomness.
 function _mulberry32(seed) {
   return function() {
     seed |= 0;

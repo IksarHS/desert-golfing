@@ -112,6 +112,22 @@ When an experiment is ready, merge to main. Before merging, run through the test
 
 See `docs/interfaces.md` for full function signatures.
 
+## Pitfalls
+
+Things that have burned us before. Read these before making changes.
+
+### PRNG is sacred
+`random()` in `level-design.js` is the seeded PRNG for terrain generation. **Never call it from gameplay, rendering, or UI code.** Any extra `random()` call shifts the entire terrain sequence for all subsequent holes, silently breaking determinism. Use `Math.random()` for non-terrain randomness.
+
+### Game init goes through `resetGame()` only
+All game start/restart paths (sign-in, sign-out, refresh, first load) must go through the single `resetGame()` function in `main.js`. Never call `startCourse()` directly from auth handlers — it was called multiple times before and caused terrain to differ between signed-in and signed-out states.
+
+### Seed is per-course, not per-hole
+`startCourse()` sets the PRNG seed once: `baseSeed + hashString(worldId + courseId)`. All holes in that course are generated sequentially from that single seed. Adding or removing a hole changes all subsequent holes.
+
+### Editor and game must use the same seed
+Both `editor.html` and `main.js` read the base seed from `localStorage('dg-seed')` with default 42. If you change the seed logic in one, change it in the other. The editor init is in `editorInit()` in editor.html.
+
 ## Testing
 
 Before merging anything to main, verify:
