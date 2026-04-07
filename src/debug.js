@@ -181,15 +181,127 @@ window.skipToHole = function(holeNum) {
   console.log('Skipped to hole ' + holeNum + ' (index ' + targetIndex + ')');
 };
 
-// Patch draw to include debug overlays
+// ── Cheat: Auto-sink (N key) ─────────────────────────────
+// Drops the ball directly into the current hole's cup.
+// Triggers the natural transition animation.
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'n' || e.key === 'N') {
+    if (state !== STATE_AIM && state !== STATE_FLIGHT) return;
+    const hole = holes[currentHole];
+    if (!hole) return;
+    // Place ball just above the cup center and give it a tiny downward velocity
+    ball.x = hole.cupX;
+    ball.y = hole.cupY - BALL_RADIUS - 2;
+    ball.vx = 0;
+    ball.vy = 0.5;
+    ball.atRest = false;
+    ball.onGround = false;
+    state = STATE_FLIGHT;
+    strokes++;
+    totalStrokes++;
+    e.preventDefault();
+  }
+});
+
+// ── Cheat: Bouncy Ball (B key) ───────────────────────────
+// Toggles bouncy mode — ball bounces off screen edges instead of going OOB.
+let ballMode = 'normal'; // 'normal' or 'bouncy'
+const BOUNCY_BALL_COLOR = '#ffcc44';
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'b' || e.key === 'B') {
+    ballMode = ballMode === 'normal' ? 'bouncy' : 'normal';
+    console.log('Ball mode:', ballMode);
+    e.preventDefault();
+  }
+});
+
+// Screen edge collision for bouncy mode
+function collideWithScreenEdges() {
+  if (ballMode !== 'bouncy') return false;
+  let collided = false;
+  const rest = MATERIALS.sand.restitution;
+  const sx = ball.x - camera.x; // screen-space X
+
+  // Left wall
+  if (sx < BALL_RADIUS) {
+    ball.x = camera.x + BALL_RADIUS;
+    if (ball.vx < 0) ball.vx = -ball.vx * rest;
+    collided = true;
+  }
+  // Right wall
+  if (sx > W - BALL_RADIUS) {
+    ball.x = camera.x + W - BALL_RADIUS;
+    if (ball.vx > 0) ball.vx = -ball.vx * rest;
+    collided = true;
+  }
+  // Top wall
+  if (ball.y < BALL_RADIUS) {
+    ball.y = BALL_RADIUS;
+    if (ball.vy < 0) ball.vy = -ball.vy * rest;
+    collided = true;
+  }
+  // Bottom wall
+  if (ball.y > H - BALL_RADIUS) {
+    ball.y = H - BALL_RADIUS;
+    if (ball.vy > 0) ball.vy = -ball.vy * rest;
+    collided = true;
+  }
+  return collided;
+}
+
+// Patch MODE.collide to include screen edges in bouncy mode
+const _origCollide = MODE.collide.bind(MODE);
+MODE.collide = function() {
+  const hit = _origCollide();
+  const edgeHit = collideWithScreenEdges();
+  return hit || edgeHit;
+};
+
+// Patch MODE.isOOB to prevent OOB in bouncy mode
+const _origIsOOB = MODE.isOOB.bind(MODE);
+MODE.isOOB = function() {
+  if (ballMode === 'bouncy') return false;
+  return _origIsOOB();
+};
+
+// Patch drawBall for bouncy mode visual
+const _origDrawBall = drawBall;
+drawBall = function() {
+  if (ballMode === 'bouncy') {
+    // Golden glow ring
+    ctx.strokeStyle = 'rgba(255, 204, 68, 0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, BALL_RADIUS + 2, 0, Math.PI * 2);
+    ctx.stroke();
+    // Swap ball color
+    const origColor = BALL_COLOR;
+    BALL_COLOR = BOUNCY_BALL_COLOR;
+    _origDrawBall();
+    BALL_COLOR = origColor;
+  } else {
+    _origDrawBall();
+  }
+};
+
+// Patch draw to include debug overlays + bouncy HUD
 const _origDraw = draw;
 draw = function() {
   _origDraw();
+  ctx.save();
+  ctx.scale(displayScale, displayScale);
+  // Bouncy mode indicator
+  if (ballMode === 'bouncy') {
+    ctx.fillStyle = 'rgba(255, 204, 68, 0.7)';
+    ctx.font = '11px "Departure Mono", monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('BOUNCY [B]', W - 10, 20);
+  }
+  // Debug panels
   if (_debugMode > 0) {
-    ctx.save();
-    ctx.scale(displayScale, displayScale);
     if (_debugMode === 1) drawSettingsPanel();
     else if (_debugMode === 2) drawBallLog();
-    ctx.restore();
   }
+  ctx.restore();
 };
