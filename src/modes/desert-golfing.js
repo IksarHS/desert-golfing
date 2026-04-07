@@ -301,20 +301,9 @@ MODE = {
   name: 'desert-golfing',
 
   init() {
-    // Use startCourse for clean initialization (clears vertices, reseeds, generates terrain)
-    let worldId = 'desert-world-1', courseId = 'desert-course-1';
-
-    // Check localStorage active course (editor override)
-    try {
-      const active = JSON.parse(localStorage.getItem('dg-active-course'));
-      if (active && active.worldId && active.courseId) {
-        worldId = active.worldId;
-        courseId = active.courseId;
-      }
-    } catch (e) {}
-
-    startCourse(worldId, courseId);
-    // Progress restoration is handled by _restartGameFromPlayerData in firebase.js
+    // No-op: all game initialization now goes through resetGame() in main.js.
+    // This exists for editor compatibility (editor.html calls MODE.init()).
+    // The editor has its own seed + course init in editorInit().
   },
 
   collide() {

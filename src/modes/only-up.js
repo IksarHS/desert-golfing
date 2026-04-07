@@ -61,6 +61,8 @@ function generateTerrain() {
   for (let i = 0; i < NUM_PLATFORMS; i++) {
     const difficulty = i / NUM_PLATFORMS;
 
+    // TODO: Uses Math.random() — platform layout is non-deterministic.
+    // Should use seeded random() if we want reproducible Only Up levels.
     const gap = lerp(220, 380, difficulty) + (Math.random() - 0.5) * 40;
     currentY -= gap;
 

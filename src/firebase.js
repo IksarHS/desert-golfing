@@ -33,44 +33,30 @@ function initFirebase() {
 
     if (user) {
       console.log('Signed in:', user.email);
-      // Load username + player data from Firestore
       loadPlayerData().then(() => {
         localStorage.setItem('dg-player-data', JSON.stringify(playerData));
-        console.log('Cloud save synced to localStorage:', playerData.currentHole);
-        // Start game: if first load, start the loop then restore progress
-        if (!_gameStarted) {
-          _gameStarted = true;
-          if (typeof initSeed === 'function') initSeed();
-          // Don't call startGame (which generates throwaway terrain)
-          // _restartGameFromPlayerData will call startCourse
+        console.log('Cloud save synced:', playerData.currentHole);
+        // Extract world/course from saved progress
+        let worldId = 'desert-world-1', courseId = 'desert-course-1';
+        if (playerData.currentCourse) {
+          const parts = playerData.currentCourse.split('/');
+          if (parts.length === 2 && typeof WORLDS !== 'undefined' && WORLDS[parts[0]]) {
+            worldId = parts[0];
+            courseId = parts[1];
+          }
         }
-        _restartGameFromPlayerData();
-        // Reveal canvas if still hidden
-        const loading = document.getElementById('loading');
-        if (loading) loading.style.display = 'none';
-        if (typeof canvas !== 'undefined') canvas.style.visibility = 'visible';
-        const authUI = document.getElementById('auth-ui');
-        if (authUI) authUI.style.display = 'block';
-        if (!window._gameLoopRunning) {
-          window._gameLoopRunning = true;
-          gameLoop();
-        }
+        resetGame(worldId, courseId, playerData);
+        revealGame();
+        ensureGameLoop();
         updateAuthUI();
       });
     } else {
       console.log('Not signed in');
       currentUsername = null;
       playerData = _freshPlayerData();
-      // Start or reset game fresh
-      if (!_gameStarted) {
-        if (typeof startGame === 'function') startGame();
-      } else {
-        // Already running — reset to hole 1
-        if (typeof initSeed === 'function') initSeed();
-        if (typeof startCourse === 'function') {
-          startCourse('desert-world-1', 'desert-course-1');
-        }
-      }
+      resetGame();
+      revealGame();
+      ensureGameLoop();
       updateAuthUI();
     }
   });
@@ -164,8 +150,7 @@ function signOut() {
   if (!firebaseAuth) return;
   localStorage.removeItem('dg-player-data');
   currentUsername = null;
-  // onAuthStateChanged(null) will handle resetting the game
-  firebaseAuth.signOut();
+  firebaseAuth.signOut(); // onAuthStateChanged(null) handles game reset
 }
 
 // ── Auth UI Mode Toggle ─────────────────────────────────────
@@ -319,64 +304,8 @@ function getCourseBest(worldId, courseId) {
   return data ? data.best : null;
 }
 
-// ── Game Restart ─────────────────────────────────────────────
-function _restartGameFromPlayerData() {
-  if (typeof startCourse !== 'function' || typeof WORLDS === 'undefined') return;
-
-  let worldId = 'desert-world-1', courseId = 'desert-course-1';
-  let resumeHole = 0, resumeStrokes = 0;
-
-  if (playerData.currentCourse) {
-    const parts = playerData.currentCourse.split('/');
-    if (parts.length === 2 && WORLDS[parts[0]]) {
-      worldId = parts[0];
-      courseId = parts[1];
-      resumeHole = playerData.currentHole || 0;
-      resumeStrokes = playerData.currentStrokes || 0;
-    }
-  }
-
-  startCourse(worldId, courseId);
-
-  // Restore progress (even on hole 0 — player may have taken shots)
-  const hasProgress = resumeHole > 0 || (playerData.ballState && playerData.ballState.x) || (playerData.strokes > 0);
-
-  if (hasProgress) {
-    ensureHolesAhead(resumeHole + 2);
-    for (let i = 0; i < resumeHole; i++) {
-      holes[i].cupFilled = true;
-      holes[i].cupFillProgress = 1;
-      holes[i].flagVisible = false;
-      holes[i].flagOpacity = 0;
-      flattenCup(holes[i]);
-    }
-    currentHole = resumeHole;
-    totalStrokes = playerData.totalStrokes || 0;
-    strokes = playerData.strokes || 0;
-    if (resumeHole > 0 || strokes > 0) showTitle = false;
-
-    if (playerData.ballState && playerData.ballState.x) {
-      const bs = playerData.ballState;
-      ball.x = bs.x; ball.y = bs.y;
-      // Always restore at rest — we only save on rest now
-      ball.vx = 0; ball.vy = 0;
-      ball.onGround = true;
-      ball.atRest = true;
-      ball.spinRate = 0;
-      ball.rotation = bs.rotation || 0;
-      state = STATE_AIM;
-      setHoleCamera(holes[currentHole]);
-    } else {
-      const hole = holes[currentHole];
-      ball.x = hole.teeX;
-      ball.y = terrainYAt(hole.teeX) - BALL_RADIUS;
-      ball.vx = 0; ball.vy = 0;
-      ball.atRest = true; ball.onGround = false;
-      setHoleCamera(hole);
-      state = STATE_AIM;
-    }
-  }
-}
+// _restartGameFromPlayerData has been replaced by resetGame() in main.js
+// All game restart logic now goes through the single resetGame() entry point.
 
 // ── Auth UI ──────────────────────────────────────────────────
 function updateAuthUI() {
