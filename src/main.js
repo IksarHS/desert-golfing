@@ -26,7 +26,13 @@ function startGame() {
   if (_gameStarted) return;
   _gameStarted = true;
   initSeed();
-  MODE.init();
+  startCourse('desert-world-1', 'desert-course-1');
+  // Reveal canvas, auth UI, and hide loading screen
+  const loading = document.getElementById('loading');
+  if (loading) loading.style.display = 'none';
+  canvas.style.visibility = 'visible';
+  const authUI = document.getElementById('auth-ui');
+  if (authUI) authUI.style.display = 'block';
   gameLoop();
 }
 

@@ -55,8 +55,10 @@ function startCourse(worldId, courseId) {
   _completeBtn = null;
 
   // Re-seed for this course so terrain is deterministic
-  setSeed((getSeed() || 42) + hashString(worldId + courseId));
-
+  // Always use the base seed (42) + course offset, never the current mutated seed
+  const baseSeed = parseInt(localStorage.getItem('dg-seed') || '42', 10);
+  const _hash = hashString(worldId + courseId);
+  setSeed(baseSeed + _hash);
   ensureHolesAhead(2);
   const firstHole = holes[0];
   ball.x = firstHole.teeX;
@@ -299,21 +301,10 @@ MODE = {
   name: 'desert-golfing',
 
   init() {
-    // Check for saved progress (resume where player left off)
+    // Use startCourse for clean initialization (clears vertices, reseeds, generates terrain)
     let worldId = 'desert-world-1', courseId = 'desert-course-1';
-    let resumeHole = 0, resumeStrokes = 0;
 
-    if (typeof playerData !== 'undefined' && playerData.currentCourse) {
-      const parts = playerData.currentCourse.split('/');
-      if (parts.length === 2 && WORLDS[parts[0]]) {
-        worldId = parts[0];
-        courseId = parts[1];
-        resumeHole = playerData.currentHole || 0;
-        resumeStrokes = playerData.currentStrokes || 0;
-      }
-    }
-
-    // Also check localStorage active course (editor override)
+    // Check localStorage active course (editor override)
     try {
       const active = JSON.parse(localStorage.getItem('dg-active-course'));
       if (active && active.worldId && active.courseId) {
@@ -322,44 +313,8 @@ MODE = {
       }
     } catch (e) {}
 
-    currentWorld = WORLDS[worldId] || WORLDS['desert-world-1'];
-    currentCourse = currentWorld.courses[courseId] || Object.values(currentWorld.courses)[0];
-    _currentWorldId = worldId;
-
-    // Apply per-course seed offset so each course has unique but deterministic terrain
-    setSeed((getSeed() || 42) + hashString(worldId + courseId));
-
-    // Load saved course data (sync — checks _preloadedCourseData first, then localStorage)
-    // Course data is defined in code — no overrides to apply
-
-    // Generate all holes up to the resume point
-    ensureHolesAhead(Math.max(2, resumeHole + 2));
-
-    // Resume from saved hole or start at beginning
-    if (resumeHole > 0 && resumeHole < holes.length) {
-      currentHole = resumeHole;
-      totalStrokes = resumeStrokes;
-      showTitle = false;
-      // Fill/flatten all completed cups
-      for (let i = 0; i < currentHole; i++) {
-        holes[i].cupFilled = true;
-        holes[i].cupFillProgress = 1;
-        holes[i].flagVisible = false;
-        holes[i].flagOpacity = 0;
-        flattenCup(holes[i]);
-      }
-      const hole = holes[currentHole];
-      ball.x = hole.teeX;
-      ball.y = terrainYAt(hole.teeX) - BALL_RADIUS;
-      ball.atRest = true;
-      setHoleCamera(hole);
-    } else {
-      const firstHole = holes[0];
-      ball.x = firstHole.teeX;
-      ball.y = terrainYAt(firstHole.teeX) - BALL_RADIUS;
-      ball.atRest = true;
-      setHoleCamera(firstHole);
-    }
+    startCourse(worldId, courseId);
+    // Progress restoration is handled by _restartGameFromPlayerData in firebase.js
   },
 
   collide() {

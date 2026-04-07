@@ -19,8 +19,11 @@
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
-<div id="auth-ui" style="position:fixed;top:8px;right:10px;z-index:9999;font-family:'Departure Mono',monospace;">
+<div id="loading" style="position:fixed;inset:0;background:#d5ad72;z-index:9999;display:flex;align-items:center;justify-content:center;">
+  <span style="font:48px 'Departure Mono',monospace;color:rgba(255,255,255,0.7);">Loading...</span>
+</div>
+<canvas id="c" style="visibility:hidden;"></canvas>
+<div id="auth-ui" style="position:fixed;top:8px;right:10px;z-index:9999;font-family:'Departure Mono',monospace;display:none;">
   <!-- Login/Register Form (shown when not signed in) -->
   <div id="auth-form" style="background:rgba(20,16,12,0.75);border:1px solid rgba(232,160,48,0.25);border-radius:4px;padding:8px 10px;min-width:180px;">
     <div id="auth-login-username-row" style="margin-bottom:4px;">
