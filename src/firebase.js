@@ -1,5 +1,5 @@
 // ── Firebase Integration ─────────────────────────────────────
-// Google Auth + Firestore cloud saves for cross-device progression.
+// Email/Password Auth + Firestore cloud saves for cross-device progression.
 // Loads via CDN script tags (no bundler needed).
 
 const FIREBASE_CONFIG = {
@@ -16,6 +16,7 @@ let firebaseApp = null;
 let firebaseAuth = null;
 let firebaseDb = null;
 let currentUser = null;
+let currentUsername = null; // Display name from Firestore
 
 // ── Initialize Firebase ──────────────────────────────────────
 function initFirebase() {
@@ -27,68 +28,173 @@ function initFirebase() {
   firebaseAuth = firebase.auth();
   firebaseDb = firebase.firestore();
 
-  let _firstAuthEvent = true;
-
   firebaseAuth.onAuthStateChanged(user => {
     currentUser = user;
 
     if (user) {
-      console.log('Signed in as', user.displayName);
+      console.log('Signed in:', user.email);
+      // Load username + player data from Firestore
       loadPlayerData().then(() => {
-        // Always sync cloud data to localStorage
         localStorage.setItem('dg-player-data', JSON.stringify(playerData));
         console.log('Cloud save synced to localStorage:', playerData.currentHole);
-        // Restart game with cloud progress (works on first load AND mid-session sign-in)
-        if (typeof startCourse === 'function') {
+        // Start or restart game with saved progress
+        if (typeof startGame === 'function') startGame();
+        if (typeof startCourse === 'function' && _gameStarted) {
           _restartGameFromPlayerData();
         }
-        _firstAuthEvent = false;
         updateAuthUI();
       });
     } else {
       console.log('Not signed in');
-      _firstAuthEvent = false;
+      currentUsername = null;
+      playerData = _freshPlayerData();
+      // Start game fresh if not started yet (unsigned user)
+      if (typeof startGame === 'function') startGame();
       updateAuthUI();
     }
   });
 }
 
 // ── Auth ─────────────────────────────────────────────────────
-function signInWithGoogle() {
+
+function _showAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  if (el) {
+    el.textContent = msg;
+    el.style.display = msg ? 'block' : 'none';
+  }
+}
+
+function _clearAuthError() {
+  _showAuthError('');
+}
+
+async function registerWithEmail() {
   if (!firebaseAuth) return;
-  const provider = new firebase.auth.GoogleAuthProvider();
-  // Popup works on both localhost and production
-  // COOP warnings in console are harmless Firebase internals
-  firebaseAuth.signInWithPopup(provider).catch(err => {
-    // Fallback to redirect if popup is blocked
-    if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user') {
-      firebaseAuth.signInWithRedirect(provider);
-    } else {
-      console.error('Sign-in failed:', err.code);
+  _clearAuthError();
+
+  const username = document.getElementById('auth-username')?.value.trim();
+  const email = document.getElementById('auth-email')?.value.trim();
+  const password = document.getElementById('auth-password')?.value;
+
+  if (!username) { _showAuthError('Username required'); return; }
+  if (!email) { _showAuthError('Email required'); return; }
+  if (!password || password.length < 6) { _showAuthError('Password must be 6+ characters'); return; }
+
+  try {
+    const cred = await firebaseAuth.createUserWithEmailAndPassword(email, password);
+    // Save username to Firestore player doc
+    await firebaseDb.collection('players').doc(cred.user.uid).set({
+      username: username,
+      email: email,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    currentUsername = username;
+    console.log('Registered as', username);
+    // onAuthStateChanged will handle the rest
+  } catch (err) {
+    console.error('Registration failed:', err.code);
+    const messages = {
+      'auth/email-already-in-use': 'Email already registered',
+      'auth/invalid-email': 'Invalid email address',
+      'auth/weak-password': 'Password too weak (6+ chars)',
+      'auth/operation-not-allowed': 'Email/password auth not enabled'
+    };
+    _showAuthError(messages[err.code] || err.message);
+  }
+}
+
+async function loginWithUsername() {
+  if (!firebaseAuth || !firebaseDb) return;
+  _clearAuthError();
+
+  const username = document.getElementById('auth-login-username')?.value.trim();
+  const password = document.getElementById('auth-password')?.value;
+
+  if (!username) { _showAuthError('Username required'); return; }
+  if (!password) { _showAuthError('Password required'); return; }
+
+  try {
+    // Look up email from username in Firestore
+    const snap = await firebaseDb.collection('players').where('username', '==', username).limit(1).get();
+    if (snap.empty) {
+      _showAuthError('No account with that username');
+      return;
     }
-  });
+    const email = snap.docs[0].data().email;
+    if (!email) {
+      _showAuthError('Account has no email — contact support');
+      return;
+    }
+    await firebaseAuth.signInWithEmailAndPassword(email, password);
+    // onAuthStateChanged will handle loading data + UI
+  } catch (err) {
+    console.error('Login failed:', err.code);
+    const messages = {
+      'auth/wrong-password': 'Wrong password',
+      'auth/too-many-requests': 'Too many attempts — try later',
+      'auth/invalid-credential': 'Invalid username or password'
+    };
+    _showAuthError(messages[err.code] || err.message);
+  }
 }
 
 function signOut() {
   if (!firebaseAuth) return;
-  // Clear local data FIRST, then sign out and reload
   localStorage.removeItem('dg-player-data');
+  currentUsername = null;
   firebaseAuth.signOut().then(() => {
-    location.reload();
+    // Reset game to hole 1
+    playerData = _freshPlayerData();
+    if (typeof startCourse === 'function') {
+      _restartGameFromPlayerData();
+    }
+    updateAuthUI();
   });
 }
 
+// ── Auth UI Mode Toggle ─────────────────────────────────────
+let _authMode = 'login'; // 'login' or 'register'
+
+function setAuthMode(mode) {
+  _authMode = mode;
+  _clearAuthError();
+  const usernameRow = document.getElementById('auth-username-row');
+  const submitBtn = document.getElementById('auth-submit');
+  const toggleLink = document.getElementById('auth-toggle');
+
+  const loginUsernameRow = document.getElementById('auth-login-username-row');
+  const emailRow = document.getElementById('auth-email-row');
+
+  if (mode === 'register') {
+    if (usernameRow) usernameRow.style.display = 'block';
+    if (loginUsernameRow) loginUsernameRow.style.display = 'none';
+    if (emailRow) emailRow.style.display = 'block';
+    if (submitBtn) { submitBtn.textContent = 'Register'; submitBtn.onclick = registerWithEmail; }
+    if (toggleLink) toggleLink.innerHTML = '<a href="#" onclick="setAuthMode(\'login\');return false">Login</a>';
+  } else {
+    if (usernameRow) usernameRow.style.display = 'none';
+    if (loginUsernameRow) loginUsernameRow.style.display = 'block';
+    if (emailRow) emailRow.style.display = 'none';
+    if (submitBtn) { submitBtn.textContent = 'Login'; submitBtn.onclick = loginWithUsername; }
+    if (toggleLink) toggleLink.innerHTML = '<a href="#" onclick="setAuthMode(\'register\');return false">Register</a>';
+  }
+}
+
 // ── Player Data ──────────────────────────────────────────────
-let playerData = {
-  currentCourse: null,
-  currentHole: 0,
-  currentStrokes: 0,
-  totalStrokes: 0,
-  strokes: 0,         // strokes on current hole
-  completed: {},
-  // Full ball state for mid-flight resume
-  ballState: null      // { x, y, vx, vy, onGround, atRest, spinRate, rotation }
-};
+function _freshPlayerData() {
+  return {
+    currentCourse: null,
+    currentHole: 0,
+    currentStrokes: 0,
+    totalStrokes: 0,
+    strokes: 0,
+    completed: {},
+    ballState: null
+  };
+}
+
+let playerData = _freshPlayerData();
 
 function getPlayerDocRef() {
   if (!firebaseDb || !currentUser) return null;
@@ -101,7 +207,12 @@ async function loadPlayerData() {
   try {
     const doc = await ref.get();
     if (doc.exists) {
-      playerData = { ...playerData, ...doc.data() };
+      const data = doc.data();
+      // Extract username
+      if (data.username) {
+        currentUsername = data.username;
+      }
+      playerData = { ..._freshPlayerData(), ...data };
       console.log('Loaded cloud save:', playerData);
     } else {
       // First time player — save initial data
@@ -114,13 +225,14 @@ async function loadPlayerData() {
 }
 
 async function savePlayerData() {
-  // Always write localStorage FIRST (synchronous, survives browser close)
+  // Only save if signed in
+  if (!currentUser) return;
+
+  // Write localStorage as fast cache for signed-in user
   localStorage.setItem('dg-player-data', JSON.stringify(playerData));
 
   const ref = getPlayerDocRef();
-  if (!ref) {
-    return;
-  }
+  if (!ref) return;
   try {
     await ref.set(playerData, { merge: true });
   } catch (err) {
@@ -161,13 +273,14 @@ function snapshotGameState() {
 
 // Full save (localStorage + cloud) — call on key events only
 function saveGameSnapshot() {
+  if (!currentUser) return; // No saves when not signed in
   snapshotGameState();
   savePlayerData();
 }
 
 // Cloud-only push — on shot fired and hole complete
-// Only sends course progress, not ball physics state
 function pushToCloud() {
+  if (!currentUser) return; // No saves when not signed in
   const ref = getPlayerDocRef();
   if (!ref) return;
   const cloudData = {
@@ -194,7 +307,7 @@ function getCourseBest(worldId, courseId) {
 // ── Game Restart ─────────────────────────────────────────────
 function _restartGameFromPlayerData() {
   if (typeof startCourse !== 'function' || typeof WORLDS === 'undefined') return;
-  if (typeof initSeed === 'function') initSeed(); // Reset to base seed before course offset
+  if (typeof initSeed === 'function') initSeed();
 
   let worldId = 'desert-world-1', courseId = 'desert-course-1';
   let resumeHole = 0, resumeStrokes = 0;
@@ -211,8 +324,10 @@ function _restartGameFromPlayerData() {
 
   startCourse(worldId, courseId);
 
-  // Resume mid-course if needed
-  if (resumeHole > 0) {
+  // Restore progress (even on hole 0 — player may have taken shots)
+  const hasProgress = resumeHole > 0 || (playerData.ballState && playerData.ballState.x) || (playerData.strokes > 0);
+
+  if (hasProgress) {
     ensureHolesAhead(resumeHole + 2);
     for (let i = 0; i < resumeHole; i++) {
       holes[i].cupFilled = true;
@@ -224,9 +339,8 @@ function _restartGameFromPlayerData() {
     currentHole = resumeHole;
     totalStrokes = playerData.totalStrokes || 0;
     strokes = playerData.strokes || 0;
-    showTitle = false;
+    if (resumeHole > 0 || strokes > 0) showTitle = false;
 
-    // Check if we have exact ball state from localStorage (same device)
     if (playerData.ballState && playerData.ballState.x) {
       const bs = playerData.ballState;
       ball.x = bs.x; ball.y = bs.y;
@@ -238,7 +352,6 @@ function _restartGameFromPlayerData() {
       state = playerData.gameState || STATE_AIM;
       setHoleCamera(holes[currentHole]);
     } else {
-      // Cross-device resume: restart current hole from tee, strokes already charged
       const hole = holes[currentHole];
       ball.x = hole.teeX;
       ball.y = terrainYAt(hole.teeX) - BALL_RADIUS;
@@ -252,23 +365,26 @@ function _restartGameFromPlayerData() {
 
 // ── Auth UI ──────────────────────────────────────────────────
 function updateAuthUI() {
-  const btn = document.getElementById('auth-btn');
-  const nameEl = document.getElementById('auth-name');
-  if (!btn) return;
+  const form = document.getElementById('auth-form');
+  const signedIn = document.getElementById('auth-signed-in');
+  const nameEl = document.getElementById('auth-display-name');
 
   if (currentUser) {
-    btn.textContent = 'Sign Out';
-    btn.onclick = signOut;
-    if (nameEl) nameEl.textContent = currentUser.displayName || 'Player';
+    // Signed in — show username + sign out
+    if (form) form.style.display = 'none';
+    if (signedIn) signedIn.style.display = 'flex';
+    if (nameEl) nameEl.textContent = currentUsername || currentUser.email;
   } else {
-    btn.textContent = 'Sign In';
-    btn.onclick = signInWithGoogle;
-    if (nameEl) nameEl.textContent = '';
+    // Not signed in — show form
+    if (form) form.style.display = 'block';
+    if (signedIn) signedIn.style.display = 'none';
+    setAuthMode(_authMode);
   }
 }
 
-// Load local data on startup (before Firebase loads)
+// On startup: load cached data for signed-in user only
+// (If not signed in, onAuthStateChanged will reset to fresh)
 try {
   const local = JSON.parse(localStorage.getItem('dg-player-data'));
-  if (local) playerData = { ...playerData, ...local };
+  if (local) playerData = { ..._freshPlayerData(), ...local };
 } catch (e) {}

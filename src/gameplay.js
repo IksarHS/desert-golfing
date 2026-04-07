@@ -107,11 +107,6 @@ canvas.addEventListener('touchend', (e) => {
 // ── Physics Update ─────────────────────────────────────────
 function updatePhysics() {
   if (ball.atRest) return;
-  // Save ball state to localStorage every frame (essentially free)
-  if (typeof snapshotGameState === 'function') {
-    snapshotGameState();
-    localStorage.setItem('dg-player-data', JSON.stringify(playerData));
-  }
 
   // 2 substeps for thin-surface safety
   const substeps = 2;
@@ -166,6 +161,8 @@ function updatePhysics() {
         ball.slowFrames = 0;
         if (MODE.onRest) MODE.onRest();
         _logBall('rest');
+        // Save position when ball comes to rest
+        if (typeof saveGameSnapshot === 'function') saveGameSnapshot();
       }
     }
   } else {
@@ -184,6 +181,8 @@ function updatePhysics() {
         ball.onGround = true;
         ball.stuckFrames = 0;
         _logBall('stuck-rest');
+        // Save position when ball comes to rest
+        if (typeof saveGameSnapshot === 'function') saveGameSnapshot();
       }
     } else {
       ball.stuckFrames = 0;
@@ -291,6 +290,8 @@ function update() {
           state = STATE_AIM;
         }
         _logBall('transition-end-tee');
+        // Save after hole transition completes
+        if (typeof saveGameSnapshot === 'function') saveGameSnapshot();
       }
       break;
     }

@@ -1,4 +1,6 @@
 // ── Game Loop ──────────────────────────────────────────────
+let _gameStarted = false;
+
 function gameLoop() {
   _ballLogFrame++;
   update();
@@ -7,9 +9,6 @@ function gameLoop() {
 }
 
 // ── Shared Seed ────────────────────────────────────────────
-// The default seed ensures every player gets the same holes.
-// Stored in localStorage so it persists across refreshes.
-// Only changes if explicitly set via setSeed() or the editor.
 const DEFAULT_GAME_SEED = 42;
 
 function initSeed() {
@@ -22,15 +21,23 @@ function initSeed() {
   }
 }
 
-// ── Init ───────────────────────────────────────────────────
-async function init() {
-  // Initialize Firebase (auth + cloud saves)
-  if (typeof initFirebase === 'function') initFirebase();
-  // Initialize seed before anything generates terrain
+// ── Start game (called after auth resolves) ────────────────
+function startGame() {
+  if (_gameStarted) return;
+  _gameStarted = true;
   initSeed();
-  // Course data is defined in code — no preloading needed
   MODE.init();
   gameLoop();
+}
+
+// ── Init ───────────────────────────────────────────────────
+function init() {
+  if (typeof initFirebase === 'function') {
+    initFirebase(); // This will call startGame() after auth resolves
+  } else {
+    // No Firebase — start immediately
+    startGame();
+  }
 }
 
 init();

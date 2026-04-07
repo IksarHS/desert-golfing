@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head><title>Drop Image Here</title></head>
+<body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#222;color:#fff;font-family:monospace">
+<div id="drop" style="border:3px dashed #e8a030;padding:80px;border-radius:16px;text-align:center;font-size:24px;cursor:pointer">
+  Drop or paste your image here
+  <input type="file" id="fileInput" accept="image/*" style="display:none">
+</div>
+<script>
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+drop.onclick = () => fileInput.click();
+drop.ondragover = e => { e.preventDefault(); drop.style.borderColor = '#fff'; };
+drop.ondragleave = () => { drop.style.borderColor = '#e8a030'; };
+drop.ondrop = e => { e.preventDefault(); handleFile(e.dataTransfer.files[0]); };
+fileInput.onchange = e => handleFile(e.target.files[0]);
+document.onpaste = e => {
+  const items = e.clipboardData.items;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) handleFile(item.getAsFile());
+  }
+};
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const base64 = reader.result.split(',')[1];
+    const res = await fetch('/api/save-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: 'experiments/art/bg-test-image.png', data: base64 })
+    });
+    if (res.ok) {
+      drop.innerHTML = 'Saved! Open <a href="bg-test.html" style="color:#e8a030">bg-test.html</a>';
+    } else {
+      drop.textContent = 'Save failed: ' + await res.text();
+    }
+  };
+  reader.readAsDataURL(file);
+};
+</script>
+</body>
+</html>
