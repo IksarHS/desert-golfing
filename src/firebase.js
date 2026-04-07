@@ -31,6 +31,9 @@ function initFirebase() {
   firebaseAuth.onAuthStateChanged(user => {
     currentUser = user;
 
+    // Skip if registerWithEmail is handling everything
+    if (_registering) return;
+
     if (user) {
       console.log('Signed in:', user.email);
       loadPlayerData().then(() => {
@@ -76,6 +79,8 @@ function _clearAuthError() {
   _showAuthError('');
 }
 
+let _registering = false;
+
 async function registerWithEmail() {
   if (!firebaseAuth) return;
   _clearAuthError();
@@ -89,17 +94,31 @@ async function registerWithEmail() {
   if (!password || password.length < 6) { _showAuthError('Password must be 6+ characters'); return; }
 
   try {
+    // Tell onAuthStateChanged to skip — we handle everything here
+    _registering = true;
+
+    // 1. Create the Firebase Auth account
     const cred = await firebaseAuth.createUserWithEmailAndPassword(email, password);
-    // Save username to Firestore player doc
-    await firebaseDb.collection('players').doc(cred.user.uid).set({
-      username: username,
-      email: email,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
+    currentUser = cred.user;
+
+    // 2. Write the profile to Firestore (username + email + fresh game state)
     currentUsername = username;
+    playerData = _freshPlayerData();
+    playerData.username = username;
+    playerData.email = email;
+    playerData.createdAt = new Date().toISOString();
+    await firebaseDb.collection('players').doc(cred.user.uid).set(playerData);
+
+    // 3. Start the game
+    resetGame();
+    revealGame();
+    ensureGameLoop();
+    updateAuthUI();
+
+    _registering = false;
     console.log('Registered as', username);
-    // onAuthStateChanged will handle the rest
   } catch (err) {
+    _registering = false;
     console.error('Registration failed:', err.code);
     const messages = {
       'auth/email-already-in-use': 'Email already registered',

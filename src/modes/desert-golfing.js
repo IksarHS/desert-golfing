@@ -46,6 +46,8 @@ function startCourse(worldId, courseId) {
   // Reset game state
   vertices.length = 0;
   holes.length = 0;
+  objects.length = 0;
+  _recentArchetypes.length = 0;
   currentHole = 0;
   totalStrokes = 0;
   strokes = 0;

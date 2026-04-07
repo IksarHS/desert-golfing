@@ -40,7 +40,9 @@ function initSeed() {
 // @param {string} courseId - course to load (default: 'desert-course-1')
 // @param {object|null} progress - saved player progress to restore, or null for fresh start
 function resetGame(worldId, courseId, progress) {
-  initSeed();
+  // Reset PRNG to exact base seed before anything else
+  setSeed(DEFAULT_GAME_SEED);
+  localStorage.setItem('dg-seed', String(DEFAULT_GAME_SEED));
   startCourse(worldId || 'desert-world-1', courseId || 'desert-course-1');
 
   if (progress) {
