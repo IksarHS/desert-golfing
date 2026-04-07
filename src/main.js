@@ -50,6 +50,28 @@ function resetGame(worldId, courseId, progress) {
     const hasProgress = resumeHole > 0 || (progress.ballState && progress.ballState.x) || (progress.strokes > 0);
 
     if (hasProgress) {
+      const maxHoles = currentCourse?.holeCount ?? Infinity;
+
+      // If saved hole is past the course end, player already completed it
+      if (resumeHole >= maxHoles) {
+        // Show completion screen for the last hole
+        ensureHolesAhead(maxHoles - 1);
+        for (let i = 0; i < maxHoles; i++) {
+          holes[i].cupFilled = true;
+          holes[i].cupFillProgress = 1;
+          holes[i].flagVisible = false;
+          holes[i].flagOpacity = 0;
+          flattenCup(holes[i]);
+        }
+        currentHole = maxHoles;
+        totalStrokes = progress.totalStrokes || 0;
+        courseComplete = true;
+        state = STATE_COMPLETE;
+        completeTimer = 60; // skip fade-in
+        setHoleCamera(holes[maxHoles - 1]);
+        return;
+      }
+
       ensureHolesAhead(resumeHole + 2);
       for (let i = 0; i < resumeHole; i++) {
         holes[i].cupFilled = true;
