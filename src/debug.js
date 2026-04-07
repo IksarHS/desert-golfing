@@ -275,11 +275,24 @@ drawBall = function() {
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, BALL_RADIUS + 2, 0, Math.PI * 2);
     ctx.stroke();
-    // Swap ball color
-    const origColor = BALL_COLOR;
-    BALL_COLOR = BOUNCY_BALL_COLOR;
-    _origDrawBall();
-    BALL_COLOR = origColor;
+    // Draw golden ball directly instead of modifying BALL_COLOR (it's const)
+    ctx.fillStyle = BOUNCY_BALL_COLOR;
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+    // Draw rotation dots
+    ctx.save();
+    ctx.translate(ball.x, ball.y);
+    ctx.rotate(ball.rotation || 0);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    const dotDist = BALL_RADIUS * 0.55;
+    for (let i = 0; i < 3; i++) {
+      const angle = (i / 3) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(Math.cos(angle) * dotDist, Math.sin(angle) * dotDist, 1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   } else {
     _origDrawBall();
   }
