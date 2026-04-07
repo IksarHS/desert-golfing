@@ -373,9 +373,36 @@
 <!-- V2B: Settings overlay (course/world/hole config) -->
 <div id="settings-overlay">
   <div class="settings-header">
-    <span class="settings-header-title">Settings</span>
+    <span class="settings-header-title">Hole Editor</span>
     <button class="settings-close-btn" onclick="toggleSettingsOverlay()">&#10005;</button>
   </div>
+
+  <!-- PRIMARY: Current hole editing -->
+  <div class="settings-section-title">Current Hole</div>
+  <div class="settings-row">
+    <span class="settings-label">HOLE</span>
+    <span id="settings-hole-indicator" style="font-size:12px; color:#e8a030; font-weight:bold; min-width:60px"></span>
+  </div>
+  <div class="settings-row">
+    <span class="settings-label">TYPE</span>
+    <div style="position:relative; display:inline-block;" id="type-toggle-wrapper">
+      <button class="ed-btn" id="btn-toggle-type" onclick="onToggleTypeClick()"></button>
+      <div id="custom-dropdown" style="display:none; position:absolute; top:100%; left:0; z-index:300; background:rgba(26,22,18,0.96); border:1px solid rgba(255,255,255,0.12); border-radius:8px; min-width:170px; box-shadow:0 8px 24px rgba(0,0,0,0.5); padding:4px 0;">
+        <div class="dropdown-item" onclick="makeCustomNew()">New Custom</div>
+        <div class="dropdown-item" onclick="openLibraryPicker()">From Library...</div>
+      </div>
+    </div>
+  </div>
+  <div class="settings-row" id="preset-row" style="display:none">
+    <span class="settings-label">PRESET</span>
+    <div id="preset-bar" class="visible">
+      <button class="ed-btn sm" onclick="cyclePreset(-1)">&#9664;</button>
+      <span class="preset-name" id="preset-name">Flat</span>
+      <button class="ed-btn sm" onclick="cyclePreset(1)">&#9654;</button>
+    </div>
+  </div>
+
+  <!-- SECONDARY: Course settings -->
   <div class="settings-section-title">Course</div>
   <div class="settings-row">
     <span class="settings-label">COURSE</span>
@@ -388,30 +415,17 @@
     <input class="ed-input" id="course-name" type="text" value="" style="width:120px" onchange="onMetadataChange()" title="Display name" />
   </div>
   <div class="settings-row">
-    <span class="settings-label">WORLD</span>
-    <select class="ed-select" id="world-picker" onchange="onWorldPick()" style="min-width:100px"></select>
-  </div>
-  <div class="settings-section-title">Current Hole</div>
-  <div class="settings-row">
     <span class="settings-label">HOLES</span>
     <button class="ed-btn sm" onclick="adjustHoleCount(-1)">&#9664;</button>
     <span id="hole-count-label" style="font-size:11px; color:#999; min-width:36px; text-align:center">10</span>
     <button class="ed-btn sm" onclick="adjustHoleCount(1)">&#9654;</button>
   </div>
+
+  <!-- TERTIARY: World + Library -->
+  <div class="settings-section-title">World</div>
   <div class="settings-row">
-    <span class="settings-label">TYPE</span>
-    <div style="position:relative; display:inline-block;" id="type-toggle-wrapper">
-      <button class="ed-btn" id="btn-toggle-type" onclick="onToggleTypeClick()"></button>
-      <div id="custom-dropdown" style="display:none; position:absolute; top:100%; left:0; z-index:300; background:rgba(26,22,18,0.96); border:1px solid rgba(255,255,255,0.12); border-radius:8px; min-width:170px; box-shadow:0 8px 24px rgba(0,0,0,0.5); padding:4px 0;">
-        <div class="dropdown-item" onclick="makeCustomNew()">New Custom</div>
-        <div class="dropdown-item" onclick="openLibraryPicker()">From Library...</div>
-      </div>
-    </div>
-    <div id="preset-bar">
-      <button class="ed-btn sm" onclick="cyclePreset(-1)">&#9664;</button>
-      <span class="preset-name" id="preset-name">Flat</span>
-      <button class="ed-btn sm" onclick="cyclePreset(1)">&#9654;</button>
-    </div>
+    <span class="settings-label">WORLD</span>
+    <select class="ed-select" id="world-picker" onchange="onWorldPick()" style="min-width:100px"></select>
   </div>
   <div class="settings-section-title">Library</div>
   <div class="settings-row">
@@ -1002,18 +1016,17 @@ function updateMaterialPicker() {
 
 // ── Editor Init ───────────────────────────────────────────
 async function editorInit() {
-  // IMPORTANT: This seed logic must stay in sync with initSeed() in main.js.
-  // Both use localStorage 'dg-seed' with default 42. If you change one, change both.
-  // See CLAUDE.md "Pitfalls" section for details.
-  const DEFAULT_GAME_SEED = 42;
-  const storedSeed = localStorage.getItem('dg-seed');
-  setSeed(storedSeed !== null ? parseInt(storedSeed, 10) : DEFAULT_GAME_SEED);
-  if (storedSeed === null) localStorage.setItem('dg-seed', String(DEFAULT_GAME_SEED));
-
   // Load editor-created courses before anything reads WORLDS
   loadCustomCourses();
 
-  MODE.init();
+  // Use startCourse() — the same function the game uses — so terrain is identical.
+  // This sets currentWorld, currentCourse, seeds the PRNG with the course hash,
+  // and generates the initial holes.
+  const DEFAULT_GAME_SEED = 42;
+  if (!localStorage.getItem('dg-seed')) {
+    localStorage.setItem('dg-seed', String(DEFAULT_GAME_SEED));
+  }
+  startCourse('desert-world-1', 'desert-course-1');
 
   // Patch camera transform for editor zoom & pan
   const _origApplyCamera = MODE.applyCameraTransform.bind(MODE);
@@ -1465,19 +1478,26 @@ function updateHoleList() {
 
 function updateToggleButton() {
   const btn = document.getElementById('btn-toggle-type');
-  const presetBar = document.getElementById('preset-bar');
+  const presetRow = document.getElementById('preset-row');
   const nameInput = document.getElementById('hole-name-input');
   const nameBar = document.getElementById('hole-name-bar');
   const isCustom = customHoleIndices.has(currentHole);
   btn.textContent = isCustom ? 'Set Auto' : 'Set Custom';
   btn.className = 'ed-btn' + (isCustom ? ' active' : '');
-  presetBar.classList.toggle('visible', isCustom);
+  // Show/hide the preset row based on custom state
+  if (presetRow) presetRow.style.display = isCustom ? '' : 'none';
   // Show/hide name input in sidebar
   if (isCustom) {
     nameBar.style.display = '';
     nameInput.value = (customHoleMeta[currentHole] && customHoleMeta[currentHole].name) || '';
   } else {
     nameBar.style.display = 'none';
+  }
+  // Update hole indicator in settings panel
+  const indicator = document.getElementById('settings-hole-indicator');
+  if (indicator) {
+    const typeLabel = isCustom ? 'custom' : 'auto';
+    indicator.textContent = `${currentHole + 1} / ${editorHoleCount}  (${typeLabel})`;
   }
   // Always close dropdown when updating
   document.getElementById('custom-dropdown').style.display = 'none';
