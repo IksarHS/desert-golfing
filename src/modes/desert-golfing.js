@@ -102,12 +102,18 @@ let _currentWorldId = 'desert-world-1';
 
 // ── Terrain Collision ──────────────────────────────────────
 function findSegment(worldX) {
+  // Find the segment whose X range contains worldX (handles any vertex order)
+  let bestIdx = vertices.length - 2;
+  let bestDist = Infinity;
   for (let i = 0; i < vertices.length - 1; i++) {
-    if (worldX >= vertices[i].x && worldX <= vertices[i + 1].x) {
-      return i;
-    }
+    const minX = Math.min(vertices[i].x, vertices[i + 1].x);
+    const maxX = Math.max(vertices[i].x, vertices[i + 1].x);
+    if (worldX >= minX && worldX <= maxX) return i;
+    // Track closest segment in case none contains worldX
+    const dist = Math.min(Math.abs(worldX - minX), Math.abs(worldX - maxX));
+    if (dist < bestDist) { bestDist = dist; bestIdx = i; }
   }
-  return vertices.length - 2;
+  return bestIdx;
 }
 
 function segmentNormal(i) {
@@ -124,9 +130,11 @@ function collideWithTerrain() {
   for (let i = 0; i < vertices.length - 1; i++) {
     const a = vertices[i], b = vertices[i + 1];
 
-    // Skip segments far from ball
-    if (b.x < ball.x - BALL_RADIUS * 2 && a.x < ball.x - BALL_RADIUS * 2) continue;
-    if (a.x > ball.x + BALL_RADIUS * 2 && b.x > ball.x + BALL_RADIUS * 2) break;
+    // Skip segments far from ball (check both vertices since order may vary)
+    const segMinX = Math.min(a.x, b.x);
+    const segMaxX = Math.max(a.x, b.x);
+    if (segMaxX < ball.x - BALL_RADIUS * 2) continue;
+    if (segMinX > ball.x + BALL_RADIUS * 2) continue;  // 'continue' not 'break'
 
     // Find closest point on segment AB to ball center
     const dx = b.x - a.x;
@@ -286,17 +294,20 @@ function isBallOffScreen() {
 function drawTerrainDG() {
   const startX = camera.x - 50;
   const endX   = camera.x + W + 50;
-  const bottomY = camera.x + H + 200; // well below screen
 
-  // Draw each segment as a filled trapezoid with its material color
+  // Draw each segment as an independent filled trapezoid.
+  // Each segment is self-contained — works regardless of vertex X-order.
+  // Overlapping segments (overhangs) naturally create solid filled areas.
   for (let i = 0; i < vertices.length - 1; i++) {
     const a = vertices[i];
     const b = vertices[i + 1];
-    // Skip segments entirely off-screen
-    if (b.x < startX - 100) continue;
-    if (a.x > endX + 100) break;
 
-    // Determine material color from the left vertex of the segment
+    // Skip segments entirely off-screen (check BOTH vertices since order may vary)
+    const segMinX = Math.min(a.x, b.x);
+    const segMaxX = Math.max(a.x, b.x);
+    if (segMaxX < startX - 100) continue;
+    if (segMinX > endX + 100) continue;  // 'continue' not 'break' — later segments may loop back
+
     const matName = a.mat || DEFAULT_MAT;
     const mat = MATERIALS[matName] || MATERIALS[DEFAULT_MAT];
     ctx.fillStyle = mat.color || GROUND;
@@ -304,8 +315,8 @@ function drawTerrainDG() {
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
-    ctx.lineTo(b.x, H + 200);
-    ctx.lineTo(a.x, H + 200);
+    ctx.lineTo(b.x, H + 300);
+    ctx.lineTo(a.x, H + 300);
     ctx.closePath();
     ctx.fill();
   }
