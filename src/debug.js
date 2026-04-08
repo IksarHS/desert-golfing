@@ -356,11 +356,6 @@ function drawCollisionLines() {
     }
   }
 
-  // Label
-  ctx.fillStyle = 'rgba(255, 40, 40, 0.7)';
-  ctx.font = '11px "Departure Mono", monospace';
-  ctx.textAlign = 'right';
-  ctx.fillText('COLLISION [C]', W - 10, ballMode === 'bouncy' ? 35 : 20);
 }
 
 // Patch draw to include debug overlays + bouncy HUD + collision lines
