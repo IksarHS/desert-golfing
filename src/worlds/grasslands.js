@@ -18,25 +18,25 @@ WORLDS['grasslands-1'] = {
 WORLDS['grasslands-1'].courses['green-hills'] = {
   name: 'Green Hills',
   materials: ['grass'],
-  archetypes: ['gentle_slope', 'gentle_hill', 'rolling_hills', 'downhill', 'uphill', 'valley'],
+  archetypes: ['gentle_slope', 'gentle_hill', 'rolling_hills', 'downhill', 'uphill', 'dramatic_ridge'],
   difficultyRange: [0.0, 0.4],
   holeCount: 10,
 };
 
-// Course 6: "Deep Valleys" — dramatic elevation, canyons with water at the bottom
+// Course 6: "Deep Valleys" — dramatic elevation, shelves dropping into valleys with water
 WORLDS['grasslands-1'].courses['deep-valleys'] = {
   name: 'Deep Valleys',
   materials: ['grass', 'rock', 'water'],
-  archetypes: ['valley', 'canyon', 'canyon_cup', 'deep_pocket', 'cliff_drop', 'shelf', 'stepped_descent'],
+  archetypes: ['deep_plunge', 'cliff_valley_climb', 'water_valley', 'shelf_drop_shelf', 'canyon', 'cliff_drop'],
   difficultyRange: [0.3, 0.8],
   holeCount: 10,
 };
 
-// Course 7: "Highland Fortress" — peaks, walls, complex terrain
+// Course 7: "Highland Fortress" — peaks, ridges, dramatic terrain
 WORLDS['grasslands-1'].courses['highland-fortress'] = {
   name: 'Highland Fortress',
   materials: ['grass', 'rock', 'mud'],
-  archetypes: ['peak_obstacle', 'twin_peaks', 'fortress', 'wall_shot', 'mesa', 'cliff_shelf', 'narrow_gap'],
+  archetypes: ['dramatic_ridge', 'deep_plunge', 'cliff_valley_climb', 'peak_obstacle', 'fortress', 'shelf_drop_shelf'],
   difficultyRange: [0.5, 1.0],
   holeCount: 10,
 };

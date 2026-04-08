@@ -449,6 +449,18 @@ MODE = {
 
   drawWorld() {
     drawTerrainDG();
+
+    // Water layer — if current course uses water material, draw a flat blue band
+    if (currentCourse?.materials?.includes('water')) {
+      const waterY = H * 0.88;
+      const waterColor = MATERIALS.water?.color || '#3a7ec8';
+      ctx.fillStyle = waterColor;
+      ctx.fillRect(camera.x - 10, waterY, W + 20, H - waterY + 10);
+      // Subtle highlight on water surface
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.fillRect(camera.x - 10, waterY, W + 20, 3);
+    }
+
     drawObjects();
 
     // Cup fill + flag for current and previous hole

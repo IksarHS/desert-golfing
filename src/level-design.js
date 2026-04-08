@@ -483,6 +483,109 @@ const archetypes = {
   }
 };
 
+  // ── DRAMATIC — extreme elevation, full screen use ──────
+  // Inspired by late-game Desert Golfing (holes 10000+)
+
+  deep_plunge(sx, sy, dist, cupY, diff) {
+    // Flat shelf on left → sheer drop → deep valley floor → long steep climb to high cup
+    // Uses nearly the full screen height
+    const shelfEnd = sx + dist * randRange(0.15, 0.3);
+    const valleyBottom = H * randRange(0.85, 0.95); // near screen bottom
+    const plateauTop = H * randRange(0.15, 0.30);   // near screen top
+    const riseStart = sx + dist * randRange(0.35, 0.5);
+    const wallW = randRange(6, 15);
+    return [
+      { x: shelfEnd, y: sy },                         // shelf edge
+      { x: shelfEnd + wallW, y: valleyBottom },        // sheer drop
+      { x: riseStart, y: valleyBottom },               // valley floor
+      { x: riseStart + dist * 0.15, y: lerp(valleyBottom, plateauTop, 0.5) }, // mid-slope
+      { x: sx + dist - 60, y: plateauTop },            // high plateau
+      { x: sx + dist, y: plateauTop }                  // cup on top
+    ];
+  },
+
+  cliff_valley_climb(sx, sy, dist, cupY, diff) {
+    // Shelf → drop → narrow valley → gradual climb → elevated cup
+    // Like the reference image: multiple distinct terrain zones in one hole
+    const shelfW = dist * randRange(0.15, 0.25);
+    const shelfY = H * randRange(0.35, 0.50);
+    const dropX = sx + shelfW;
+    const valleyY = H * randRange(0.80, 0.92);
+    const valleyW = dist * randRange(0.08, 0.15);
+    const climbEnd = sx + dist * randRange(0.75, 0.85);
+    const cupHeight = H * randRange(0.20, 0.40);
+    const wallW = randRange(6, 12);
+    return [
+      { x: sx + 20, y: shelfY },                      // shelf start (below tee area)
+      { x: dropX, y: shelfY },                        // shelf edge
+      { x: dropX + wallW, y: valleyY },                // drop to valley
+      { x: dropX + wallW + valleyW, y: valleyY },      // valley floor
+      { x: dropX + wallW + valleyW + wallW, y: lerp(valleyY, cupHeight, 0.3) }, // start climbing
+      { x: climbEnd, y: cupHeight + 40 },              // approaching cup
+      { x: sx + dist - 30, y: cupHeight },             // cup plateau
+      { x: sx + dist, y: cupHeight }
+    ];
+  },
+
+  dramatic_ridge(sx, sy, dist, cupY, diff) {
+    // Low start → massive climb to a high ridge → steep drop on the other side → cup below
+    const ridgeX = sx + dist * randRange(0.4, 0.6);
+    const ridgeTop = H * randRange(0.10, 0.25);
+    const lowY = H * randRange(0.70, 0.85);
+    const cupFloorY = H * randRange(0.55, 0.70);
+    return [
+      { x: sx + 40, y: lowY },                        // low start
+      { x: ridgeX - 80, y: lerp(lowY, ridgeTop, 0.4) }, // climbing
+      { x: ridgeX - 30, y: ridgeTop + 15 },            // near peak
+      { x: ridgeX, y: ridgeTop },                      // ridge peak
+      { x: ridgeX + 20, y: ridgeTop + 10 },            // sharp other side
+      { x: ridgeX + 60, y: lerp(ridgeTop, cupFloorY, 0.6) }, // descending
+      { x: sx + dist - 40, y: cupFloorY },             // cup area
+      { x: sx + dist, y: cupFloorY }
+    ];
+  },
+
+  shelf_drop_shelf(sx, sy, dist, cupY, diff) {
+    // High shelf → vertical drop → low shelf → another drop or rise
+    // Creates the rectangular staircase look from the reference
+    const step1X = sx + dist * randRange(0.2, 0.35);
+    const step2X = sx + dist * randRange(0.55, 0.7);
+    const highY = H * randRange(0.25, 0.40);
+    const midY = H * randRange(0.50, 0.65);
+    const lowY = H * randRange(0.70, 0.85);
+    const wallW = randRange(6, 12);
+    return [
+      { x: sx + 20, y: highY },                       // high shelf
+      { x: step1X, y: highY },                        // first edge
+      { x: step1X + wallW, y: midY },                  // drop to mid
+      { x: step2X, y: midY },                         // mid shelf
+      { x: step2X + wallW, y: lowY },                  // drop to low
+      { x: sx + dist, y: lowY }                        // cup on low shelf
+    ];
+  },
+
+  water_valley(sx, sy, dist, cupY, diff) {
+    // Terrain dips below a "water line" — creates a water hazard
+    // Ball going into the water = OOB
+    const waterY = H * 0.88;  // water level near screen bottom
+    const valleyX = sx + dist * randRange(0.3, 0.5);
+    const valleyW = dist * randRange(0.1, 0.2);
+    const leftY = H * randRange(0.40, 0.55);
+    const rightY = H * randRange(0.35, 0.55);
+    const wallW = randRange(8, 15);
+    return [
+      { x: sx + 40, y: leftY },                       // left terrain
+      { x: valleyX - 30, y: leftY + 20 },             // approaching valley
+      { x: valleyX, y: leftY + 10 },                  // valley rim left
+      { x: valleyX + wallW, y: waterY + 20 },          // plunge below water
+      { x: valleyX + valleyW, y: waterY + 20 },        // valley floor (underwater)
+      { x: valleyX + valleyW + wallW, y: rightY + 10 },// climb out
+      { x: valleyX + valleyW + 60, y: rightY },        // right terrain
+      { x: sx + dist, y: rightY }
+    ];
+  },
+};
+
 // ── Archetype Selection ──────────────────────────────────────
 // Weights and difficulty ranges tuned from real Desert Golfing gameplay footage.
 // Early game (diff 0-0.3): simple slopes, gentle hills, flat runs
@@ -516,6 +619,12 @@ const ARCHETYPE_TABLE = [
   ['narrow_gap',       0.55, 1.0, 2],
   ['cliff_shelf',      0.5, 1.0, 2],
   ['compound_terrain', 0.6, 1.0, 3],
+  // Dramatic — extreme elevation, full screen terrain
+  ['deep_plunge',      0.3, 1.0, 3],
+  ['cliff_valley_climb', 0.3, 1.0, 3],
+  ['dramatic_ridge',   0.2, 1.0, 3],
+  ['shelf_drop_shelf', 0.2, 1.0, 3],
+  ['water_valley',     0.3, 1.0, 2],
 ];
 
 // Anti-repetition: track last 3 archetypes to halve their selection weight
