@@ -939,9 +939,17 @@ function switchCourse(worldId, courseId) {
   }
 
   // Mark hand-defined holes as custom so they show ✎ in the list
-  // Only mark indices that actually have data (sparse arrays may have undefined gaps)
   for (let i = 0; i < HAND_DEFINED_HOLES.length && i < editorHoleCount; i++) {
     if (HAND_DEFINED_HOLES[i]) customHoleIndices.add(i);
+  }
+  // Also mark holes from handDefinedSource (e.g. REFERENCE_HOLES_500)
+  if (currentCourse?.handDefinedSource) {
+    const src = window[currentCourse.handDefinedSource];
+    if (src) {
+      for (let i = 0; i < src.length && i < editorHoleCount; i++) {
+        if (src[i]) customHoleIndices.add(i);
+      }
+    }
   }
 
   // Ensure at least 1 hole
@@ -1121,9 +1129,16 @@ async function editorInit() {
     editorHoleCount = getCourseHoleCount(currentCourse);
   }
   // Mark hand-defined holes as custom so they show ✎ in the list
-  // Only mark indices that actually have data (sparse arrays may have undefined gaps)
   for (let i = 0; i < HAND_DEFINED_HOLES.length && i < editorHoleCount; i++) {
     if (HAND_DEFINED_HOLES[i]) customHoleIndices.add(i);
+  }
+  if (currentCourse?.handDefinedSource) {
+    const src = window[currentCourse.handDefinedSource];
+    if (src) {
+      for (let i = 0; i < src.length && i < editorHoleCount; i++) {
+        if (src[i]) customHoleIndices.add(i);
+      }
+    }
   }
   if (editorHoleCount < 1) editorHoleCount = getCourseHoleCount(currentCourse);
 
