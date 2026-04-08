@@ -27,8 +27,8 @@ WORLDS['grasslands-1'].courses['green-hills'] = {
 WORLDS['grasslands-1'].courses['deep-valleys'] = {
   name: 'Deep Valleys',
   materials: ['grass', 'rock', 'water'],
-  archetypes: ['deep_plunge', 'cliff_valley_climb', 'water_valley', 'shelf_drop_shelf', 'canyon', 'cliff_drop'],
-  difficultyRange: [0.3, 0.8],
+  archetypes: ['deep_plunge', 'cliff_valley_climb', 'water_valley', 'shelf_drop_shelf'],
+  difficultyRange: [0.4, 1.0],
   holeCount: 10,
 };
 
@@ -36,7 +36,7 @@ WORLDS['grasslands-1'].courses['deep-valleys'] = {
 WORLDS['grasslands-1'].courses['highland-fortress'] = {
   name: 'Highland Fortress',
   materials: ['grass', 'rock', 'mud'],
-  archetypes: ['dramatic_ridge', 'deep_plunge', 'cliff_valley_climb', 'peak_obstacle', 'fortress', 'shelf_drop_shelf'],
-  difficultyRange: [0.5, 1.0],
+  archetypes: ['dramatic_ridge', 'deep_plunge', 'cliff_valley_climb', 'shelf_drop_shelf'],
+  difficultyRange: [0.5, 1.2],
   holeCount: 10,
 };

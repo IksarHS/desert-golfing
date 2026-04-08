@@ -490,8 +490,8 @@ const archetypes = {
     // Flat shelf on left → sheer drop → deep valley floor → long steep climb to high cup
     // Uses nearly the full screen height
     const shelfEnd = sx + dist * randRange(0.15, 0.3);
-    const valleyBottom = H * randRange(0.85, 0.95); // near screen bottom
-    const plateauTop = H * randRange(0.15, 0.30);   // near screen top
+    const valleyBottom = H * randRange(0.88, 0.96); // near screen bottom
+    const plateauTop = H * randRange(0.06, 0.20);   // near screen top
     const riseStart = sx + dist * randRange(0.35, 0.5);
     const wallW = randRange(6, 15);
     return [
@@ -508,12 +508,12 @@ const archetypes = {
     // Shelf → drop → narrow valley → gradual climb → elevated cup
     // Like the reference image: multiple distinct terrain zones in one hole
     const shelfW = dist * randRange(0.15, 0.25);
-    const shelfY = H * randRange(0.35, 0.50);
+    const shelfY = H * randRange(0.25, 0.45);
     const dropX = sx + shelfW;
-    const valleyY = H * randRange(0.80, 0.92);
+    const valleyY = H * randRange(0.85, 0.96);
     const valleyW = dist * randRange(0.08, 0.15);
     const climbEnd = sx + dist * randRange(0.75, 0.85);
-    const cupHeight = H * randRange(0.20, 0.40);
+    const cupHeight = H * randRange(0.08, 0.30);
     const wallW = randRange(6, 12);
     return [
       { x: sx + 20, y: shelfY },                      // shelf start (below tee area)
@@ -530,9 +530,9 @@ const archetypes = {
   dramatic_ridge(sx, sy, dist, cupY, diff) {
     // Low start → massive climb to a high ridge → steep drop on the other side → cup below
     const ridgeX = sx + dist * randRange(0.4, 0.6);
-    const ridgeTop = H * randRange(0.10, 0.25);
-    const lowY = H * randRange(0.70, 0.85);
-    const cupFloorY = H * randRange(0.55, 0.70);
+    const ridgeTop = H * randRange(0.05, 0.18);
+    const lowY = H * randRange(0.75, 0.92);
+    const cupFloorY = H * randRange(0.50, 0.70);
     return [
       { x: sx + 40, y: lowY },                        // low start
       { x: ridgeX - 80, y: lerp(lowY, ridgeTop, 0.4) }, // climbing
@@ -550,9 +550,9 @@ const archetypes = {
     // Creates the rectangular staircase look from the reference
     const step1X = sx + dist * randRange(0.2, 0.35);
     const step2X = sx + dist * randRange(0.55, 0.7);
-    const highY = H * randRange(0.25, 0.40);
-    const midY = H * randRange(0.50, 0.65);
-    const lowY = H * randRange(0.70, 0.85);
+    const highY = H * randRange(0.10, 0.30);
+    const midY = H * randRange(0.45, 0.60);
+    const lowY = H * randRange(0.75, 0.92);
     const wallW = randRange(6, 12);
     return [
       { x: sx + 20, y: highY },                       // high shelf
