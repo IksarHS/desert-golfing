@@ -66,10 +66,11 @@ const HAND_DEFINED_HOLES = [];
 //   - Steepness increases from 0.03 → 0.07
 function getDifficulty(holeIndex) {
   if (_difficultyOverride !== null) return _difficultyOverride;
-  if (holeIndex <= 0) return 0;
-  // ~0.32 at hole 10, ~0.52 at hole 50, ~0.61 at hole 100
-  // ~0.70 at hole 200, ~0.82 at hole 500, ~0.91 at hole 1000, ~1.0 at hole 2000
-  return Math.min(5.0, 5.0 * Math.log(1 + holeIndex) / Math.log(1 + 20));
+  // Base ramp: 0 at hole 0, ~1.0 at hole 20, up to 5.0
+  const raw = holeIndex <= 0 ? 0 : Math.min(5.0, 5.0 * Math.log(1 + holeIndex) / Math.log(1 + 20));
+  // Clamp to course difficulty range if set
+  const [minD, maxD] = currentCourse?.difficultyRange || [0, 5];
+  return minD + raw * (maxD - minD) / 5.0;
 }
 
 // ── Terrain Micro-Noise ──────────────────────────────────────
@@ -480,8 +481,7 @@ const archetypes = {
     }
     verts.push({ x: sx + dist, y: cupY });
     return verts;
-  }
-};
+  },
 
   // ── DRAMATIC — extreme elevation, full screen use ──────
   // Inspired by late-game Desert Golfing (holes 10000+)
@@ -637,10 +637,18 @@ function pickArchetype(difficulty) {
   // Filter to archetypes available at this difficulty, then weighted random
   // If the current course defines an archetype subset, only pick from those
   const courseArchetypes = currentCourse?.archetypes || null;
-  const available = ARCHETYPE_TABLE.filter(
+  let available = ARCHETYPE_TABLE.filter(
     ([name, minD, maxD]) => difficulty >= minD
       && (!courseArchetypes || courseArchetypes.includes(name))
   );
+  // Fallback: if nothing matches at this difficulty, allow all course archetypes regardless of minD
+  if (available.length === 0 && courseArchetypes) {
+    available = ARCHETYPE_TABLE.filter(([name]) => courseArchetypes.includes(name));
+  }
+  // Ultimate fallback: pick from everything
+  if (available.length === 0) {
+    available = ARCHETYPE_TABLE;
+  }
   // Apply anti-repetition: halve weight if archetype was used in last 3 holes
   const weights = available.map(([name, , , w]) =>
     _recentArchetypes.includes(name) ? w * 0.5 : w

@@ -17,6 +17,18 @@ Press `` ` `` (backtick) to cycle debug panels: off -> physics settings -> ball 
 
 Do not ask for confirmation before running commands, editing files, or making git operations (except force-push to main). CLI agents should be launched with `--dangerously-skip-permissions`.
 
+## Mandatory Testing
+
+**Every code change MUST be tested before telling the user it's done.** No exceptions.
+
+After editing any file in `src/`, `editor.html`, or world definitions:
+1. Open the game or editor in a browser (Chrome MCP tools or preview tools)
+2. Check the console for errors — if there are ANY errors, fix them before responding
+3. Verify the change works visually (take a screenshot or check game state via JS injection)
+4. If you cannot test (browser tools unavailable), explicitly say "I was unable to test this" — never say "should work" or "try it out"
+
+**Never deliver untested code.** If you write code and can't verify it loads and runs without errors, that is a failure. The user should never be the one discovering console errors.
+
 ## Safety Rules
 
 These rules exist because we lost days of work to preventable mistakes. Follow them strictly.
