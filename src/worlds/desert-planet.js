@@ -79,3 +79,13 @@ WORLDS['desert-world-2'].courses['desert-course-4'] = {
   difficultyRange: [0.5, 1.0],
   holeCount: 10,
 };
+
+// Course 5: "Knife's Edge" — angular shelves, cliff drops, hard-angled slopes
+// Based on analysis of real Desert Golfing holes 500-700
+WORLDS['desert-world-2'].courses['knifes-edge'] = {
+  name: "Knife's Edge",
+  materials: ['sand', 'rock'],
+  archetypes: ['mg_shelf_drop', 'mg_angular_valley', 'mg_slope_break', 'mg_double_shelf', 'mg_cliff_face', 'mg_notch'],
+  difficultyRange: [0.3, 0.8],
+  holeCount: 10,
+};
