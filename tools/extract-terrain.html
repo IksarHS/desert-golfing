@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Terrain Extractor</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; color: #eee; font-family: monospace; padding: 20px; }
+  h1 { color: #e8a030; margin-bottom: 10px; }
+  .row { display: flex; gap: 20px; margin-top: 15px; }
+  .col { flex: 1; }
+  canvas { border: 1px solid #444; display: block; max-width: 100%; }
+  #output { background: #111; padding: 12px; border-radius: 4px; font-size: 11px; white-space: pre-wrap; max-height: 300px; overflow-y: auto; margin-top: 10px; }
+  button { background: #e8a030; color: #1a1a2e; border: none; padding: 8px 16px; font: bold 13px monospace; cursor: pointer; border-radius: 4px; margin: 4px; }
+  button:hover { background: #f0b848; }
+  label { display: block; margin: 6px 0 2px; color: #aaa; font-size: 11px; }
+  input[type="file"] { margin: 8px 0; }
+  .preview { position: relative; }
+  .info { color: #888; font-size: 11px; margin-top: 4px; }
+</style>
+</head>
+<body>
+<h1>Terrain Extractor</h1>
+<p>Load a Desert Golfing screenshot → automatically extract the terrain surface → output as game vertices.</p>
+
+<input type="file" id="fileInput" accept="image/*">
+<button onclick="processImage()">Extract Terrain</button>
+<button onclick="copyOutput()">Copy Vertices</button>
+
+<div class="row">
+  <div class="col preview">
+    <label>Reference (red = detected edge, blue = masked areas)</label>
+    <canvas id="preview" width="960" height="540"></canvas>
+    <div class="info" id="info"></div>
+  </div>
+  <div class="col">
+    <label>Extracted vertices (paste into REFERENCE_HOLES)</label>
+    <div id="output">Load an image to extract terrain...</div>
+  </div>
+</div>
+
+<script>
+const previewCanvas = document.getElementById('preview');
+const previewCtx = previewCanvas.getContext('2d');
+let lastVertices = null;
+
+const fileInput = document.getElementById('fileInput');
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    // Draw on preview at 960x540
+    previewCtx.clearRect(0, 0, 960, 540);
+    previewCtx.drawImage(img, 0, 0, 960, 540);
+    document.getElementById('info').textContent = 'Image loaded: ' + img.naturalWidth + 'x' + img.naturalHeight + ' → scaled to 960x540';
+  };
+  img.src = URL.createObjectURL(file);
+});
+
+function processImage() {
+  const imageData = previewCtx.getImageData(0, 0, 960, 540);
+  const data = imageData.data;
+  const W = 960, H = 540;
+
+  // ── Step 1: Detect sky color from top-center (avoiding overlays) ──
+  let skyR = 0, skyG = 0, skyB = 0, skyCount = 0;
+  // Sample from a clean area: top center strip (avoid top-left text and top-right facecam)
+  for (let y = 30; y < 60; y++) {
+    for (let x = Math.floor(W * 0.3); x < Math.floor(W * 0.6); x += 5) {
+      const idx = (y * W + x) * 4;
+      skyR += data[idx]; skyG += data[idx + 1]; skyB += data[idx + 2];
+      skyCount++;
+    }
+  }
+  skyR = Math.round(skyR / skyCount);
+  skyG = Math.round(skyG / skyCount);
+  skyB = Math.round(skyB / skyCount);
+
+  // ── Step 2: Detect terrain color from bottom-center ──
+  let terrR = 0, terrG = 0, terrB = 0, terrCount = 0;
+  for (let y = H - 30; y < H - 5; y++) {
+    for (let x = Math.floor(W * 0.3); x < Math.floor(W * 0.6); x += 5) {
+      const idx = (y * W + x) * 4;
+      terrR += data[idx]; terrG += data[idx + 1]; terrB += data[idx + 2];
+      terrCount++;
+    }
+  }
+  terrR = Math.round(terrR / terrCount);
+  terrG = Math.round(terrG / terrCount);
+  terrB = Math.round(terrB / terrCount);
+
+  const skyBrightness = (skyR + skyG + skyB) / 3;
+  const terrBrightness = (terrR + terrG + terrB) / 3;
+  const threshold = (skyBrightness + terrBrightness) / 2;
+
+  // ── Step 3: Define mask regions to ignore (streamer overlays) ──
+  function isMasked(x, y) {
+    // Facecam: circle in top-right (~center 870,70 radius ~60)
+    const fcDx = x - 870, fcDy = y - 70;
+    if (fcDx * fcDx + fcDy * fcDy < 70 * 70) return true;
+    // Stream UI bottom-left
+    if (x < 80 && y > 480) return true;
+    // Watermark bottom-right
+    if (x > 750 && y > 500) return true;
+    // Stroke counter at top center (small area)
+    if (y < 25 && x > 300 && x < 660) return true;
+    return false;
+  }
+
+  // ── Step 4: Scan each column to find terrain edge ──
+  const rawPoints = [];
+  const sampleStep = 2; // every 2 pixels
+
+  for (let x = 0; x < W; x += sampleStep) {
+    if (isMasked(x, 0) && isMasked(x, H / 2)) {
+      // Entire column is in a mask — interpolate later
+      rawPoints.push({ x, y: -1 });
+      continue;
+    }
+
+    let surfaceY = H; // default: bottom of screen
+
+    for (let y = 0; y < H; y++) {
+      if (isMasked(x, y)) continue;
+
+      const idx = (y * W + x) * 4;
+      const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+      const brightness = (r + g + b) / 3;
+
+      // Terrain is darker than sky — find where brightness drops below threshold
+      if (brightness < threshold - 5) {
+        surfaceY = y;
+        break;
+      }
+    }
+
+    rawPoints.push({ x, y: surfaceY });
+  }
+
+  // ── Step 5: Interpolate masked columns ──
+  for (let i = 0; i < rawPoints.length; i++) {
+    if (rawPoints[i].y === -1) {
+      // Find nearest non-masked points on each side
+      let left = i - 1;
+      while (left >= 0 && rawPoints[left].y === -1) left--;
+      let right = i + 1;
+      while (right < rawPoints.length && rawPoints[right].y === -1) right++;
+
+      const leftY = left >= 0 ? rawPoints[left].y : H * 0.5;
+      const rightY = right < rawPoints.length ? rawPoints[right].y : H * 0.5;
+      const t = (left >= 0 && right < rawPoints.length) ? (i - left) / (right - left) : 0.5;
+      rawPoints[i].y = Math.round(leftY + t * (rightY - leftY));
+    }
+  }
+
+  // ── Step 6: Smooth (moving average to reduce noise) ──
+  const smoothWindow = 5;
+  const smoothed = [];
+  for (let i = 0; i < rawPoints.length; i++) {
+    let sumY = 0, count = 0;
+    for (let j = Math.max(0, i - smoothWindow); j <= Math.min(rawPoints.length - 1, i + smoothWindow); j++) {
+      sumY += rawPoints[j].y;
+      count++;
+    }
+    smoothed.push({ x: rawPoints[i].x, y: Math.round(sumY / count) });
+  }
+
+  // ── Step 7: Douglas-Peucker simplification ──
+  const simplified = douglasPeucker(smoothed, 4.0);
+
+  // ── Step 8: Find tee and cup positions ──
+  // Tee: leftmost point (ball starts on the left in DG)
+  // Cup: look for a small notch/dip in the terrain (the cup indent)
+  // For now, use the first and ~85% point
+  const teeIdx = 0;
+  const cupIdx = Math.floor(simplified.length * 0.85);
+  const teeY = simplified[teeIdx].y;
+  const cupY = simplified[cupIdx].y;
+  const teeX = simplified[teeIdx].x;
+  const cupX = simplified[cupIdx].x;
+  const dist = cupX - teeX;
+
+  // ── Step 9: Convert to relative dx format ──
+  const verts = simplified.map(p => ({
+    dx: p.x - teeX,
+    y: p.y
+  }));
+
+  lastVertices = { teeY, dist, cupY, verts };
+
+  // ── Draw debug overlay on preview ──
+  // Redraw original image
+  const origData = previewCtx.getImageData(0, 0, 960, 540);
+  // Draw mask areas in blue tint
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (isMasked(x, y)) {
+        const idx = (y * W + x) * 4;
+        origData.data[idx] = Math.round(origData.data[idx] * 0.5);
+        origData.data[idx + 1] = Math.round(origData.data[idx + 1] * 0.5);
+        origData.data[idx + 2] = Math.min(255, origData.data[idx + 2] + 80);
+      }
+    }
+  }
+  previewCtx.putImageData(origData, 0, 0);
+
+  // Draw detected edge in red
+  previewCtx.strokeStyle = 'rgba(255, 40, 40, 0.9)';
+  previewCtx.lineWidth = 2;
+  previewCtx.beginPath();
+  previewCtx.moveTo(smoothed[0].x, smoothed[0].y);
+  for (let i = 1; i < smoothed.length; i++) {
+    previewCtx.lineTo(smoothed[i].x, smoothed[i].y);
+  }
+  previewCtx.stroke();
+
+  // Draw simplified vertices as yellow dots
+  previewCtx.fillStyle = '#ffcc00';
+  for (const p of simplified) {
+    previewCtx.beginPath();
+    previewCtx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+    previewCtx.fill();
+  }
+
+  // Draw cup position
+  previewCtx.fillStyle = '#00ff88';
+  previewCtx.beginPath();
+  previewCtx.arc(cupX, cupY, 6, 0, Math.PI * 2);
+  previewCtx.fill();
+
+  // ── Output ──
+  const output = `// Extracted from reference screenshot
+{
+  teeY: ${teeY}, dist: ${dist}, cupY: ${cupY},
+  verts: [
+${verts.map(v => `    { dx: ${v.dx}, y: ${v.y} },`).join('\n')}
+  ]
+},`;
+
+  document.getElementById('output').textContent = output;
+  document.getElementById('info').textContent =
+    `Sky: rgb(${skyR},${skyG},${skyB}) brightness=${Math.round(skyBrightness)} | ` +
+    `Terrain: rgb(${terrR},${terrG},${terrB}) brightness=${Math.round(terrBrightness)} | ` +
+    `Threshold: ${Math.round(threshold)} | ` +
+    `${rawPoints.length} raw → ${simplified.length} vertices | ` +
+    `Tee: (${teeX}, ${teeY}) Cup: (${cupX}, ${cupY}) dist=${dist}`;
+}
+
+function douglasPeucker(points, tolerance) {
+  if (points.length <= 2) return points;
+  let maxDist = 0, maxIdx = 0;
+  const first = points[0], last = points[points.length - 1];
+  for (let i = 1; i < points.length - 1; i++) {
+    const d = pointToLineDist(points[i], first, last);
+    if (d > maxDist) { maxDist = d; maxIdx = i; }
+  }
+  if (maxDist > tolerance) {
+    const left = douglasPeucker(points.slice(0, maxIdx + 1), tolerance);
+    const right = douglasPeucker(points.slice(maxIdx), tolerance);
+    return left.slice(0, -1).concat(right);
+  }
+  return [first, last];
+}
+
+function pointToLineDist(p, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return Math.sqrt((p.x - a.x) ** 2 + (p.y - a.y) ** 2);
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq));
+  const projX = a.x + t * dx, projY = a.y + t * dy;
+  return Math.sqrt((p.x - projX) ** 2 + (p.y - projY) ** 2);
+}
+
+function copyOutput() {
+  const text = document.getElementById('output').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    alert('Copied to clipboard!');
+  });
+}
+</script>
+</body>
+</html>

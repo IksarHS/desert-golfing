@@ -62,183 +62,89 @@ const HAND_DEFINED_HOLES = [];
 // These are stored separately and loaded by a dedicated course.
 // Each hole is traced from real gameplay screenshots.
 // Expose on window so courses can reference by name via handDefinedSource
+// Auto-extracted from Desert Golfing gameplay screenshots (holes 502-699)
+// Terrain edge detected automatically from screenshot pixel data.
 var REFERENCE_HOLES_500 = [
-  // Hole 1 (based on #502): Shelf drop with rectangular notch
-  {
-    teeY: 350, dist: 800, cupY: 430,
+  { teeY: 540, dist: 675, cupY: 472,
     verts: [
-      { dx: 50, y: 350 },
-      { dx: 150, y: 345 },
-      { dx: 250, y: 340 },
-      { dx: 350, y: 350 },
-      { dx: 450, y: 380 },
-      { dx: 500, y: 420 },     // slope down
-      { dx: 520, y: 430 },     // shelf
-      { dx: 600, y: 430 },
-      { dx: 610, y: 460 },     // notch drop
-      { dx: 680, y: 460 },     // notch floor
-      { dx: 690, y: 430 },     // notch climb
-      { dx: 780, y: 430 },
+      { dx: 0, y: 540 }, { dx: 66, y: 540 }, { dx: 93, y: 500 }, { dx: 240, y: 431 },
+      { dx: 459, y: 431 }, { dx: 486, y: 479 }, { dx: 531, y: 479 }, { dx: 549, y: 493 },
+      { dx: 576, y: 459 }, { dx: 603, y: 448 }, { dx: 630, y: 479 }, { dx: 657, y: 479 },
+      { dx: 675, y: 472 }, { dx: 756, y: 412 }, { dx: 786, y: 407 }
     ]
   },
-  // Hole 2 (based on #535): Two peaks with cup on a shelf between them
-  {
-    teeY: 430, dist: 800, cupY: 320,
+  { teeY: 383, dist: 735, cupY: 311,
     verts: [
-      { dx: 80, y: 420 },
-      { dx: 150, y: 380 },
-      { dx: 200, y: 340 },     // first peak
-      { dx: 250, y: 380 },
-      { dx: 320, y: 410 },     // valley between peaks
-      { dx: 380, y: 370 },
-      { dx: 440, y: 320 },     // second peak / cup area
-      { dx: 520, y: 320 },
-      { dx: 580, y: 350 },
-      { dx: 650, y: 390 },
-      { dx: 750, y: 410 },
+      { dx: 0, y: 383 }, { dx: 72, y: 383 }, { dx: 135, y: 359 }, { dx: 213, y: 359 },
+      { dx: 324, y: 407 }, { dx: 450, y: 407 }, { dx: 480, y: 374 }, { dx: 606, y: 312 },
+      { dx: 663, y: 311 }, { dx: 687, y: 325 }, { dx: 708, y: 296 }, { dx: 735, y: 311 },
+      { dx: 786, y: 311 }
     ]
   },
-  // Hole 3 (based on #543): High shelf → cliff drop → long flat run to low cup
-  {
-    teeY: 280, dist: 850, cupY: 420,
+  { teeY: 311, dist: 459, cupY: 407,
     verts: [
-      { dx: 60, y: 280 },
-      { dx: 120, y: 275 },     // high shelf
-      { dx: 180, y: 280 },
-      { dx: 200, y: 310 },     // start dropping
-      { dx: 220, y: 370 },     // steep drop
-      { dx: 240, y: 410 },
-      { dx: 280, y: 420 },     // bottom level
-      { dx: 500, y: 418 },     // long flat run
-      { dx: 700, y: 420 },
-      { dx: 800, y: 420 },
+      { dx: 0, y: 311 }, { dx: 171, y: 311 }, { dx: 180, y: 280 }, { dx: 192, y: 280 },
+      { dx: 219, y: 383 }, { dx: 252, y: 384 }, { dx: 309, y: 407 }, { dx: 348, y: 406 },
+      { dx: 432, y: 366 }, { dx: 459, y: 407 }, { dx: 786, y: 407 }
     ]
   },
-  // Hole 4 (based on #559): Complex angular — shelf, peak, notch, high cup
-  {
-    teeY: 380, dist: 800, cupY: 280,
+  { teeY: 335, dist: 729, cupY: 226,
     verts: [
-      { dx: 60, y: 380 },
-      { dx: 130, y: 370 },
-      { dx: 180, y: 340 },     // rise
-      { dx: 220, y: 310 },
-      { dx: 250, y: 290 },     // first peak
-      { dx: 270, y: 310 },     // dip
-      { dx: 300, y: 330 },
-      { dx: 340, y: 300 },     // second peak (triangular)
-      { dx: 370, y: 280 },     // apex
-      { dx: 400, y: 300 },
-      { dx: 440, y: 320 },     // notch entrance
-      { dx: 450, y: 340 },     // notch drop
-      { dx: 500, y: 340 },     // notch floor
-      { dx: 510, y: 310 },     // notch exit
-      { dx: 560, y: 290 },
-      { dx: 650, y: 280 },     // cup plateau
-      { dx: 750, y: 285 },
+      { dx: 0, y: 335 }, { dx: 228, y: 335 }, { dx: 267, y: 327 }, { dx: 315, y: 314 },
+      { dx: 366, y: 231 }, { dx: 381, y: 217 }, { dx: 477, y: 215 }, { dx: 492, y: 221 },
+      { dx: 522, y: 202 }, { dx: 555, y: 243 }, { dx: 582, y: 215 }, { dx: 693, y: 215 },
+      { dx: 702, y: 163 }, { dx: 720, y: 175 }, { dx: 729, y: 226 }, { dx: 753, y: 197 },
+      { dx: 786, y: 228 }
     ]
   },
-  // Hole 5 (based on #575): Wide valley, cup at the very bottom
-  {
-    teeY: 310, dist: 850, cupY: 470,
+  { teeY: 335, dist: 738, cupY: 494,
     verts: [
-      { dx: 50, y: 310 },
-      { dx: 100, y: 320 },
-      { dx: 180, y: 350 },
-      { dx: 280, y: 400 },     // descending into valley
-      { dx: 380, y: 440 },
-      { dx: 450, y: 460 },     // valley floor
-      { dx: 520, y: 470 },     // deepest point / cup
-      { dx: 600, y: 460 },
-      { dx: 700, y: 430 },     // climbing out
-      { dx: 800, y: 400 },
+      { dx: 0, y: 335 }, { dx: 78, y: 336 }, { dx: 210, y: 400 }, { dx: 228, y: 415 },
+      { dx: 267, y: 470 }, { dx: 282, y: 479 }, { dx: 408, y: 479 }, { dx: 432, y: 472 },
+      { dx: 459, y: 407 }, { dx: 480, y: 407 }, { dx: 489, y: 357 }, { dx: 507, y: 357 },
+      { dx: 516, y: 407 }, { dx: 600, y: 407 }, { dx: 615, y: 412 }, { dx: 738, y: 494 },
+      { dx: 765, y: 540 }, { dx: 783, y: 540 }
     ]
   },
-  // Hole 6 (based on #583): Cup on top of a sharp peak
-  {
-    teeY: 380, dist: 800, cupY: 240,
+  { teeY: 239, dist: 627, cupY: 188,
     verts: [
-      { dx: 60, y: 380 },
-      { dx: 120, y: 370 },
-      { dx: 200, y: 340 },     // gradual rise
-      { dx: 280, y: 300 },
-      { dx: 350, y: 260 },     // steep rise to peak
-      { dx: 400, y: 240 },     // peak / cup
-      { dx: 450, y: 260 },     // descent
-      { dx: 520, y: 310 },
-      { dx: 600, y: 360 },
-      { dx: 700, y: 400 },
-      { dx: 780, y: 420 },
+      { dx: 0, y: 239 }, { dx: 123, y: 239 }, { dx: 150, y: 287 }, { dx: 222, y: 287 },
+      { dx: 237, y: 281 }, { dx: 291, y: 234 }, { dx: 417, y: 171 }, { dx: 423, y: 169 },
+      { dx: 444, y: 184 }, { dx: 471, y: 149 }, { dx: 495, y: 185 }, { dx: 567, y: 234 },
+      { dx: 627, y: 188 }, { dx: 708, y: 168 }, { dx: 786, y: 167 }
     ]
   },
-  // Hole 7 (based on #619): Large triangular mountain, cup at summit
-  {
-    teeY: 410, dist: 800, cupY: 210,
+  { teeY: 330, dist: 555, cupY: 232,
     verts: [
-      { dx: 50, y: 410 },
-      { dx: 120, y: 390 },
-      { dx: 200, y: 350 },
-      { dx: 300, y: 290 },     // climbing
-      { dx: 380, y: 240 },
-      { dx: 430, y: 215 },     // summit / cup
-      { dx: 480, y: 240 },     // descent
-      { dx: 560, y: 300 },
-      { dx: 650, y: 360 },
-      { dx: 750, y: 410 },
+      { dx: 0, y: 330 }, { dx: 45, y: 312 }, { dx: 99, y: 307 }, { dx: 186, y: 266 },
+      { dx: 285, y: 287 }, { dx: 417, y: 287 }, { dx: 432, y: 277 }, { dx: 474, y: 220 },
+      { dx: 480, y: 217 }, { dx: 501, y: 229 }, { dx: 525, y: 200 }, { dx: 555, y: 232 },
+      { dx: 663, y: 285 }, { dx: 792, y: 287 }
     ]
   },
-  // Hole 8 (based on #643): Angular peak left, deep rectangular notch center
-  {
-    teeY: 410, dist: 800, cupY: 380,
+  { teeY: 407, dist: 693, cupY: 363,
     verts: [
-      { dx: 50, y: 400 },
-      { dx: 120, y: 360 },
-      { dx: 170, y: 330 },     // peak
-      { dx: 220, y: 360 },
-      { dx: 280, y: 390 },
-      { dx: 350, y: 400 },
-      { dx: 380, y: 400 },     // notch edge
-      { dx: 390, y: 440 },     // notch drop
-      { dx: 480, y: 440 },     // notch floor / cup area
-      { dx: 490, y: 400 },     // notch exit
-      { dx: 560, y: 390 },
-      { dx: 700, y: 380 },
+      { dx: 0, y: 407 }, { dx: 129, y: 406 }, { dx: 186, y: 382 }, { dx: 309, y: 362 },
+      { dx: 336, y: 330 }, { dx: 366, y: 374 }, { dx: 381, y: 383 }, { dx: 564, y: 383 },
+      { dx: 585, y: 398 }, { dx: 612, y: 364 }, { dx: 639, y: 377 }, { dx: 693, y: 363 },
+      { dx: 720, y: 407 }, { dx: 792, y: 407 }
     ]
   },
-  // Hole 9 (based on #673): Rectangular shelf with step-down notch
-  {
-    teeY: 320, dist: 850, cupY: 330,
+  { teeY: 245, dist: 684, cupY: 303,
     verts: [
-      { dx: 50, y: 330 },
-      { dx: 150, y: 320 },
-      { dx: 300, y: 315 },
-      { dx: 350, y: 320 },     // slight dip
-      { dx: 380, y: 340 },
-      { dx: 400, y: 340 },     // shelf edge
-      { dx: 410, y: 380 },     // step down
-      { dx: 500, y: 380 },     // lower shelf
-      { dx: 510, y: 340 },     // step back up
-      { dx: 530, y: 330 },     // cup area
-      { dx: 580, y: 330 },
-      { dx: 650, y: 325 },
-      { dx: 780, y: 330 },
+      { dx: 0, y: 245 }, { dx: 39, y: 263 }, { dx: 405, y: 263 }, { dx: 513, y: 332 },
+      { dx: 546, y: 318 }, { dx: 567, y: 293 }, { dx: 588, y: 301 }, { dx: 615, y: 268 },
+      { dx: 639, y: 287 }, { dx: 657, y: 287 }, { dx: 672, y: 314 }, { dx: 684, y: 303 },
+      { dx: 699, y: 263 }, { dx: 792, y: 263 }
     ]
   },
-  // Hole 10 (based on #699): High shelf left, angular terrain, rectangular shelf right
-  {
-    teeY: 280, dist: 850, cupY: 370,
+  { teeY: 183, dist: 747, cupY: 375,
     verts: [
-      { dx: 50, y: 280 },
-      { dx: 120, y: 275 },     // high shelf
-      { dx: 180, y: 290 },
-      { dx: 220, y: 320 },     // dropping
-      { dx: 260, y: 360 },
-      { dx: 300, y: 380 },
-      { dx: 350, y: 350 },     // angular rise
-      { dx: 420, y: 320 },
-      { dx: 480, y: 340 },     // dip
-      { dx: 530, y: 370 },     // cup shelf
-      { dx: 650, y: 370 },
-      { dx: 750, y: 375 },
+      { dx: 0, y: 183 }, { dx: 30, y: 191 }, { dx: 171, y: 191 }, { dx: 198, y: 287 },
+      { dx: 315, y: 287 }, { dx: 342, y: 430 }, { dx: 354, y: 446 }, { dx: 369, y: 452 },
+      { dx: 495, y: 410 }, { dx: 558, y: 357 }, { dx: 681, y: 316 }, { dx: 708, y: 359 },
+      { dx: 720, y: 359 }, { dx: 741, y: 375 }, { dx: 747, y: 375 }, { dx: 768, y: 346 },
+      { dx: 792, y: 359 }
     ]
   },
 ];
