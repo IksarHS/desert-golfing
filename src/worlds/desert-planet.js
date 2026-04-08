@@ -26,21 +26,21 @@ WORLDS['desert-world-1'] = {
   courses: {},
 };
 
-// Course 1 — sand only, easy intro
+// Course 1: "Sand Dunes" — gentle rolling terrain, easy intro
 WORLDS['desert-world-1'].courses['desert-course-1'] = {
-  name: 'Desert Course 1',
+  name: 'Sand Dunes',
   materials: ['sand'],
-  archetypes: null,
-  difficultyRange: [0.0, 0.5],
+  archetypes: ['flat_run', 'gentle_slope', 'gentle_hill', 'downhill', 'uphill', 'rolling_hills'],
+  difficultyRange: [0.0, 0.3],
   holeCount: 10,
 };
 
-// Course 2 — sand + rock, moderate
+// Course 2: "Rocky Ridge" — cliffs, shelves, and mesas
 WORLDS['desert-world-1'].courses['desert-course-2'] = {
-  name: 'Desert Course 2',
+  name: 'Rocky Ridge',
   materials: ['sand', 'rock'],
-  archetypes: null,
-  difficultyRange: [0.3, 0.7],
+  archetypes: ['cliff_drop', 'shelf', 'mesa', 'stepped_descent', 'cliff_shelf', 'uphill', 'downhill'],
+  difficultyRange: [0.2, 0.6],
   holeCount: 10,
 };
 
@@ -49,7 +49,7 @@ WORLDS['desert-world-2'] = {
   name: 'Desert World 2',
   system: 'Desert System',
 
-  sky: '#d5ad72',
+  sky: '#c9a066',
   materials: ['sand', 'rock', 'mud'],
   defaultMaterial: 'sand',
 
@@ -62,20 +62,20 @@ WORLDS['desert-world-2'] = {
   courses: {},
 };
 
-// Course 3 — sand + rock + mud
+// Course 3: "Canyonlands" — valleys, canyons, pockets
 WORLDS['desert-world-2'].courses['desert-course-3'] = {
-  name: 'Desert Course 3',
+  name: 'Canyonlands',
   materials: ['sand', 'rock', 'mud'],
-  archetypes: null,
-  difficultyRange: [0.5, 0.85],
+  archetypes: ['valley', 'canyon', 'canyon_cup', 'deep_pocket', 'cliff_drop', 'gentle_slope'],
+  difficultyRange: [0.3, 0.7],
   holeCount: 10,
 };
 
-// Course 4 — all desert materials, hardest
+// Course 4: "The Gauntlet" — peaks, walls, fortresses, narrow gaps
 WORLDS['desert-world-2'].courses['desert-course-4'] = {
-  name: 'Desert Course 4',
+  name: 'The Gauntlet',
   materials: ['sand', 'rock', 'mud'],
-  archetypes: null,
-  difficultyRange: [0.6, 1.0],
+  archetypes: ['peak_obstacle', 'twin_peaks', 'wall_shot', 'fortress', 'narrow_gap', 'compound_terrain'],
+  difficultyRange: [0.5, 1.0],
   holeCount: 10,
 };

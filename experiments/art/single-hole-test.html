@@ -11,9 +11,9 @@
     font-weight: normal; font-style: normal; font-display: swap;
   }
   * { margin: 0; padding: 0; }
-  html, body { width: 100vw; height: 100vh; overflow: hidden; background: #f0dfc0; }
+  html, body { width: 100vw; height: 100vh; overflow: hidden; background: #1a1a1a; }
   body { display: flex; align-items: center; justify-content: center; }
-  canvas { display: block; cursor: crosshair; max-width: 100vw; max-height: 100vh; }
+  canvas { display: block; cursor: crosshair; image-rendering: pixelated; image-rendering: crisp-edges; }
 </style>
 </head>
 <body>
@@ -26,88 +26,261 @@
 <script src="/src/modes/desert-golfing.js"></script>
 
 <script>
-// ── Load the hole art image ──────────────────────────────
-const _holeImg = new Image();
-_holeImg.src = 'anothertest.jpg';
-let _holeImgReady = false;
-_holeImg.onload = () => { _holeImgReady = true; };
+// ============================================================
+// Auto-detect terrain surface from image
+// ============================================================
+// Scans the image column by column from top to bottom.
+// Finds where sky transitions to terrain using brightness/saturation.
+// Returns an array of {x, y} points in game coordinates.
 
-// ── Override terrain drawing: image IS the terrain ───────
-// Hide the normal flat-color terrain fill entirely.
-// The image provides all visuals; collision is invisible.
-drawTerrainDG = function() {
-  // Don't draw any terrain fill — the background image handles it
+function detectTerrainEdge(img, gameW, gameH, sampleStep) {
+  sampleStep = sampleStep || 4;
+
+  const offCanvas = document.createElement('canvas');
+  offCanvas.width = gameW;
+  offCanvas.height = gameH;
+  const offCtx = offCanvas.getContext('2d');
+  offCtx.drawImage(img, 0, 0, gameW, gameH);
+  const imageData = offCtx.getImageData(0, 0, gameW, gameH);
+  const data = imageData.data;
+
+  // Helper: get color saturation (how "colorful" vs gray)
+  function getSaturation(r, g, b) {
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    if (max === 0) return 0;
+    return (max - min) / max;
+  }
+
+  // Helper: get brightness
+  function getBrightness(r, g, b) {
+    return (r + g + b) / 3;
+  }
+
+  // Sample the foreground terrain color from bottom-center of image
+  // (this is guaranteed to be terrain)
+  let fgR = 0, fgG = 0, fgB = 0, fgCount = 0;
+  for (let y = gameH - 20; y < gameH - 5; y++) {
+    for (let x = Math.floor(gameW * 0.3); x < Math.floor(gameW * 0.7); x += 10) {
+      const idx = (y * gameW + x) * 4;
+      fgR += data[idx]; fgG += data[idx + 1]; fgB += data[idx + 2];
+      fgCount++;
+    }
+  }
+  fgR = Math.round(fgR / fgCount);
+  fgG = Math.round(fgG / fgCount);
+  fgB = Math.round(fgB / fgCount);
+  const fgSat = getSaturation(fgR, fgG, fgB);
+  console.log('Foreground terrain: rgb(' + fgR + ',' + fgG + ',' + fgB + ') sat=' + fgSat.toFixed(2));
+
+  // For each column, scan BOTTOM to TOP.
+  // Start in solid foreground terrain. Find where:
+  // - Saturation drops significantly (entering hazy background/sky)
+  // - OR brightness increases sharply (entering sky)
+  // - OR color distance from foreground exceeds threshold
+  const rawPoints = [];
+
+  for (let x = 0; x < gameW; x += sampleStep) {
+    let surfaceY = 0; // default: top of screen if nothing found
+
+    for (let y = gameH - 1; y >= 0; y--) {
+      const idx = (y * gameW + x) * 4;
+      const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+
+      const sat = getSaturation(r, g, b);
+      const bright = getBrightness(r, g, b);
+
+      // Color distance from known foreground terrain
+      const dr = r - fgR, dg = g - fgG, db = b - fgB;
+      const colorDist = Math.sqrt(dr * dr + dg * dg + db * db);
+
+      // The foreground terrain is warm and saturated.
+      // Sky/background is desaturated and brighter.
+      // We've left the foreground terrain when:
+      const satDrop = fgSat - sat;
+      const isNotTerrain = (
+        (colorDist > 60 && satDrop > 0.05) || // significantly different color AND less saturated
+        (bright > 180 && sat < 0.10) ||         // very bright and desaturated = sky
+        (colorDist > 80)                         // very different from terrain regardless
+      );
+
+      if (isNotTerrain) {
+        surfaceY = y + 1; // the pixel below was still terrain
+        break;
+      }
+    }
+
+    rawPoints.push({ x: x, y: surfaceY });
+  }
+
+  // Smooth the raw points to remove noise (moving average)
+  const smoothWindow = 3;
+  const smoothed = [];
+  for (let i = 0; i < rawPoints.length; i++) {
+    let sumY = 0, count = 0;
+    for (let j = Math.max(0, i - smoothWindow); j <= Math.min(rawPoints.length - 1, i + smoothWindow); j++) {
+      sumY += rawPoints[j].y;
+      count++;
+    }
+    smoothed.push({ x: rawPoints[i].x, y: Math.round(sumY / count) });
+  }
+
+  // Simplify with Douglas-Peucker to reduce vertex count
+  const simplified = douglasPeucker(smoothed, 3.0);
+
+  console.log('Terrain edge: ' + rawPoints.length + ' raw → ' + simplified.length + ' vertices');
+  return simplified;
+}
+
+// Douglas-Peucker line simplification
+function douglasPeucker(points, tolerance) {
+  if (points.length <= 2) return points;
+
+  let maxDist = 0, maxIdx = 0;
+  const first = points[0], last = points[points.length - 1];
+
+  for (let i = 1; i < points.length - 1; i++) {
+    const d = pointToLineDist(points[i], first, last);
+    if (d > maxDist) { maxDist = d; maxIdx = i; }
+  }
+
+  if (maxDist > tolerance) {
+    const left = douglasPeucker(points.slice(0, maxIdx + 1), tolerance);
+    const right = douglasPeucker(points.slice(maxIdx), tolerance);
+    return left.slice(0, -1).concat(right);
+  }
+  return [first, last];
+}
+
+function pointToLineDist(p, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return Math.sqrt((p.x - a.x) ** 2 + (p.y - a.y) ** 2);
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq));
+  const projX = a.x + t * dx, projY = a.y + t * dy;
+  return Math.sqrt((p.x - projX) ** 2 + (p.y - projY) ** 2);
+}
+
+// ============================================================
+// Image loading + terrain generation
+// ============================================================
+
+const _rawImg = new Image();
+_rawImg.src = 'anothertest.png';
+let _holeImgReady = false;
+let _terrainGenerated = false;
+let _holeImg = null; // cleaned version
+
+_rawImg.onload = function() {
+  // Clean the image: paint over game UI elements (title, ball, flag, cup)
+  const cleanCanvas = document.createElement('canvas');
+  const cw = _rawImg.naturalWidth;
+  const ch = _rawImg.naturalHeight;
+  cleanCanvas.width = cw;
+  cleanCanvas.height = ch;
+  const cctx = cleanCanvas.getContext('2d');
+  cctx.drawImage(_rawImg, 0, 0);
+
+  // Sample sky color from a clean area (center-top, below any text)
+  const skyData = cctx.getImageData(Math.floor(cw * 0.5), Math.floor(ch * 0.15), 1, 1).data;
+  const skyColor = 'rgb(' + skyData[0] + ',' + skyData[1] + ',' + skyData[2] + ')';
+
+  // Paint over title text area (top-left)
+  // Sample the actual pixels from the right side at the same height to get the real sky gradient
+  for (let y = 0; y < Math.floor(ch * 0.25); y++) {
+    // Get sky color from the right side of the image at this y (away from text)
+    const srcData = cctx.getImageData(Math.floor(cw * 0.5), y, 1, 1).data;
+    cctx.fillStyle = 'rgb(' + srcData[0] + ',' + srcData[1] + ',' + srcData[2] + ')';
+    cctx.fillRect(0, y, Math.floor(cw * 0.35), 1); // paint over left 35% where text is
+  }
+
+  // Paint over the ball (small white dot, left side, ~65% down)
+  // Sample terrain color nearby and paint a small patch
+  const ballArea = cctx.getImageData(Math.floor(cw * 0.08), Math.floor(ch * 0.68), 1, 1).data;
+  cctx.fillStyle = 'rgb(' + ballArea[0] + ',' + ballArea[1] + ',' + ballArea[2] + ')';
+  cctx.fillRect(Math.floor(cw * 0.05), Math.floor(ch * 0.62), Math.floor(cw * 0.04), Math.floor(ch * 0.06));
+
+  // Paint over flag + cup area (right side, ~85% across)
+  // Sample terrain from just left of the flag
+  for (let y = Math.floor(ch * 0.35); y < Math.floor(ch * 0.75); y++) {
+    const srcData = cctx.getImageData(Math.floor(cw * 0.82), y, 1, 1).data;
+    cctx.fillStyle = 'rgb(' + srcData[0] + ',' + srcData[1] + ',' + srcData[2] + ')';
+    cctx.fillRect(Math.floor(cw * 0.85), y, Math.floor(cw * 0.15), 1);
+  }
+
+  // Create a clean Image from the canvas
+  _holeImg = new Image();
+  _holeImg.onload = function() {
+    _holeImgReady = true;
+    runTerrainDetection();
+  };
+  _holeImg.src = cleanCanvas.toDataURL('image/png');
 };
 
-// ── Override sky drawing: use the image instead ──────────
+function runTerrainDetection() {
+  // Auto-detect terrain edge and generate collision vertices
+  const edgePoints = detectTerrainEdge(_holeImg, 960, 540, 4);
+
+  if (edgePoints.length < 3) {
+    console.error('Terrain detection failed — not enough points');
+    return;
+  }
+
+  // Find where to place tee (leftmost surface point) and cup (rightmost)
+  const firstPt = edgePoints[0];
+  const lastPt = edgePoints[edgePoints.length - 1];
+
+  // Build the hand-defined hole from detected points
+  // teeX will be at x=100 (standard), so offset all points relative to that
+  const teeX = 100;
+  const teeY = firstPt.y;
+  const cupPt = edgePoints[Math.floor(edgePoints.length * 0.85)]; // cup at ~85% across
+  const dist = cupPt.x - firstPt.x;
+  const cupY = cupPt.y;
+
+  const verts = edgePoints.map(p => ({
+    dx: p.x - firstPt.x,
+    y: p.y
+  }));
+
+  HAND_DEFINED_HOLES[0] = {
+    teeY: teeY,
+    dist: dist,
+    cupY: cupY,
+    verts: verts
+  };
+
+  _terrainGenerated = true;
+  console.log('Terrain generated: ' + verts.length + ' vertices, dist=' + dist + ', teeY=' + teeY + ', cupY=' + cupY);
+}
+
+// ============================================================
+// Override rendering: image IS the terrain
+// ============================================================
+
+drawTerrainDG = function() {
+  // Image provides all terrain visuals — don't draw flat color
+};
+
 const _origDrawSky = MODE.drawSky;
 MODE.drawSky = function() {
   if (!_holeImgReady) {
     _origDrawSky();
     return;
   }
-  // Draw the image scaled to fill the game viewport
-  // The image aspect ratio may differ from the viewport,
-  // so we cover the full width and let height crop naturally
-  const imgAspect = _holeImg.naturalWidth / _holeImg.naturalHeight;
-  const viewAspect = W / H;
-
-  let drawW, drawH, drawX, drawY;
-  if (viewAspect > imgAspect) {
-    // Viewport is wider than image — fit width, crop height
-    drawW = W;
-    drawH = W / imgAspect;
-    drawX = 0;
-    drawY = 0; // anchor to top
-  } else {
-    // Viewport is taller than image — fit height, crop width
-    drawH = H;
-    drawW = H * imgAspect;
-    drawX = (W - drawW) / 2;
-    drawY = 0;
-  }
-  ctx.drawImage(_holeImg, drawX, drawY, drawW, drawH);
-};
-
-// ── Hand-place terrain vertices to trace the dune edge ───
-// These are in game coordinates (W~1060, H=540)
-// Traced from the image: the dune surface line
-// The image shows: left side rises gently, peaks around 55-60% across,
-// dips into a valley around 65%, rises to a small plateau at 80% where the cup sits
-HAND_DEFINED_HOLES[0] = {
-  teeY: 310,
-  dist: 880,
-  cupY: 205,
-  verts: [
-    { dx: -50,  y: 340 },   // off-screen left, below frame
-    { dx: 0,    y: 320 },   // left edge
-    { dx: 80,   y: 305 },   // gentle rise
-    { dx: 160,  y: 288 },   // climbing the dune
-    { dx: 240,  y: 268 },   // steeper climb
-    { dx: 320,  y: 245 },   // approaching peak
-    { dx: 380,  y: 225 },   // near peak
-    { dx: 430,  y: 212 },   // peak of the dune
-    { dx: 470,  y: 218 },   // slight dip after peak
-    { dx: 520,  y: 240 },   // descending into valley
-    { dx: 570,  y: 265 },   // valley bottom
-    { dx: 610,  y: 255 },   // rising out of valley
-    { dx: 660,  y: 232 },   // second rise
-    { dx: 720,  y: 215 },   // approaching cup plateau
-    { dx: 780,  y: 208 },   // cup area
-    // cup will be placed at dx ~820
-    { dx: 860,  y: 205 },   // after cup
-    { dx: 920,  y: 210 },   // trailing off right
-    { dx: 980,  y: 225 },   // off-screen right
-  ]
+  // Draw the image to fill the game viewport exactly
+  // Disable smoothing for crisp pixel art scaling
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(_holeImg, 0, 0, W, H);
+  ctx.imageSmoothingEnabled = true; // restore for text/UI rendering
 };
 </script>
 
-<!-- Load rendering + gameplay -->
+<!-- Load rendering + gameplay + debug -->
 <script src="/src/art.js"></script>
 <script src="/src/gameplay.js"></script>
 <script src="/src/debug.js"></script>
 
-<!-- Inline main.js — skip Firebase, single hole -->
+<!-- Start the game -->
 <script>
 let _gameLoopRunning = false;
 function gameLoop() {
@@ -127,17 +300,21 @@ if (!localStorage.getItem('dg-seed')) {
   localStorage.setItem('dg-seed', String(DEFAULT_GAME_SEED));
 }
 
-// Start the course — this will use HAND_DEFINED_HOLES[0]
-startCourse('desert-world-1', 'desert-course-1');
-
-// Position ball at the tee
-const hole = holes[0];
-ball.x = hole.teeX;
-ball.y = terrainYAt(hole.teeX) - BALL_RADIUS;
-ball.atRest = true;
-setHoleCamera(hole);
-
-ensureGameLoop();
+// Wait for terrain detection before starting
+function tryStart() {
+  if (!_terrainGenerated) {
+    requestAnimationFrame(tryStart);
+    return;
+  }
+  startCourse('desert-world-1', 'desert-course-1');
+  const hole = holes[0];
+  ball.x = hole.teeX;
+  ball.y = terrainYAt(hole.teeX) - BALL_RADIUS;
+  ball.atRest = true;
+  setHoleCamera(hole);
+  ensureGameLoop();
+}
+tryStart();
 </script>
 </body>
 </html>

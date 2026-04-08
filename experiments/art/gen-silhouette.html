@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html><body>
+<script>
+const pts = [[1,472],[79,478],[158,481],[236,486],[265,173],[279,486],[306,486],[321,230],[350,486],[445,486],[541,481],[636,483],[694,486],[714,486],[717,506],[747,506],[750,486],[770,486],[868,486],[972,486]];
+
+const c = document.createElement('canvas');
+c.width = 960; c.height = 540;
+const ctx = c.getContext('2d');
+
+ctx.fillStyle = '#ffffff';
+ctx.fillRect(0, 0, 960, 540);
+
+ctx.fillStyle = '#000000';
+ctx.beginPath();
+ctx.moveTo(pts[0][0], pts[0][1]);
+for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+ctx.lineTo(1010, 540);
+ctx.lineTo(-50, 540);
+ctx.closePath();
+ctx.fill();
+
+// Auto-download
+const a = document.createElement('a');
+a.href = c.toDataURL('image/png');
+a.download = 'hole-6-silhouette.png';
+document.body.appendChild(a);
+a.click();
+
+// Also show it
+document.body.appendChild(c);
+c.style.border = '1px solid #ccc';
+document.body.insertAdjacentHTML('beforeend', '<p>Silhouette generated. Check Downloads folder.</p>');
+</script>
+</body></html>
