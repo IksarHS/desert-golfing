@@ -89,3 +89,14 @@ WORLDS['desert-world-2'].courses['knifes-edge'] = {
   difficultyRange: [0.3, 0.8],
   holeCount: 10,
 };
+
+// Course 6: "Classic 500" — 10 hand-recreated holes from real Desert Golfing (holes 500-700)
+WORLDS['desert-world-2'].courses['classic-500'] = {
+  name: 'Classic 500',
+  materials: ['sand'],
+  archetypes: null,
+  difficultyRange: [0.3, 0.7],
+  holeCount: 10,
+  // These holes are loaded from REFERENCE_HOLES_500 in level-design.js
+  handDefinedSource: 'REFERENCE_HOLES_500',
+};

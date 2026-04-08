@@ -58,6 +58,191 @@ let _difficultyOverride = null;
 // After hole 10, procedural generation takes over.
 const HAND_DEFINED_HOLES = [];
 
+// ── Reference Holes: Recreated from Desert Golfing holes 500-700 ──
+// These are stored separately and loaded by a dedicated course.
+// Each hole is traced from real gameplay screenshots.
+// Expose on window so courses can reference by name via handDefinedSource
+var REFERENCE_HOLES_500 = [
+  // Hole 1 (based on #502): Shelf drop with rectangular notch
+  {
+    teeY: 350, dist: 800, cupY: 430,
+    verts: [
+      { dx: 50, y: 350 },
+      { dx: 150, y: 345 },
+      { dx: 250, y: 340 },
+      { dx: 350, y: 350 },
+      { dx: 450, y: 380 },
+      { dx: 500, y: 420 },     // slope down
+      { dx: 520, y: 430 },     // shelf
+      { dx: 600, y: 430 },
+      { dx: 610, y: 460 },     // notch drop
+      { dx: 680, y: 460 },     // notch floor
+      { dx: 690, y: 430 },     // notch climb
+      { dx: 780, y: 430 },
+    ]
+  },
+  // Hole 2 (based on #535): Two peaks with cup on a shelf between them
+  {
+    teeY: 430, dist: 800, cupY: 320,
+    verts: [
+      { dx: 80, y: 420 },
+      { dx: 150, y: 380 },
+      { dx: 200, y: 340 },     // first peak
+      { dx: 250, y: 380 },
+      { dx: 320, y: 410 },     // valley between peaks
+      { dx: 380, y: 370 },
+      { dx: 440, y: 320 },     // second peak / cup area
+      { dx: 520, y: 320 },
+      { dx: 580, y: 350 },
+      { dx: 650, y: 390 },
+      { dx: 750, y: 410 },
+    ]
+  },
+  // Hole 3 (based on #543): High shelf → cliff drop → long flat run to low cup
+  {
+    teeY: 280, dist: 850, cupY: 420,
+    verts: [
+      { dx: 60, y: 280 },
+      { dx: 120, y: 275 },     // high shelf
+      { dx: 180, y: 280 },
+      { dx: 200, y: 310 },     // start dropping
+      { dx: 220, y: 370 },     // steep drop
+      { dx: 240, y: 410 },
+      { dx: 280, y: 420 },     // bottom level
+      { dx: 500, y: 418 },     // long flat run
+      { dx: 700, y: 420 },
+      { dx: 800, y: 420 },
+    ]
+  },
+  // Hole 4 (based on #559): Complex angular — shelf, peak, notch, high cup
+  {
+    teeY: 380, dist: 800, cupY: 280,
+    verts: [
+      { dx: 60, y: 380 },
+      { dx: 130, y: 370 },
+      { dx: 180, y: 340 },     // rise
+      { dx: 220, y: 310 },
+      { dx: 250, y: 290 },     // first peak
+      { dx: 270, y: 310 },     // dip
+      { dx: 300, y: 330 },
+      { dx: 340, y: 300 },     // second peak (triangular)
+      { dx: 370, y: 280 },     // apex
+      { dx: 400, y: 300 },
+      { dx: 440, y: 320 },     // notch entrance
+      { dx: 450, y: 340 },     // notch drop
+      { dx: 500, y: 340 },     // notch floor
+      { dx: 510, y: 310 },     // notch exit
+      { dx: 560, y: 290 },
+      { dx: 650, y: 280 },     // cup plateau
+      { dx: 750, y: 285 },
+    ]
+  },
+  // Hole 5 (based on #575): Wide valley, cup at the very bottom
+  {
+    teeY: 310, dist: 850, cupY: 470,
+    verts: [
+      { dx: 50, y: 310 },
+      { dx: 100, y: 320 },
+      { dx: 180, y: 350 },
+      { dx: 280, y: 400 },     // descending into valley
+      { dx: 380, y: 440 },
+      { dx: 450, y: 460 },     // valley floor
+      { dx: 520, y: 470 },     // deepest point / cup
+      { dx: 600, y: 460 },
+      { dx: 700, y: 430 },     // climbing out
+      { dx: 800, y: 400 },
+    ]
+  },
+  // Hole 6 (based on #583): Cup on top of a sharp peak
+  {
+    teeY: 380, dist: 800, cupY: 240,
+    verts: [
+      { dx: 60, y: 380 },
+      { dx: 120, y: 370 },
+      { dx: 200, y: 340 },     // gradual rise
+      { dx: 280, y: 300 },
+      { dx: 350, y: 260 },     // steep rise to peak
+      { dx: 400, y: 240 },     // peak / cup
+      { dx: 450, y: 260 },     // descent
+      { dx: 520, y: 310 },
+      { dx: 600, y: 360 },
+      { dx: 700, y: 400 },
+      { dx: 780, y: 420 },
+    ]
+  },
+  // Hole 7 (based on #619): Large triangular mountain, cup at summit
+  {
+    teeY: 410, dist: 800, cupY: 210,
+    verts: [
+      { dx: 50, y: 410 },
+      { dx: 120, y: 390 },
+      { dx: 200, y: 350 },
+      { dx: 300, y: 290 },     // climbing
+      { dx: 380, y: 240 },
+      { dx: 430, y: 215 },     // summit / cup
+      { dx: 480, y: 240 },     // descent
+      { dx: 560, y: 300 },
+      { dx: 650, y: 360 },
+      { dx: 750, y: 410 },
+    ]
+  },
+  // Hole 8 (based on #643): Angular peak left, deep rectangular notch center
+  {
+    teeY: 410, dist: 800, cupY: 380,
+    verts: [
+      { dx: 50, y: 400 },
+      { dx: 120, y: 360 },
+      { dx: 170, y: 330 },     // peak
+      { dx: 220, y: 360 },
+      { dx: 280, y: 390 },
+      { dx: 350, y: 400 },
+      { dx: 380, y: 400 },     // notch edge
+      { dx: 390, y: 440 },     // notch drop
+      { dx: 480, y: 440 },     // notch floor / cup area
+      { dx: 490, y: 400 },     // notch exit
+      { dx: 560, y: 390 },
+      { dx: 700, y: 380 },
+    ]
+  },
+  // Hole 9 (based on #673): Rectangular shelf with step-down notch
+  {
+    teeY: 320, dist: 850, cupY: 330,
+    verts: [
+      { dx: 50, y: 330 },
+      { dx: 150, y: 320 },
+      { dx: 300, y: 315 },
+      { dx: 350, y: 320 },     // slight dip
+      { dx: 380, y: 340 },
+      { dx: 400, y: 340 },     // shelf edge
+      { dx: 410, y: 380 },     // step down
+      { dx: 500, y: 380 },     // lower shelf
+      { dx: 510, y: 340 },     // step back up
+      { dx: 530, y: 330 },     // cup area
+      { dx: 580, y: 330 },
+      { dx: 650, y: 325 },
+      { dx: 780, y: 330 },
+    ]
+  },
+  // Hole 10 (based on #699): High shelf left, angular terrain, rectangular shelf right
+  {
+    teeY: 280, dist: 850, cupY: 370,
+    verts: [
+      { dx: 50, y: 280 },
+      { dx: 120, y: 275 },     // high shelf
+      { dx: 180, y: 290 },
+      { dx: 220, y: 320 },     // dropping
+      { dx: 260, y: 360 },
+      { dx: 300, y: 380 },
+      { dx: 350, y: 350 },     // angular rise
+      { dx: 420, y: 320 },
+      { dx: 480, y: 340 },     // dip
+      { dx: 530, y: 370 },     // cup shelf
+      { dx: 650, y: 370 },
+      { dx: 750, y: 375 },
+    ]
+  },
+];
+
 // ── Difficulty Curve ─────────────────────────────────────────
 // Logarithmic ramp matching real Desert Golfing's gradual progression.
 // Analysis of 990 real holes shows difficulty ramps over ~2000 holes:
@@ -672,6 +857,19 @@ function generateHoleTerrain(holeIndex) {
   const isDesertWorld = !currentWorld || currentWorld === WORLDS['desert-world-1'];
   if (isDesertWorld && HAND_DEFINED_HOLES[holeIndex]) {
     return generateHandDefinedHole(holeIndex);
+  }
+
+  // Check for course-specific reference holes (e.g. recreated from real Desert Golfing)
+  if (currentCourse?.handDefinedSource && typeof window !== 'undefined') {
+    const sourceArray = window[currentCourse.handDefinedSource];
+    if (sourceArray && sourceArray[holeIndex]) {
+      // Temporarily inject into HAND_DEFINED_HOLES and generate
+      const saved = HAND_DEFINED_HOLES[holeIndex];
+      HAND_DEFINED_HOLES[holeIndex] = sourceArray[holeIndex];
+      generateHandDefinedHole(holeIndex);
+      HAND_DEFINED_HOLES[holeIndex] = saved;
+      return;
+    }
   }
 
   const difficulty = getDifficulty(holeIndex);
