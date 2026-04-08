@@ -292,31 +292,43 @@ function isBallOffScreen() {
 
 // ── Drawing ────────────────────────────────────────────────
 function drawTerrainDG() {
-  const startX = camera.x - 50;
-  const endX   = camera.x + W + 50;
+  const startX = camera.x - 100;
+  const endX   = camera.x + W + 100;
 
-  // Draw each segment as an independent filled trapezoid.
-  // Each segment is self-contained — works regardless of vertex X-order.
-  // Overlapping segments (overhangs) naturally create solid filled areas.
-  for (let i = 0; i < vertices.length - 1; i++) {
-    const a = vertices[i];
-    const b = vertices[i + 1];
-
-    // Skip segments entirely off-screen (check BOTH vertices since order may vary)
-    const segMinX = Math.min(a.x, b.x);
-    const segMaxX = Math.max(a.x, b.x);
-    if (segMaxX < startX - 100) continue;
-    if (segMinX > endX + 100) continue;  // 'continue' not 'break' — later segments may loop back
-
-    const matName = a.mat || DEFAULT_MAT;
+  // Group consecutive same-material vertices into runs.
+  // Each run is drawn as ONE polygon tracing all vertices in order,
+  // closed along the bottom. Canvas nonzero fill rule handles
+  // self-intersecting paths (overhangs) correctly.
+  let i = 0;
+  while (i < vertices.length - 1) {
+    const matName = vertices[i].mat || DEFAULT_MAT;
     const mat = MATERIALS[matName] || MATERIALS[DEFAULT_MAT];
-    ctx.fillStyle = mat.color || GROUND;
+    const runStart = i;
 
+    // Find end of this material run
+    while (i < vertices.length - 1 && (vertices[i].mat || DEFAULT_MAT) === matName) {
+      i++;
+    }
+    const runEnd = i; // exclusive — vertices[runEnd] is the first vertex of the next material
+
+    // Check if any part of this run is visible
+    let anyVisible = false;
+    for (let j = runStart; j <= runEnd && j < vertices.length; j++) {
+      if (vertices[j].x >= startX && vertices[j].x <= endX) { anyVisible = true; break; }
+    }
+    if (!anyVisible) continue;
+
+    // Draw one polygon: trace all vertices in order, then close along bottom
+    ctx.fillStyle = mat.color || GROUND;
     ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.lineTo(b.x, H + 300);
-    ctx.lineTo(a.x, H + 300);
+    ctx.moveTo(vertices[runStart].x, vertices[runStart].y);
+    for (let j = runStart + 1; j <= runEnd && j < vertices.length; j++) {
+      ctx.lineTo(vertices[j].x, vertices[j].y);
+    }
+    // Close along the bottom
+    const lastIdx = Math.min(runEnd, vertices.length - 1);
+    ctx.lineTo(vertices[lastIdx].x, H + 300);
+    ctx.lineTo(vertices[runStart].x, H + 300);
     ctx.closePath();
     ctx.fill();
   }
