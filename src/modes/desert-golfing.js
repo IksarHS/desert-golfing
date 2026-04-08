@@ -21,9 +21,11 @@ function getNextDestination() {
     return { type: 'course', worldId: _currentWorldId, courseId: nextId, course: currentWorld.courses[nextId] };
   }
 
-  // No more courses — find next world in same system
+  // No more courses — find next world (same system first, then any system)
   const worldIds = Object.keys(WORLDS);
   const currentWorldIdx = worldIds.findIndex(id => WORLDS[id] === currentWorld);
+
+  // Same system first
   for (let i = currentWorldIdx + 1; i < worldIds.length; i++) {
     const nextWorld = WORLDS[worldIds[i]];
     if (nextWorld.system === currentWorld.system) {
@@ -34,7 +36,18 @@ function getNextDestination() {
     }
   }
 
-  return null; // end of system
+  // Different system — next adventure
+  for (let i = currentWorldIdx + 1; i < worldIds.length; i++) {
+    const nextWorld = WORLDS[worldIds[i]];
+    if (nextWorld.system !== currentWorld.system) {
+      const firstCourseId = Object.keys(nextWorld.courses)[0];
+      if (firstCourseId) {
+        return { type: 'world', worldId: worldIds[i], courseId: firstCourseId, course: nextWorld.courses[firstCourseId], world: nextWorld };
+      }
+    }
+  }
+
+  return null; // end of everything
 }
 
 // Start a new course (resets game state)
@@ -430,7 +443,7 @@ MODE = {
   },
 
   drawSky() {
-    ctx.fillStyle = SKY;
+    ctx.fillStyle = currentWorld?.sky || SKY;
     ctx.fillRect(0, 0, W, H);
   },
 

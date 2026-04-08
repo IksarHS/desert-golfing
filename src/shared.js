@@ -69,6 +69,7 @@ const MATERIALS = {
   ice:   { restitution: 0.55, rollingFriction: 0.998, surfaceFriction: 0.001, color: '#6ba8c7', colorLight: '#82bdd8' },
   rock:  { restitution: 0.75, rollingFriction: 0.97,  surfaceFriction: 0.003, color: '#c45c4a', colorLight: '#d4705f' },
   mud:   { restitution: 0.15, rollingFriction: 0.90,  surfaceFriction: 0.015, color: '#8b6b4a', colorLight: '#a07d5a' },
+  water: { restitution: 0.10, rollingFriction: 0.85,  surfaceFriction: 0.025, color: '#3a7ec8', colorLight: '#5094d8' },
 };
 
 function getMaterialAt(worldX) {
