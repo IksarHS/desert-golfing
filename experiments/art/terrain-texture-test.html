@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Terrain Texture POC</title>
+<style>
+  @font-face {
+    font-family: 'Departure Mono';
+    src: url('../../assets/fonts/DepartureMono-Regular.woff2') format('woff2'),
+         url('../../assets/fonts/DepartureMono-Regular.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
+  * { margin: 0; padding: 0; }
+  html, body { width: 100vw; height: 100vh; overflow: hidden; background: #d5ad72; margin: 0; padding: 0; }
+  body { display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; cursor: crosshair; position: relative; z-index: 1; max-width: 100vw; max-height: 100vh; }
+  #label {
+    position: fixed; top: 8px; left: 8px; z-index: 100;
+    font: 12px 'Departure Mono', monospace; color: rgba(255,255,255,0.6);
+    background: rgba(0,0,0,0.35); padding: 4px 8px; border-radius: 3px;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="label">TEXTURE POC</div>
+<canvas id="c"></canvas>
+
+<!-- Load all real game scripts (paths relative to project root via dev server) -->
+<script src="/src/shared.js"></script>
+<script src="/src/worlds/desert-planet.js"></script>
+<script src="/src/level-design.js"></script>
+<script src="/src/modes/desert-golfing.js"></script>
+
+<script>
+// ============================================================
+// AI-Generated Terrain Art
+// ============================================================
+
+// Load the terrain body image
+const _terrainBodyImg = new Image();
+_terrainBodyImg.src = 'testimage.jpg';
+let _terrainBodyPattern = null;
+let _terrainReady = false;
+
+_terrainBodyImg.onload = function() {
+  _terrainBodyPattern = ctx.createPattern(_terrainBodyImg, 'repeat-x');
+  _terrainReady = true;
+  console.log('Terrain art loaded:', _terrainBodyImg.naturalWidth + 'x' + _terrainBodyImg.naturalHeight);
+};
+
+// ============================================================
+// Override drawTerrainDG with textured version
+// ============================================================
+
+drawTerrainDG = function() {
+  const startX = camera.x - 50;
+  const endX   = camera.x + W + 50;
+  const EDGE_WIDTH = 2;
+
+  // Find visible vertex range
+  let visStart = 0, visEnd = vertices.length - 1;
+  while (visStart < vertices.length - 1 && vertices[visStart + 1].x < startX - 100) visStart++;
+  while (visEnd > 0 && vertices[visEnd].x > endX + 100) visEnd--;
+
+  // --- Build terrain clip polygon ---
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(vertices[visStart].x, vertices[visStart].y);
+  for (let i = visStart + 1; i <= visEnd; i++) {
+    ctx.lineTo(vertices[i].x, vertices[i].y);
+  }
+  ctx.lineTo(vertices[visEnd].x, H + 300);
+  ctx.lineTo(vertices[visStart].x, H + 300);
+  ctx.closePath();
+  ctx.clip();
+
+  // --- Fill with AI terrain art, tiled ---
+  if (_terrainReady && _terrainBodyPattern) {
+    const imgH = _terrainBodyImg.naturalHeight;
+    const imgW = _terrainBodyImg.naturalWidth;
+
+    // Fixed scale: 0.5 = rock details are small relative to ball (golfer-scale)
+    // Adjust this to taste — smaller = more rock detail visible, larger = zoomed in
+    const scale = 0.5;
+
+    // Offset the image so the pale top edge is ABOVE the terrain surface.
+    // The rich detailed middle of the image should be what shows at the surface.
+    // Skip the top ~30% of the image (the washed-out part)
+    const topCropOffset = imgH * scale * 0.3;
+
+    // Find the min Y (highest terrain point) for anchoring
+    let minY = H;
+    for (let i = visStart; i <= visEnd; i++) {
+      if (vertices[i].y < minY) minY = vertices[i].y;
+    }
+
+    const m = new DOMMatrix();
+    m.a = scale;
+    m.d = scale;
+    m.e = -(camera.x * scale) % (imgW * scale);
+    // Anchor: the rich middle of the image starts at the terrain surface
+    m.f = minY - topCropOffset;
+    _terrainBodyPattern.setTransform(m);
+
+    const fillX = vertices[visStart].x - 10;
+    const fillW = vertices[visEnd].x - vertices[visStart].x + 20;
+    const texH = imgH * scale;
+    const texTop = minY - topCropOffset;
+
+    // 1. Fill entire depth with dark base color
+    ctx.fillStyle = '#4a2010';
+    ctx.fillRect(fillX, minY - 20, fillW, H + 300 - minY + 20);
+
+    // 2. Draw the texture (repeat-x only)
+    ctx.fillStyle = _terrainBodyPattern;
+    ctx.fillRect(fillX, minY - 20, fillW, texH + 20);
+
+    // 3. Gradient to blend texture into the dark base (smooth the transition)
+    const blendStart = texTop + texH - 30; // start fading 30px before texture ends
+    const blendEnd = texTop + texH + 20;   // finish 20px into the dark base
+    const grad = ctx.createLinearGradient(0, blendStart, 0, blendEnd);
+    grad.addColorStop(0, 'rgba(74, 32, 16, 0)');    // transparent
+    grad.addColorStop(1, 'rgba(74, 32, 16, 1)');    // opaque dark base
+    ctx.fillStyle = grad;
+    ctx.fillRect(fillX, blendStart, fillW, blendEnd - blendStart);
+  } else {
+    ctx.fillStyle = GROUND;
+    ctx.fillRect(vertices[visStart].x, 0, vertices[visEnd].x - vertices[visStart].x, H + 300);
+  }
+
+  ctx.restore(); // remove clip
+
+  // --- Now draw overlays OUTSIDE the clip (lighting, edges) ---
+  // Rebuild clip for lighting pass
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(vertices[visStart].x, vertices[visStart].y);
+  for (let i = visStart + 1; i <= visEnd; i++) {
+    ctx.lineTo(vertices[i].x, vertices[i].y);
+  }
+  ctx.lineTo(vertices[visEnd].x, H + 300);
+  ctx.lineTo(vertices[visStart].x, H + 300);
+  ctx.closePath();
+  ctx.clip();
+
+  // --- Per-segment normal-based lighting overlay ---
+  const lightDirX = 0.6;
+  const lightDirY = -0.8;
+
+  for (let i = visStart; i < visEnd; i++) {
+    const a = vertices[i], b = vertices[i + 1];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 1) continue;
+
+    const nx = -dy / len;
+    const ny = dx / len;
+    const normX = ny < 0 ? nx : -nx;
+    const normY = ny < 0 ? ny : -ny;
+    const dot = normX * lightDirX + normY * lightDirY;
+
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.lineTo(b.x, b.y + 300);
+    ctx.lineTo(a.x, a.y + 300);
+    ctx.closePath();
+
+    if (dot > 0) {
+      ctx.fillStyle = 'rgba(255, 230, 180, ' + (dot * 0.35) + ')';
+    } else {
+      ctx.fillStyle = 'rgba(20, 10, 0, ' + (Math.abs(dot) * 0.5) + ')';
+    }
+    ctx.fill();
+  }
+
+  // --- Edge highlight per segment ---
+  ctx.lineWidth = EDGE_WIDTH;
+  for (let i = visStart; i < visEnd; i++) {
+    const a = vertices[i], b = vertices[i + 1];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 1) continue;
+    const nx = -dy / len;
+    const ny = dx / len;
+    const normX = ny < 0 ? nx : -nx;
+    const normY = ny < 0 ? ny : -ny;
+    const dot = normX * lightDirX + normY * lightDirY;
+
+    if (dot > 0.1) {
+      ctx.strokeStyle = 'rgba(255, 240, 200, ' + (0.3 + dot * 0.4) + ')';
+    } else {
+      ctx.strokeStyle = 'rgba(40, 20, 5, ' + (0.2 + Math.abs(dot) * 0.3) + ')';
+    }
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+
+  ctx.restore(); // remove lighting clip
+};
+
+</script>
+
+<!-- Load the rest of the game scripts (art, gameplay, main) -->
+<script src="/src/art.js"></script>
+<script src="/src/gameplay.js"></script>
+<script src="/src/debug.js"></script>
+
+<!-- Inline main.js logic, skipping Firebase auth -->
+<script>
+// ── Game Loop (from main.js) ──────────────────────────────
+let _gameLoopRunning = false;
+
+function gameLoop() {
+  _ballLogFrame++;
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+function ensureGameLoop() {
+  if (_gameLoopRunning) return;
+  _gameLoopRunning = true;
+  gameLoop();
+}
+
+const DEFAULT_GAME_SEED = 42;
+
+function initSeed() {
+  const stored = localStorage.getItem('dg-seed');
+  if (stored !== null) {
+    setSeed(parseInt(stored, 10));
+  } else {
+    setSeed(DEFAULT_GAME_SEED);
+    localStorage.setItem('dg-seed', String(DEFAULT_GAME_SEED));
+  }
+}
+
+function resetGame(worldId, courseId, progress) {
+  setSeed(DEFAULT_GAME_SEED);
+  localStorage.setItem('dg-seed', String(DEFAULT_GAME_SEED));
+  startCourse(worldId || 'desert-world-1', courseId || 'desert-course-1');
+}
+
+function revealGame() {
+  if (typeof canvas !== 'undefined') canvas.style.visibility = 'visible';
+}
+
+// Start immediately without Firebase
+resetGame();
+revealGame();
+ensureGameLoop();
+</script>
+</body>
+</html>

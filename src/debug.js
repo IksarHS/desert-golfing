@@ -298,18 +298,99 @@ drawBall = function() {
   }
 };
 
-// Patch draw to include debug overlays + bouncy HUD
+// ── Cheat: Show Collision Lines (C key) ──────────────────
+let _showCollisionLines = false;
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'c' || e.key === 'C') {
+    _showCollisionLines = !_showCollisionLines;
+    console.log('Collision lines:', _showCollisionLines ? 'ON' : 'OFF');
+    e.preventDefault();
+  }
+});
+
+function drawCollisionLines() {
+  const startX = camera.x - 50;
+  const endX = camera.x + W + 50;
+
+  // Terrain collision line (red)
+  ctx.strokeStyle = 'rgba(255, 40, 40, 0.8)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  let started = false;
+  for (let i = 0; i < vertices.length; i++) {
+    if (vertices[i].x < startX - 100) continue;
+    if (vertices[i].x > endX + 100) break;
+    if (!started) {
+      ctx.moveTo(vertices[i].x, vertices[i].y);
+      started = true;
+    } else {
+      ctx.lineTo(vertices[i].x, vertices[i].y);
+    }
+  }
+  ctx.stroke();
+
+  // Terrain vertex dots
+  ctx.fillStyle = 'rgba(255, 40, 40, 0.9)';
+  for (let i = 0; i < vertices.length; i++) {
+    if (vertices[i].x < startX - 100) continue;
+    if (vertices[i].x > endX + 100) break;
+    ctx.beginPath();
+    ctx.arc(vertices[i].x, vertices[i].y, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Object collision outlines (blue)
+  if (typeof objects !== 'undefined') {
+    ctx.strokeStyle = 'rgba(40, 120, 255, 0.8)';
+    ctx.lineWidth = 2;
+    for (const obj of objects) {
+      if (!obj.verts || obj.verts.length < 2) continue;
+      ctx.beginPath();
+      ctx.moveTo(obj.verts[0].x, obj.verts[0].y);
+      for (let i = 1; i < obj.verts.length; i++) {
+        ctx.lineTo(obj.verts[i].x, obj.verts[i].y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
+  }
+
+  // Label
+  ctx.fillStyle = 'rgba(255, 40, 40, 0.7)';
+  ctx.font = '11px "Departure Mono", monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText('COLLISION [C]', W - 10, ballMode === 'bouncy' ? 35 : 20);
+}
+
+// Patch draw to include debug overlays + bouncy HUD + collision lines
 const _origDraw = draw;
 draw = function() {
   _origDraw();
   ctx.save();
   ctx.scale(displayScale, displayScale);
+
+  // Collision lines (drawn in world space, need camera transform)
+  if (_showCollisionLines) {
+    ctx.save();
+    MODE.applyCameraTransform(ctx);
+    drawCollisionLines();
+    ctx.restore();
+  }
+
   // Bouncy mode indicator
   if (ballMode === 'bouncy') {
     ctx.fillStyle = 'rgba(255, 204, 68, 0.7)';
     ctx.font = '11px "Departure Mono", monospace';
     ctx.textAlign = 'right';
     ctx.fillText('BOUNCY [B]', W - 10, 20);
+  }
+  // Collision label (screen space)
+  if (_showCollisionLines) {
+    ctx.fillStyle = 'rgba(255, 40, 40, 0.7)';
+    ctx.font = '11px "Departure Mono", monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('COLLISION [C]', W - 10, ballMode === 'bouncy' ? 35 : 20);
   }
   // Debug panels
   if (_debugMode > 0) {
