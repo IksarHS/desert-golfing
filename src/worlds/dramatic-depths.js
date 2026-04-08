@@ -133,3 +133,19 @@ WORLDS['dramatic-depths-1'].courses['vertical-gauntlet'] = {
     return result;
   },
 };
+
+// Course: "The Labyrinth" -- complex overhangs, zigzag terrain, fortress shapes
+WORLDS['dramatic-depths-1'].courses['the-labyrinth'] = {
+  name: 'The Labyrinth',
+  materials: ['rock', 'sand'],
+  archetypes: [
+    'complex_fortress', 'labyrinth', 'angular_chaos',
+    'overhang_cave', 'cave_passage',
+  ],
+  difficultyRange: [0.4, 1.0],
+  holeCount: 10,
+  cupElevation: _dramaticCupElevation,
+  noiseFunction: function(verts) {
+    return verts;
+  },
+};

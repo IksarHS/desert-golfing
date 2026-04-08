@@ -399,6 +399,124 @@ const dramaticArchetypes = {
 
     return verts;
   },
+  // ── COMPLEX FORTRESS: Reference image hole 128 ──────────────
+  // Terrain wraps around itself with overhangs, notches, tunnels.
+  // Vertices zigzag in both X and Y creating enclosed negative spaces.
+  // Ball starts low-left, cup on a high plateau.
+  complex_fortress(sx, sy, dist, cupY, diff) {
+    const groundY = H * randRange(0.82, 0.92);    // base ground level
+    const midY = H * randRange(0.50, 0.65);        // mid-level shelves
+    const highY = H * randRange(0.20, 0.35);       // high plateau (cup area)
+    const topY = H * randRange(0.08, 0.18);        // highest point
+    const wallW = randRange(6, 12);
+
+    // Build a complex path that zigzags up, creating overhangs and notches
+    const x1 = sx + dist * randRange(0.08, 0.15);  // first feature
+    const x2 = sx + dist * randRange(0.20, 0.30);
+    const x3 = sx + dist * randRange(0.35, 0.45);
+    const x4 = sx + dist * randRange(0.50, 0.60);
+    const x5 = sx + dist * randRange(0.65, 0.75);
+    const x6 = sx + dist * randRange(0.80, 0.90);
+
+    return [
+      // Start at ground level, rise to first shelf
+      { x: sx + 20, y: groundY },
+      { x: x1, y: groundY },
+      { x: x1 + wallW, y: midY },                    // wall up to mid shelf
+      { x: x2 - 20, y: midY },                       // mid shelf
+      // Overhang: go UP then BACK LEFT, creating a ceiling
+      { x: x2, y: midY },
+      { x: x2 - wallW, y: highY },                   // wall up (going LEFT = overhang!)
+      { x: x2 - 60, y: highY },                      // overhang shelf extending left
+      // Come back right and down, creating a notch
+      { x: x2 - 60, y: highY - 30 },                 // notch up
+      { x: x3, y: highY - 30 },                      // extend right at high level
+      { x: x3, y: midY + 30 },                       // drop back down
+      // Another shelf section
+      { x: x4 - 20, y: midY + 30 },
+      { x: x4, y: midY + 30 },
+      { x: x4 + wallW, y: topY },                    // rise to top
+      { x: x5, y: topY },                            // high plateau
+      // Drop to cup level
+      { x: x5 + wallW, y: highY },
+      { x: x6 - 30, y: highY },                      // cup plateau
+      { x: sx + dist, y: highY },
+    ];
+  },
+
+  // ── LABYRINTH: multiple overhangs creating a maze-like path ────
+  labyrinth(sx, sy, dist, cupY, diff) {
+    const floorY = H * randRange(0.85, 0.95);
+    const shelf1Y = H * randRange(0.55, 0.65);
+    const shelf2Y = H * randRange(0.30, 0.42);
+    const roofY = H * randRange(0.10, 0.20);
+    const wallW = randRange(6, 12);
+
+    const x1 = sx + dist * 0.15;
+    const x2 = sx + dist * 0.30;
+    const x3 = sx + dist * 0.45;
+    const x4 = sx + dist * 0.60;
+    const x5 = sx + dist * 0.75;
+
+    return [
+      // Ground level start
+      { x: sx + 20, y: floorY },
+      // Rise to first shelf
+      { x: x1, y: floorY },
+      { x: x1 + wallW, y: shelf1Y },
+      { x: x2, y: shelf1Y },
+      // Overhang going left — creates ceiling over the entry
+      { x: x2 - wallW, y: shelf2Y },
+      { x: x1 - 30, y: shelf2Y },
+      // Back right and up
+      { x: x1 - 30, y: shelf2Y - 25 },
+      { x: x3, y: shelf2Y - 25 },
+      // Drop into a pocket
+      { x: x3 + wallW, y: shelf1Y + 40 },
+      { x: x4 - wallW, y: shelf1Y + 40 },
+      // Rise to high shelf
+      { x: x4, y: roofY + 20 },
+      { x: x5 - 20, y: roofY + 20 },
+      // Overhang back left — creates ceiling over the pocket
+      { x: x5 - 20, y: roofY },
+      { x: x3 + 20, y: roofY },
+      // Back right to cup
+      { x: x3 + 20, y: roofY - 15 },
+      { x: sx + dist - 40, y: roofY - 15 },
+      { x: sx + dist, y: shelf2Y },
+    ];
+  },
+
+  // ── ANGULAR CHAOS: random zigzag creating unpredictable overhangs ──
+  angular_chaos(sx, sy, dist, cupY, diff) {
+    const numPoints = 10 + Math.floor(random() * 6);
+    const verts = [];
+    let x = sx + 30;
+    let y = H * randRange(0.75, 0.90);
+
+    verts.push({ x: sx + 20, y: y });
+
+    for (let i = 0; i < numPoints; i++) {
+      const frac = (i + 1) / (numPoints + 1);
+      // Mix of forward and backward X movement
+      const dx = dist / numPoints * randRange(0.3, 1.5);
+      const goBack = random() < 0.25; // 25% chance to go backward (overhang)
+      x += goBack ? -dx * 0.5 : dx;
+      x = Math.max(sx + 40, Math.min(sx + dist - 40, x));
+
+      // Y oscillates between ground level and high up
+      const targetY = H * randRange(0.08, 0.95);
+      y = lerp(y, targetY, randRange(0.5, 1.0));
+
+      verts.push({ x: x, y: y });
+    }
+
+    // End at cup position
+    const cupFinalY = H * randRange(0.15, 0.50);
+    verts.push({ x: sx + dist, y: cupFinalY });
+
+    return verts;
+  },
 };
 
 // ── Register dramatic archetypes into the main archetype table ──
@@ -422,6 +540,9 @@ const DRAMATIC_ARCHETYPE_ENTRIES = [
   ['water_canyon',            0.4, 1.0, 2],
   ['double_cliff',            0.2, 1.0, 3],
   ['cave_passage',            0.4, 1.0, 2],
+  ['complex_fortress',        0.3, 1.0, 3],
+  ['labyrinth',               0.4, 1.0, 2],
+  ['angular_chaos',           0.3, 1.0, 3],
 ];
 
 for (const entry of DRAMATIC_ARCHETYPE_ENTRIES) {
