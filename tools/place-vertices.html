@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Vertex Placer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; color: #eee; font-family: monospace; }
+  canvas { display: block; cursor: crosshair; }
+  #ui { position: fixed; top: 10px; right: 10px; z-index: 10; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 6px; font-size: 11px; max-width: 300px; }
+  button { background: #e8a030; color: #1a1a2e; border: none; padding: 6px 12px; font: bold 12px monospace; cursor: pointer; border-radius: 3px; margin: 2px; }
+  #output { background: #111; padding: 8px; border-radius: 3px; font-size: 10px; max-height: 200px; overflow-y: auto; margin-top: 8px; white-space: pre; }
+  #coords { color: #e8a030; margin-top: 4px; }
+  .mode-active { background: #ffcc00 !important; color: #000 !important; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <div><b>Vertex Placer</b></div>
+  <div>Click to place vertices along terrain edge</div>
+  <div id="coords">Mouse: (0, 0)</div>
+  <div id="count">Vertices: 0</div>
+  <button onclick="undoLast()">Undo</button>
+  <button onclick="clearAll()">Clear</button>
+  <button onclick="exportVerts()">Export</button>
+  <button onclick="loadCurrentVerts()">Load Current</button>
+  <div style="margin-top:6px;font-size:10px;color:#888;">
+    Click = place vertex | Right-click = remove nearest<br>
+    Drag = move vertex | Vertices auto-sort by X
+  </div>
+  <div id="output">Click on the terrain surface...</div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const img = new Image();
+const vertices = [];
+
+// Game resolution
+const GW = 960, GH = 540;
+
+// Set canvas to game resolution
+canvas.width = GW;
+canvas.height = GH;
+
+// Load the art image
+img.src = '/experiments/art/art-holes/hole-1.png';
+img.onload = () => { render(); };
+
+function render() {
+  ctx.clearRect(0, 0, GW, GH);
+
+  // Draw the art image at game resolution
+  if (img.complete && img.naturalWidth > 0) {
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, 0, GW, GH);
+  }
+
+  // Draw grid (every 100px, subtle)
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+  ctx.lineWidth = 0.5;
+  for (let x = 0; x < GW; x += 100) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, GH); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '9px monospace';
+    ctx.fillText(x, x + 2, 10);
+  }
+  for (let y = 0; y < GH; y += 100) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(GW, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fillText(y, 2, y + 10);
+  }
+
+  // Draw placed vertices and connecting lines
+  if (vertices.length > 0) {
+    // Lines
+    ctx.strokeStyle = 'rgba(255, 40, 40, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(vertices[0].x, vertices[0].y);
+    for (let i = 1; i < vertices.length; i++) {
+      ctx.lineTo(vertices[i].x, vertices[i].y);
+    }
+    ctx.stroke();
+
+    // Dots
+    ctx.fillStyle = 'rgba(255, 40, 40, 0.9)';
+    for (const v of vertices) {
+      ctx.beginPath();
+      ctx.arc(v.x, v.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Labels
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = '9px monospace';
+    for (let i = 0; i < vertices.length; i++) {
+      ctx.fillText(i + ': (' + vertices[i].x + ',' + vertices[i].y + ')', vertices[i].x + 6, vertices[i].y - 6);
+    }
+  }
+}
+
+// Dragging state
+let dragging = null; // index of vertex being dragged
+
+function getGameCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: Math.round((e.clientX - rect.left) * (GW / rect.width)),
+    y: Math.round((e.clientY - rect.top) * (GH / rect.height))
+  };
+}
+
+function findNearestVert(gx, gy, maxDist) {
+  let best = -1, bestD = Infinity;
+  for (let i = 0; i < vertices.length; i++) {
+    const d = Math.sqrt((vertices[i].x - gx)**2 + (vertices[i].y - gy)**2);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return bestD < (maxDist || 15) ? best : -1;
+}
+
+canvas.addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return;
+  const {x, y} = getGameCoords(e);
+  const near = findNearestVert(x, y, 15);
+  if (near >= 0) {
+    dragging = near;
+    e.preventDefault();
+  }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  const {x, y} = getGameCoords(e);
+  document.getElementById('coords').textContent = 'Mouse: (' + x + ', ' + y + ')';
+  if (dragging !== null) {
+    vertices[dragging].x = x;
+    vertices[dragging].y = y;
+    render();
+  }
+});
+
+canvas.addEventListener('mouseup', (e) => {
+  if (dragging !== null) {
+    dragging = null;
+    vertices.sort((a, b) => a.x - b.x);
+    render();
+    return;
+  }
+  // If not dragging, place a new vertex on click
+  if (e.button === 0) {
+    const {x, y} = getGameCoords(e);
+    const near = findNearestVert(x, y, 15);
+    if (near < 0) { // only place if not near existing vertex
+      vertices.push({ x, y });
+      vertices.sort((a, b) => a.x - b.x);
+      document.getElementById('count').textContent = 'Vertices: ' + vertices.length;
+      render();
+    }
+  }
+});
+
+// Load the current art course vertices
+function loadCurrentVerts() {
+  const current = [
+    {x:0,y:330},{x:60,y:320},{x:120,y:308},{x:180,y:290},{x:240,y:268},
+    {x:300,y:245},{x:340,y:230},{x:370,y:222},{x:400,y:238},{x:440,y:252},
+    {x:500,y:283},{x:560,y:303},{x:620,y:318},{x:680,y:330},{x:740,y:340},
+    {x:800,y:350},{x:860,y:358},{x:920,y:364},{x:958,y:368}
+  ];
+  vertices.length = 0;
+  for (const v of current) vertices.push({...v});
+  document.getElementById('count').textContent = 'Vertices: ' + vertices.length;
+  render();
+}
+
+// Right-click to remove nearest vertex
+canvas.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = GW / rect.width;
+  const scaleY = GH / rect.height;
+  const x = (e.clientX - rect.left) * scaleX;
+  const y = (e.clientY - rect.top) * scaleY;
+
+  let bestIdx = -1, bestDist = Infinity;
+  for (let i = 0; i < vertices.length; i++) {
+    const d = Math.sqrt((vertices[i].x - x) ** 2 + (vertices[i].y - y) ** 2);
+    if (d < bestDist) { bestDist = d; bestIdx = i; }
+  }
+  if (bestIdx >= 0 && bestDist < 20) {
+    vertices.splice(bestIdx, 1);
+    document.getElementById('count').textContent = 'Vertices: ' + vertices.length;
+    render();
+  }
+});
+
+function undoLast() {
+  vertices.pop();
+  document.getElementById('count').textContent = 'Vertices: ' + vertices.length;
+  render();
+}
+
+function clearAll() {
+  vertices.length = 0;
+  document.getElementById('count').textContent = 'Vertices: 0';
+  render();
+}
+
+function exportVerts() {
+  if (vertices.length < 2) {
+    document.getElementById('output').textContent = 'Need at least 2 vertices';
+    return;
+  }
+  const teeX = vertices[0].x;
+  const cupIdx = Math.floor(vertices.length * 0.85);
+  const verts = vertices.map(v => ({ dx: v.x - teeX, y: v.y }));
+
+  const code = `{ teeY: ${vertices[0].y}, dist: ${verts[cupIdx].dx}, cupY: ${verts[cupIdx].y},
+    verts: [
+${verts.map(v => '      { dx: ' + v.dx + ', y: ' + v.y + ' }').join(',\n')}
+    ]
+  }`;
+
+  document.getElementById('output').textContent = code;
+
+  // Also store globally for easy JS access
+  window._exportedHole = {
+    teeY: vertices[0].y,
+    dist: verts[cupIdx].dx,
+    cupY: verts[cupIdx].y,
+    verts: verts
+  };
+}
+</script>
+</body>
+</html>
