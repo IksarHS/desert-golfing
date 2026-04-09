@@ -716,7 +716,7 @@ const ed = {
   },
 };
 
-const HANDLE_RADIUS = 6;
+const HANDLE_RADIUS = 4;
 const HANDLE_HIT = 10; // click target radius
 const EDGE_HIT_DIST = 12; // distance to detect edge clicks
 
@@ -2860,13 +2860,13 @@ function drawEditorObjects() {
       ctx.fillStyle = 'rgba(232, 200, 64, 0.9)';
       ctx.fill();
       ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2 * invZ;
+      ctx.lineWidth = 1 * invZ;
       ctx.stroke();
     } else if (isHover) {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
       ctx.fill();
       ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 1 * invZ;
+      ctx.lineWidth = 0.5 * invZ;
       ctx.stroke();
     } else {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
