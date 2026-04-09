@@ -58,12 +58,10 @@ let _difficultyOverride = null;
 // After hole 10, procedural generation takes over.
 const HAND_DEFINED_HOLES = [];
 
-// ── Reference Holes: Recreated from Desert Golfing holes 500-700 ──
-// These are stored separately and loaded by a dedicated course.
-// Each hole is traced from real gameplay screenshots.
-// Expose on window so courses can reference by name via handDefinedSource
-// Auto-extracted from Desert Golfing gameplay screenshots (holes 502-699)
-// Terrain edge detected automatically from screenshot pixel data.
+// ── Reference Holes ──────────────────────────────────────────
+// REFERENCE_HOLES_500 is defined here (original 10 holes from DG 502-699).
+// Additional tiers (2300, 4000, 5900, 6400) are in src/reference-holes.js.
+// All auto-extracted from Desert Golfing gameplay screenshots.
 var REFERENCE_HOLES_500 = [
   { teeY: 540, dist: 675, cupY: 472,
     verts: [
