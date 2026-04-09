@@ -905,6 +905,9 @@ function switchCourse(worldId, courseId) {
   currentWorld = WORLDS[worldId];
   currentCourse = currentWorld.courses[courseId];
 
+  // Load art images if this course has them
+  if (typeof loadArtImages === 'function') loadArtImages();
+
   // Reset terrain state
   vertices.length = 0;
   holes.length = 0;
@@ -1060,6 +1063,16 @@ async function editorInit() {
   // Patch drawSky to fill larger area when zoomed out
   const _origDrawSky = MODE.drawSky.bind(MODE);
   MODE.drawSky = function() {
+    // Check for art image first (works in both edit and play mode)
+    if (typeof getArtImage === 'function') {
+      const artImg = getArtImage();
+      if (artImg) {
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(artImg, 0, 0, W / (ed.mode === 'edit' ? ed.zoom : 1), H / (ed.mode === 'edit' ? ed.zoom : 1));
+        ctx.imageSmoothingEnabled = true;
+        return;
+      }
+    }
     if (ed.mode === 'edit') {
       ctx.fillStyle = currentWorld?.sky || (typeof SKY !== 'undefined' ? SKY : '#d4b483');
       ctx.fillRect(0, 0, W / ed.zoom + 10, H / ed.zoom + 10);

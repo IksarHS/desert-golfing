@@ -56,6 +56,9 @@ function startCourse(worldId, courseId) {
   currentCourse = currentWorld.courses[courseId];
   _currentWorldId = worldId;
 
+  // Load art images if the course defines them
+  loadArtImages();
+
   // Reset game state
   vertices.length = 0;
   holes.length = 0;
@@ -291,7 +294,31 @@ function isBallOffScreen() {
 }
 
 // ── Drawing ────────────────────────────────────────────────
+// ── Art Image Support ──────────────────────────────────────
+// Courses can define artImages: { holeIndex: 'path/to/image.png' }
+// When an art image is loaded for the current hole, it replaces
+// both sky and terrain rendering.
+const _artImageCache = {}; // holeIndex → Image
+let _artImagesLoading = false;
+
+function loadArtImages() {
+  if (!currentCourse?.artImages) return;
+  for (const [idx, path] of Object.entries(currentCourse.artImages)) {
+    if (_artImageCache[idx]) continue;
+    const img = new Image();
+    img.src = path;
+    img.onload = () => { _artImageCache[idx] = img; };
+  }
+}
+
+function getArtImage() {
+  return _artImageCache[currentHole] || null;
+}
+
 function drawTerrainDG() {
+  // If art image is active, don't draw flat terrain — the image IS the terrain
+  if (getArtImage()) return;
+
   const startX = camera.x - 100;
   const endX   = camera.x + W + 100;
 
@@ -466,6 +493,13 @@ MODE = {
   },
 
   drawSky() {
+    const artImg = getArtImage();
+    if (artImg) {
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(artImg, 0, 0, W, H);
+      ctx.imageSmoothingEnabled = true;
+      return;
+    }
     ctx.fillStyle = currentWorld?.sky || SKY;
     ctx.fillRect(0, 0, W, H);
   },
