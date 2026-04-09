@@ -80,50 +80,13 @@ const _artImg1 = new Image();
 _artImg1.src = 'art-holes/hole-1.png';
 _artImg1.onload = () => { _artImages[0] = _artImg1; };
 
-// ── Override terrain rendering: use art image ───────────
-const _origDrawTerrainDG = drawTerrainDG;
+// ── Override terrain rendering: INVISIBLE ─────────────────
+// The art image provides ALL visuals. Terrain polygon is collision-only.
 drawTerrainDG = function() {
-  const holeImg = _artImages[currentHole];
-  if (!holeImg) {
-    // No art for this hole — use normal rendering
-    _origDrawTerrainDG();
-    return;
-  }
-  // Draw the art image clipped to the terrain polygon
-  const startX = camera.x - 50;
-  const endX = camera.x + W + 50;
-
-  // Build terrain clip path
-  ctx.save();
-  ctx.beginPath();
-  let started = false;
-  for (let i = 0; i < vertices.length; i++) {
-    const v = vertices[i];
-    if (v.x < startX - 100 && i < vertices.length - 1 && vertices[i+1].x < startX - 100) continue;
-    if (v.x > endX + 100) break;
-    if (!started) { ctx.moveTo(v.x, v.y); started = true; }
-    else ctx.lineTo(v.x, v.y);
-  }
-  // Close along the bottom
-  ctx.lineTo(endX + 100, H + 300);
-  ctx.lineTo(startX - 100, H + 300);
-  ctx.closePath();
-  ctx.clip();
-
-  // Draw the art image inside the clip
-  // The image is 960x540 and maps to the hole's world coordinates
-  const hole = holes[currentHole];
-  if (hole) {
-    const imgX = hole.teeX - 40; // offset to align tee with left edge of image
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(holeImg, imgX, 0, 960, 540);
-    ctx.imageSmoothingEnabled = true;
-  }
-
-  ctx.restore();
+  // Don't draw anything — the image handles all terrain visuals
 };
 
-// ── Override sky: draw sky portion of the art image ──────
+// ── Override sky: draw the FULL art image as the entire background ──
 const _origDrawSky = MODE.drawSky;
 MODE.drawSky = function() {
   const holeImg = _artImages[currentHole];
@@ -131,14 +94,11 @@ MODE.drawSky = function() {
     _origDrawSky();
     return;
   }
-  // Draw the full art image as the background (sky + distant terrain)
-  const hole = holes[currentHole];
-  if (hole) {
-    const imgX = hole.teeX - 40;
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(holeImg, imgX, 0, 960, 540);
-    ctx.imageSmoothingEnabled = true;
-  }
+  // Draw the art image scaled to fill the full game viewport
+  // The image is the complete scene: sky + background + terrain
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(holeImg, 0, 0, W, H);
+  ctx.imageSmoothingEnabled = true;
 };
 </script>
 
