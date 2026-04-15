@@ -276,14 +276,14 @@ const dramaticArchetypes = {
   // ── CHASM BRIDGE: Two high plateaus with a deep chasm between ─
   // Must lob ball across the gap. Optional overhang object.
   chasm_bridge(sx, sy, dist, cupY, diff) {
-    const plateauY = H * randRange(0.15, 0.30);      // high plateaus
-    const chasmY = H * randRange(0.88, 0.97);        // deep chasm
+    const plateauY = H * randRange(0.20, 0.35);      // high plateaus (less extreme)
+    const chasmY = H * randRange(0.78, 0.88);        // shallower chasm
     const chasmLeft = sx + dist * randRange(0.25, 0.40);
     const chasmRight = sx + dist * randRange(0.55, 0.70);
 
     // Proportional wall width — chasm walls must be climbable
     const chasmDepth = Math.abs(chasmY - plateauY);
-    const wallW = Math.max(45, chasmDepth * 0.5);
+    const wallW = Math.max(55, chasmDepth * 0.6);
 
     const verts = [
       { x: sx + 20, y: sy },                        // match tee
