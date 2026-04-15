@@ -367,6 +367,12 @@ function toggleAutoplay() {
 
 function setAutoplaySpeed(s) {
   aiSpeed = s;
+  if (!aiEnabled) {
+    aiEnabled = true;
+    aiState = AI_IDLE;
+    aiTimer = 0;
+    aiming = false;
+  }
   _updateAutoplayPanel();
 }
 
