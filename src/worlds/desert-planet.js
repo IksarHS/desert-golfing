@@ -32,7 +32,7 @@ WORLDS['desert-world-1'].courses['desert-course-1'] = {
   materials: ['sand'],
   archetypes: ['flat_run', 'gentle_slope', 'gentle_hill', 'downhill', 'uphill', 'rolling_hills'],
   difficultyRange: [0.0, 0.3],
-  holeCount: 10,
+  holeCount: 500,
 };
 
 // Course 2: "Rocky Ridge" — cliffs, shelves, and mesas
@@ -41,7 +41,7 @@ WORLDS['desert-world-1'].courses['desert-course-2'] = {
   materials: ['sand', 'rock'],
   archetypes: ['cliff_drop', 'shelf', 'mesa', 'stepped_descent', 'cliff_shelf', 'uphill', 'downhill'],
   difficultyRange: [0.2, 0.6],
-  holeCount: 10,
+  holeCount: 500,
 };
 
 // ── World 2: Desert World 2 ─────────────────────────────────
@@ -68,7 +68,7 @@ WORLDS['desert-world-2'].courses['desert-course-3'] = {
   materials: ['sand', 'rock', 'mud'],
   archetypes: ['valley', 'canyon', 'canyon_cup', 'deep_pocket', 'cliff_drop', 'gentle_slope'],
   difficultyRange: [0.3, 0.7],
-  holeCount: 10,
+  holeCount: 500,
 };
 
 // Course 4: "The Gauntlet" — peaks, walls, fortresses, narrow gaps
@@ -77,7 +77,7 @@ WORLDS['desert-world-2'].courses['desert-course-4'] = {
   materials: ['sand', 'rock', 'mud'],
   archetypes: ['peak_obstacle', 'twin_peaks', 'wall_shot', 'fortress', 'narrow_gap', 'compound_terrain'],
   difficultyRange: [0.5, 1.0],
-  holeCount: 10,
+  holeCount: 500,
 };
 
 // Course 5: "Knife's Edge" — angular shelves, cliff drops, hard-angled slopes
@@ -87,7 +87,7 @@ WORLDS['desert-world-2'].courses['knifes-edge'] = {
   materials: ['sand', 'rock'],
   archetypes: ['mg_shelf_drop', 'mg_angular_valley', 'mg_slope_break', 'mg_double_shelf', 'mg_cliff_face', 'mg_notch'],
   difficultyRange: [0.3, 0.8],
-  holeCount: 10,
+  holeCount: 500,
 };
 
 // Course 6: "Classic 500" — 10 hand-recreated holes from real Desert Golfing (holes 500-700)
@@ -99,4 +99,22 @@ WORLDS['desert-world-2'].courses['classic-500'] = {
   holeCount: 10,
   // These holes are loaded from REFERENCE_HOLES_500 in level-design.js
   handDefinedSource: 'REFERENCE_HOLES_500',
+};
+
+// Course: "Endless Dunes" — long procedural desert run
+WORLDS['desert-world-1'].courses['endless-dunes'] = {
+  name: 'Endless Dunes',
+  materials: ['sand', 'rock'],
+  archetypes: ['gentle_slope', 'gentle_hill', 'rolling_hills', 'downhill', 'uphill', 'cliff_drop', 'valley'],
+  difficultyRange: [0.1, 0.6],
+  holeCount: 500,
+};
+
+// Course: "Scorched Earth" — hard desert terrain
+WORLDS['desert-world-2'].courses['scorched-earth'] = {
+  name: 'Scorched Earth',
+  materials: ['sand', 'rock', 'mud'],
+  archetypes: ['fortress', 'narrow_gap', 'twin_peaks', 'cliff_shelf', 'compound_terrain', 'canyon_cup'],
+  difficultyRange: [0.6, 1.2],
+  holeCount: 500,
 };

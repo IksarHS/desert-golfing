@@ -293,7 +293,7 @@ const archetypes = {
     const baseLevel = Math.max(sy, cupY);
     const botY = clampY(baseLevel + depth);
     const flatBottom = random() < 0.4; // 40% chance of flat-bottom canyon
-    const wallW = randRange(8, 20 + diff * 10); // narrow walls
+    const wallW = randRange(8, 20 + diff * 10);
     if (flatBottom) {
       const gapW = randRange(40, 80);
       return [
@@ -319,7 +319,7 @@ const archetypes = {
     const mesaR = sx + dist * randRange(0.55, 0.75);
     const mesaH = randRange(60, 120 + diff * 100);
     const mesaTopY = clampY(Math.min(sy, cupY) - mesaH);
-    const wallW = randRange(8, 18);
+    const wallW = randRange(8, 15);
     return [
       { x: mesaL, y: sy },                      // base left
       { x: mesaL + wallW, y: mesaTopY },         // steep wall up
@@ -337,7 +337,7 @@ const archetypes = {
     const goingDown = random() < 0.6;
     const topY = goingDown ? sy : clampY(sy - stepH);
     const botY = goingDown ? clampY(sy + stepH) : sy;
-    const wallW = randRange(6, 15);
+    const wallW = randRange(8, 15);
     return [
       { x: stepX - 30, y: topY },               // flat approach
       { x: stepX, y: topY },                    // step edge
@@ -355,7 +355,7 @@ const archetypes = {
     const depth = randRange(100, 200 + diff * 100);
     const topY = clampY(Math.min(sy, H * 0.4));
     const botY = clampY(topY + depth);
-    const wallW = randRange(6, 14);
+    const wallW = randRange(8, 15);
     return [
       { x: canyonL - 20, y: topY },             // approach
       { x: canyonL, y: topY },                  // left edge
@@ -382,17 +382,19 @@ const archetypes = {
   },
 
   wall_shot(sx, sy, dist, cupY, diff) {
-    // Cup tucked at base of tall vertical wall (backstop)
+    // Cup tucked at base of tall wall (backstop)
     // Common pattern in real DG — wall catches overshoots
     const wallX = sx + dist * randRange(0.65, 0.8);
-    const wallH = randRange(100, 180 + diff * 80);
+    const wallH = randRange(80, 140 + diff * 60);   // reduced max height
     const floorY = clampY(Math.max(sy + 30, H * 0.7));
     const wallTopY = clampY(floorY - wallH);
+    // Wall width proportional to height — climbable slope, not vertical
+    const wallWidth = Math.max(30, wallH * 0.35);
     return [
       { x: sx + dist * 0.3, y: clampY(lerp(sy, floorY, 0.5)) },
       { x: wallX - 30, y: floorY },             // flat approach to wall
       { x: wallX, y: floorY },                  // cup area (at wall base)
-      { x: wallX + 8, y: wallTopY },            // near-vertical wall
+      { x: wallX + wallWidth, y: wallTopY },     // angled wall (not vertical)
       { x: sx + dist + 80, y: wallTopY }
     ];
   },
@@ -447,7 +449,7 @@ const archetypes = {
     const pocketDepth = randRange(80, 160 + diff * 80);
     const rimY = clampY(Math.min(sy, H * 0.45));
     const pocketBotY = clampY(rimY + pocketDepth);
-    const wallW = randRange(6, 12);
+    const wallW = randRange(8, 15);
     return [
       { x: sx + dist * 0.25, y: clampY(lerp(sy, rimY, 0.5)) },
       { x: pocketX - pocketW / 2 - 20, y: rimY },  // approach
@@ -467,7 +469,7 @@ const archetypes = {
     const topY = clampY(Math.min(sy, H * 0.35));
     const botY = clampY(topY + depth);
     const canyonW = randRange(60, 100);
-    const wallW = randRange(6, 12);
+    const wallW = randRange(8, 15);
     return [
       { x: sx + dist * 0.2, y: clampY(lerp(sy, topY, 0.4)) },
       { x: canyonX - canyonW / 2, y: topY },    // left rim
@@ -486,7 +488,7 @@ const archetypes = {
     const blockH = randRange(120, 200 + diff * 80);
     const floorY = clampY(Math.max(sy, H * 0.65));
     const blockTopY = clampY(floorY - blockH);
-    const wallW = randRange(6, 12);
+    const wallW = randRange(8, 15);
     return [
       { x: blockL - 10, y: floorY },            // ground level
       { x: blockL, y: floorY },                 // base left
@@ -505,9 +507,11 @@ const archetypes = {
     const wallH = randRange(120, 200 + diff * 80);
     const floorY = clampY(Math.max(sy + 30, H * 0.7));
     const wallTopY = clampY(floorY - wallH);
-    const wallW = randRange(8, 15);
+    // Proportional wall width for tall walls
+    const wallW = Math.max(30, wallH * 0.3);
     return [
-      { x: gapX - gapW / 2 - 60, y: floorY },
+      { x: sx + 20, y: sy },                    // match tee
+      { x: gapX - gapW / 2 - 60, y: floorY },  // transition to floor
       { x: gapX - gapW / 2 - wallW, y: floorY },
       { x: gapX - gapW / 2, y: wallTopY },      // left wall top
       { x: gapX - gapW / 2 + wallW, y: floorY },// left wall inner
@@ -528,12 +532,16 @@ const archetypes = {
     const shelfY = clampY(topY + shelfH);
     const botY = clampY(topY + totalH);
     const shelfW = randRange(50, 90);
-    const wallW = randRange(6, 12);
+    // Proportional wall widths
+    const wallW1 = Math.max(30, shelfH * 0.4);
+    const wallW2 = Math.max(30, (totalH - shelfH) * 0.4);
     return [
+      { x: sx + 20, y: sy },                    // match tee
+      { x: cliffX - 20, y: topY },              // transition to cliff top
       { x: cliffX, y: topY },                   // cliff top
-      { x: cliffX + wallW, y: shelfY },          // wall to shelf
-      { x: cliffX + wallW + shelfW, y: shelfY }, // shelf (cup goes here)
-      { x: cliffX + wallW + shelfW + wallW, y: botY }, // drop below shelf
+      { x: cliffX + wallW1, y: shelfY },          // wall to shelf
+      { x: cliffX + wallW1 + shelfW, y: shelfY }, // shelf (cup goes here)
+      { x: cliffX + wallW1 + shelfW + wallW2, y: botY }, // drop below shelf
       { x: sx + dist, y: botY }
     ];
   },
@@ -576,16 +584,18 @@ const archetypes = {
   // Inspired by late-game Desert Golfing (holes 10000+)
 
   deep_plunge(sx, sy, dist, cupY, diff) {
-    // Flat shelf on left → sheer drop → deep valley floor → long steep climb to high cup
+    // Flat shelf on left → steep drop → deep valley floor → long steep climb to high cup
     // Uses nearly the full screen height
     const shelfEnd = sx + dist * randRange(0.15, 0.3);
     const valleyBottom = H * randRange(0.88, 0.96); // near screen bottom
     const plateauTop = H * randRange(0.06, 0.20);   // near screen top
     const riseStart = sx + dist * randRange(0.35, 0.5);
-    const wallW = randRange(6, 15);
+    // Proportional wall width for the big drop
+    const dropH = Math.abs(valleyBottom - sy);
+    const wallW = Math.max(45, dropH * 0.5);
     return [
       { x: shelfEnd, y: sy },                         // shelf edge
-      { x: shelfEnd + wallW, y: valleyBottom },        // sheer drop
+      { x: shelfEnd + wallW, y: valleyBottom },        // sloped drop
       { x: riseStart, y: valleyBottom },               // valley floor
       { x: riseStart + dist * 0.15, y: lerp(valleyBottom, plateauTop, 0.5) }, // mid-slope
       { x: sx + dist - 60, y: plateauTop },            // high plateau
@@ -603,13 +613,18 @@ const archetypes = {
     const valleyW = dist * randRange(0.08, 0.15);
     const climbEnd = sx + dist * randRange(0.75, 0.85);
     const cupHeight = H * randRange(0.08, 0.30);
-    const wallW = randRange(6, 12);
+    // Proportional wall widths for deep drops
+    const drop1 = Math.abs(valleyY - shelfY);
+    const wallW1 = Math.max(45, drop1 * 0.5);
+    const rise1 = Math.abs(valleyY - lerp(valleyY, cupHeight, 0.3));
+    const wallW2 = Math.max(45, rise1 * 0.5);
     return [
-      { x: sx + 20, y: shelfY },                      // shelf start (below tee area)
+      { x: sx + 20, y: sy },                          // match tee
+      { x: sx + dist * 0.08, y: shelfY },             // transition to shelf
       { x: dropX, y: shelfY },                        // shelf edge
-      { x: dropX + wallW, y: valleyY },                // drop to valley
-      { x: dropX + wallW + valleyW, y: valleyY },      // valley floor
-      { x: dropX + wallW + valleyW + wallW, y: lerp(valleyY, cupHeight, 0.3) }, // start climbing
+      { x: dropX + wallW1, y: valleyY },               // sloped drop to valley
+      { x: dropX + wallW1 + valleyW, y: valleyY },     // valley floor
+      { x: dropX + wallW1 + valleyW + wallW2, y: lerp(valleyY, cupHeight, 0.3) }, // start climbing
       { x: climbEnd, y: cupHeight + 40 },              // approaching cup
       { x: sx + dist - 30, y: cupHeight },             // cup plateau
       { x: sx + dist, y: cupHeight }
@@ -623,7 +638,8 @@ const archetypes = {
     const lowY = H * randRange(0.75, 0.92);
     const cupFloorY = H * randRange(0.50, 0.70);
     return [
-      { x: sx + 40, y: lowY },                        // low start
+      { x: sx + 20, y: sy },                          // match tee
+      { x: sx + dist * 0.08, y: lowY },               // transition to low start
       { x: ridgeX - 80, y: lerp(lowY, ridgeTop, 0.4) }, // climbing
       { x: ridgeX - 30, y: ridgeTop + 15 },            // near peak
       { x: ridgeX, y: ridgeTop },                      // ridge peak
@@ -635,21 +651,26 @@ const archetypes = {
   },
 
   shelf_drop_shelf(sx, sy, dist, cupY, diff) {
-    // High shelf → vertical drop → low shelf → another drop or rise
-    // Creates the rectangular staircase look from the reference
+    // High shelf → sloped drop → low shelf → another drop or rise
     const step1X = sx + dist * randRange(0.2, 0.35);
-    const step2X = sx + dist * randRange(0.55, 0.7);
-    const highY = H * randRange(0.10, 0.30);
-    const midY = H * randRange(0.45, 0.60);
-    const lowY = H * randRange(0.75, 0.92);
-    const wallW = randRange(6, 12);
+    const highY = H * randRange(0.18, 0.32);         // less extreme (was 0.10-0.30)
+    const midY = H * randRange(0.45, 0.58);
+    const lowY = H * randRange(0.72, 0.85);           // less extreme (was 0.75-0.92)
+    // Proportional wall width — never steeper than ~55° so ball can escape
+    const drop1 = Math.abs(midY - highY);
+    const drop2 = Math.abs(lowY - midY);
+    const wallW1 = Math.max(65, drop1 * 0.7);         // reduced from 0.8
+    const wallW2 = Math.max(65, drop2 * 0.7);
+    // Ensure step2 starts after step1's wall ends
+    const step2X = Math.max(sx + dist * randRange(0.55, 0.7), step1X + wallW1 + 40);
     return [
-      { x: sx + 20, y: highY },                       // high shelf
-      { x: step1X, y: highY },                        // first edge
-      { x: step1X + wallW, y: midY },                  // drop to mid
-      { x: step2X, y: midY },                         // mid shelf
-      { x: step2X + wallW, y: lowY },                  // drop to low
-      { x: sx + dist, y: lowY }                        // cup on low shelf
+      { x: sx + 20, y: sy },                          // match tee
+      { x: sx + dist * 0.08, y: highY },              // transition to high shelf
+      { x: step1X, y: highY },
+      { x: step1X + wallW1, y: midY },
+      { x: step2X, y: midY },
+      { x: step2X + wallW2, y: lowY },
+      { x: sx + dist, y: lowY }
     ];
   },
 
@@ -661,12 +682,15 @@ const archetypes = {
     const valleyW = dist * randRange(0.1, 0.2);
     const leftY = H * randRange(0.40, 0.55);
     const rightY = H * randRange(0.35, 0.55);
-    const wallW = randRange(8, 15);
+    // Proportional wall width for the drop
+    const dropH = Math.abs(waterY + 20 - leftY);
+    const wallW = Math.max(35, dropH * 0.4);
     return [
-      { x: sx + 40, y: leftY },                       // left terrain
+      { x: sx + 20, y: sy },                          // match tee
+      { x: sx + dist * 0.08, y: leftY },              // transition to left terrain
       { x: valleyX - 30, y: leftY + 20 },             // approaching valley
       { x: valleyX, y: leftY + 10 },                  // valley rim left
-      { x: valleyX + wallW, y: waterY + 20 },          // plunge below water
+      { x: valleyX + wallW, y: waterY + 20 },          // sloped drop below water
       { x: valleyX + valleyW, y: waterY + 20 },        // valley floor (underwater)
       { x: valleyX + valleyW + wallW, y: rightY + 10 },// climb out
       { x: valleyX + valleyW + 60, y: rightY },        // right terrain
@@ -826,7 +850,9 @@ function generateHoleTerrain(holeIndex) {
   const archName = pickArchetype(difficulty);
   const archFunc = archetypes[archName];
   const startX = teeX + 40; // small gap after tee
-  const rawVerts = archFunc(startX, teeY, dist, cupTargetY, difficulty);
+  let rawVerts = archFunc(startX, teeY, dist, cupTargetY, difficulty);
+
+  // No terrain validation — the autogolfer handles all terrain via simulation.
 
   // Add micro-noise: subdivide long segments with subtle perturbations
   // Courses can override the noise function for different terrain character
@@ -836,9 +862,9 @@ function generateHoleTerrain(holeIndex) {
   // The cup X is at the last feature vertex (end of hole)
   const lastVert = holeVerts[holeVerts.length - 1];
 
-  // Remove any stray vertices (e.g. background verts from previous hole)
-  // that fall within this hole's terrain range, to maintain X-order
-  vertices = vertices.filter(v => v.x <= startX || v.x >= lastVert.x);
+  // Remove all vertices past startX — the new hole terrain replaces everything
+  // from startX onward (background verts from previous hole get regenerated)
+  vertices = vertices.filter(v => v.x <= startX);
 
   // Assign materials from course palette to vertex segments
   const courseMats = currentCourse?.materials || [DEFAULT_MAT];
@@ -887,6 +913,14 @@ function generateHoleTerrain(holeIndex) {
   // Now place the cup into the terrain at cupX
   placeCup(holeIndex, cupX, teeX, teeY);
   holes[holeIndex].archetype = archName;
+
+  // Enforce strict X-monotonicity — remove any vertex that goes backwards.
+  // Background verts from earlier holes or cup insertion can create overlaps.
+  let _maxX = -Infinity;
+  vertices = vertices.filter(v => {
+    if (v.x >= _maxX - 0.5) { _maxX = v.x; return true; }
+    return false;
+  });
 }
 
 function generateHandDefinedHole(holeIndex) {
@@ -918,10 +952,9 @@ function generateHandDefinedHole(holeIndex) {
   // Add the cup endpoint
   holeVerts.push({ x: teeX + def.dist, y: def.cupY });
 
-  // Remove any stray vertices (e.g. background verts from previous hole)
-  // that fall within this hole's terrain range, to maintain X-order
-  const holeEndX = teeX + def.dist;
-  vertices = vertices.filter(v => v.x <= startX || v.x >= holeEndX);
+  // Remove all vertices past startX — the new hole terrain replaces everything
+  // from startX onward (background verts from previous hole get regenerated)
+  vertices = vertices.filter(v => v.x <= startX);
 
   // Append hole vertices to global array
   for (const v of holeVerts) {
@@ -941,6 +974,13 @@ function generateHandDefinedHole(holeIndex) {
   // Place the cup
   placeCup(holeIndex, cupX, teeX, teeY);
   holes[holeIndex].archetype = 'hand_defined';
+
+  // Enforce strict X-monotonicity
+  for (let i = vertices.length - 1; i > 0; i--) {
+    if (vertices[i].x < vertices[i - 1].x - 0.5) {
+      vertices.splice(i, 1);
+    }
+  }
 
   // Load objects defined for this hole
   if (def.objects && def.objects.length > 0) {
@@ -1035,4 +1075,12 @@ function ensureHolesAhead(upToHole) {
     generateHoleTerrain(i);
     holes[i].flagVisible = true;
   }
+  // Final enforcement: remove any vertex that breaks X-monotonicity.
+  // Per-hole generation handles most cases, but inter-hole boundaries
+  // (background verts from hole N overlapping hole N+1) can slip through.
+  let _maxX2 = -Infinity;
+  vertices = vertices.filter(v => {
+    if (v.x >= _maxX2 - 0.5) { _maxX2 = v.x; return true; }
+    return false;
+  });
 }

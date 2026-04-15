@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Playtest — Full Course Run</title>
+<style>
+  @font-face {
+    font-family: 'Departure Mono';
+    src: url('assets/fonts/DepartureMono-Regular.woff2') format('woff2'),
+         url('assets/fonts/DepartureMono-Regular.woff') format('woff');
+    font-weight: normal; font-style: normal; font-display: swap;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #1a1510; overflow: hidden; }
+  canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+
+  #panel {
+    position: fixed; top: 8px; right: 8px; z-index: 100;
+    width: 260px; max-height: calc(100vh - 16px);
+    background: rgba(10,8,6,0.92); backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;
+    font: 11px 'Departure Mono', monospace; color: #ccc;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  #controls { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  #controls h2 { color: #e8a030; font-size: 13px; margin-bottom: 6px; }
+  .row { display: flex; align-items: center; gap: 4px; margin-bottom: 5px; flex-wrap: wrap; }
+  .lbl { color: #666; font-size: 9px; min-width: 36px; text-transform: uppercase; }
+  .btn {
+    padding: 3px 7px; border-radius: 4px; font: 10px 'Departure Mono', monospace;
+    cursor: pointer; border: 1px solid #444; background: #222; color: #999; outline: none;
+  }
+  .btn:hover { background: #333; color: #fff; }
+  .btn.on { border-color: #6c6; color: #8e8; background: rgba(100,200,120,0.15); }
+  .btn.active { border-color: #6c6; color: #fff; background: #1a2a1a; }
+  .btn.pause { border-color: #c84; color: #fc8; background: rgba(200,140,60,0.15); }
+
+  #stats { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 10px; }
+  #stats .s { color: #666; margin-bottom: 2px; }
+  #stats .s span { color: #ddd; }
+  #stats .s.warn span { color: #f88; }
+
+  #report-area { flex: 1; overflow-y: auto; padding: 8px 10px; font-size: 9px; }
+  .rh { color: #e8a030; font-weight: bold; margin-top: 8px; margin-bottom: 3px; font-size: 10px; }
+  .course-row {
+    display: flex; align-items: center; gap: 6px; padding: 4px 6px; margin-bottom: 2px;
+    border-radius: 4px; cursor: pointer; transition: background 0.1s;
+  }
+  .course-row:hover { background: rgba(255,255,255,0.05); }
+  .course-row .cname { flex: 1; color: #bbb; font-size: 10px; }
+  .course-row .cavg { color: #888; font-size: 9px; }
+  .course-row .cmax { font-size: 9px; min-width: 32px; text-align: right; }
+  .course-row .cmax.ok { color: #6a6; }
+  .course-row .cmax.warn { color: #fc8; }
+  .course-row .cmax.bad { color: #f88; }
+  .course-row .cprog { color: #555; font-size: 9px; }
+  .course-row .cdot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .course-row .cdot.done { background: #6a6; }
+  .course-row .cdot.active { background: #e8a030; }
+  .course-row .cdot.pending { background: #333; }
+  .course-detail { padding: 2px 0 6px 18px; display: none; }
+  .course-detail.open { display: block; }
+  .hole-row { color: #666; font-size: 9px; padding: 1px 0; }
+  .hole-row.h-bad { color: #f88; }
+  .hole-row.h-warn { color: #fc8; }
+  .dist-bar { display: inline-block; height: 3px; border-radius: 1px; vertical-align: middle; margin-left: 4px; }
+  .problems { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.06); }
+  .prob-item { color: #f88; font-size: 9px; padding: 1px 0; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <div id="controls">
+    <h2>PLAYTEST RUN</h2>
+    <div class="row">
+      <span class="lbl">Auto</span>
+      <button class="btn on" id="pt-auto" onclick="togglePT()">ON</button>
+      <button class="btn" id="pt-pause" onclick="togglePause()">⏸</button>
+    </div>
+    <div class="row">
+      <span class="lbl">Speed</span>
+      <button class="btn" data-s="1" onclick="setSp(1)">1x</button>
+      <button class="btn" data-s="2" onclick="setSp(2)">2x</button>
+      <button class="btn" data-s="4" onclick="setSp(4)">4x</button>
+      <button class="btn" data-s="8" onclick="setSp(8)">8x</button>
+      <button class="btn" data-s="16" onclick="setSp(16)">16x</button>
+      <button class="btn active" data-s="32" onclick="setSp(32)">32x</button>
+      <button class="btn" data-s="64" onclick="setSp(64)">64x</button>
+      <button class="btn" data-s="128" onclick="setSp(128)">128x</button>
+    </div>
+    <div class="row">
+      <span class="lbl">Sort</span>
+      <button class="btn active" id="sort-prog" onclick="setSort('progress')">Progress</button>
+      <button class="btn" id="sort-shots" onclick="setSort('shots')">Shots ↓</button>
+    </div>
+    <div class="row">
+      <button class="btn" onclick="openReport()" style="flex:1;padding:5px;color:#e8a030;border-color:#e8a030">GENERATE REPORT</button>
+    </div>
+  </div>
+  <div id="stats">
+    <div class="s">World: <span id="sv-world">—</span></div>
+    <div class="s">Course: <span id="sv-course">—</span></div>
+    <div class="s">Hole: <span id="sv-hole">—</span></div>
+    <div class="s">Courses done: <span id="sv-cdone">0</span> / <span id="sv-ctotal">0</span></div>
+    <div class="s">Holes done: <span id="sv-hdone">0</span> / <span id="sv-htotal">0</span></div>
+    <div class="s">Avg shots: <span id="sv-avg">—</span></div>
+    <div class="s warn">Max shots: <span id="sv-max">0</span></div>
+    <div class="s warn">Over 10: <span id="sv-o10">0</span></div>
+    <div class="s warn">Cheated (25+): <span id="sv-cheat">0</span></div>
+    <div class="s" style="margin-top:4px;border-top:1px solid rgba(255,255,255,0.06);padding-top:4px;color:#8af">PERF</div>
+    <div class="s">Frame: <span id="sv-frame">—</span> ms</div>
+    <div class="s">Calc shot: <span id="sv-calc">—</span> ms</div>
+    <div class="s">Vertices: <span id="sv-verts">0</span></div>
+    <div class="s">Holes/sec: <span id="sv-hps">—</span></div>
+  </div>
+  <div id="report-area"></div>
+</div>
+
+<script src="src/shared.js"></script>
+<script src="src/worlds/desert-planet.js"></script>
+<script src="src/worlds/grasslands.js"></script>
+<script src="src/worlds/classic-collection.js"></script>
+<script src="src/worlds/dramatic-depths.js"></script>
+<script src="src/worlds/frozen-wastes.js"></script>
+<script src="src/worlds/mudlands.js"></script>
+<script src="src/reference-holes.js"></script>
+<script src="src/level-design.js"></script>
+<script src="src/generators/midgame.js"></script>
+<script src="src/generators/dramatic.js"></script>
+<script src="src/modes/desert-golfing.js"></script>
+<script src="src/art.js"></script>
+<script src="src/gameplay.js"></script>
+<script src="src/debug.js"></script>
+<script src="src/autoplay.js"></script>
+
+<script>
+// ── Playtest Runner ──
+// Plays through every course sequentially, tracks every hole,
+// cheats past 25+ shot holes, generates full report.
+
+const CHEAT_THRESHOLD = 25;
+let ptSpeed = 32;
+let ptPaused = false;
+let sortMode = 'progress'; // 'progress' or 'shots'
+
+// Perf tracking
+let _perfFrameStart = 0;
+let _perfFrameMs = 0;
+let _perfCalcMs = 0;
+let _perfHolesStart = 0;
+let _perfHolesCount = 0;
+let _perfHps = 0;
+let _perfLastHps = performance.now();
+
+// Wrap calculateShot to measure timing
+const _origCalcShot = calculateShot;
+calculateShot = function() {
+  const t0 = performance.now();
+  const result = _origCalcShot();
+  _perfCalcMs = performance.now() - t0;
+  return result;
+};
+
+// Build course queue
+const courseQueue = [];
+for (const [wId, world] of Object.entries(WORLDS)) {
+  for (const [cId, course] of Object.entries(world.courses)) {
+    courseQueue.push({ wId, cId, name: course.name, worldName: world.name, holeCount: course.holeCount || 10 });
+  }
+}
+const totalCourses = courseQueue.length;
+const totalHoles = courseQueue.reduce((s, c) => s + c.holeCount, 0);
+
+// State
+let courseIdx = 0;
+let courseStarted = false;
+let lastTrackedHole = -1;
+let holeStartStrokes = 0;
+let cheatedHoles = 0;
+let _cheatedThisHole = false;
+const holeLog = []; // every hole: { world, course, hole, shots, arch, cheated }
+
+// Running stats (avoid recalculating from full array each frame)
+let _totalShots = 0;
+let _maxShots = 0;
+let _over10 = 0;
+
+// Controls
+function togglePT() {
+  aiEnabled = !aiEnabled;
+  document.getElementById('pt-auto').textContent = aiEnabled ? 'ON' : 'OFF';
+  document.getElementById('pt-auto').classList.toggle('on', aiEnabled);
+}
+
+function togglePause() {
+  ptPaused = !ptPaused;
+  document.getElementById('pt-pause').textContent = ptPaused ? '▶' : '⏸';
+  document.getElementById('pt-pause').classList.toggle('pause', ptPaused);
+}
+
+function setSp(s) {
+  ptSpeed = s;
+  aiSpeed = s;
+  document.querySelectorAll('[data-s]').forEach(el => el.classList.toggle('active', parseInt(el.dataset.s) === s));
+}
+
+function setSort(mode) {
+  sortMode = mode;
+  document.getElementById('sort-prog').classList.toggle('active', mode === 'progress');
+  document.getElementById('sort-shots').classList.toggle('active', mode === 'shots');
+  renderReport();
+}
+
+// Prevent panel clicks from triggering game
+document.getElementById('panel').addEventListener('mousedown', e => e.stopPropagation());
+document.getElementById('panel').addEventListener('touchstart', e => e.stopPropagation());
+
+function startNextCourse() {
+  if (courseIdx >= courseQueue.length) return false;
+  const c = courseQueue[courseIdx];
+  startCourse(c.wId, c.cId);
+  showTitle = false;
+  aiSkill = 0.8;
+  aiEnabled = true;
+  aiSpeed = ptSpeed;
+  lastTrackedHole = -1;
+  holeStartStrokes = 0;
+  courseStarted = true;
+  return true;
+}
+
+function updateStats() {
+  const c = courseQueue[courseIdx] || {};
+  document.getElementById('sv-world').textContent = c.worldName || '—';
+  document.getElementById('sv-course').textContent = c.name || '—';
+  document.getElementById('sv-hole').textContent = (currentHole + 1) + '/' + (c.holeCount || '?');
+  document.getElementById('sv-cdone').textContent = courseIdx;
+  document.getElementById('sv-ctotal').textContent = totalCourses;
+  document.getElementById('sv-hdone').textContent = holeLog.length;
+  document.getElementById('sv-htotal').textContent = totalHoles;
+  document.getElementById('sv-avg').textContent = holeLog.length > 0
+    ? (_totalShots / holeLog.length).toFixed(1) : '—';
+  document.getElementById('sv-max').textContent = _maxShots;
+  document.getElementById('sv-o10').textContent = _over10;
+  document.getElementById('sv-cheat').textContent = cheatedHoles;
+
+  // Perf
+  document.getElementById('sv-frame').textContent = _perfFrameMs.toFixed(1);
+  document.getElementById('sv-calc').textContent = _perfCalcMs.toFixed(0);
+  document.getElementById('sv-verts').textContent = vertices.length;
+  document.getElementById('sv-hps').textContent = _perfHps.toFixed(1);
+}
+
+function _trackHole(entry) {
+  holeLog.push(entry);
+  _totalShots += entry.shots;
+  if (entry.shots > _maxShots) _maxShots = entry.shots;
+  if (entry.shots >= 10) _over10++;
+}
+
+function renderReport() {
+  const area = document.getElementById('report-area');
+
+  // Group by course
+  const byCourse = {};
+  const courseOrder = [];
+  for (const h of holeLog) {
+    const key = h.world + '/' + h.course;
+    if (!byCourse[key]) { byCourse[key] = []; courseOrder.push(key); }
+    byCourse[key].push(h);
+  }
+
+  // Collect problems
+  const problems = holeLog.filter(h => h.shots >= 5 || h.cheated);
+
+  let html = '';
+
+  // Course summary rows
+  html += '<div class="rh">COURSES</div>';
+  for (let ci = 0; ci < courseQueue.length; ci++) {
+    const c = courseQueue[ci];
+    const key = c.worldName + '/' + c.name;
+    const holes = byCourse[key] || [];
+    const done = holes.length >= c.holeCount;
+    const active = ci === courseIdx && courseStarted;
+    const pending = holes.length === 0 && !active;
+
+    const dotCls = done ? 'done' : active ? 'active' : 'pending';
+    const avg = holes.length > 0 ? (holes.reduce((s,h) => s+h.shots, 0) / holes.length).toFixed(1) : '—';
+    const max = holes.length > 0 ? Math.max(...holes.map(h => h.shots)) : 0;
+    const maxCls = max >= 10 ? 'bad' : max >= 5 ? 'warn' : 'ok';
+    const cheats = holes.filter(h => h.cheated).length;
+    const prog = holes.length + '/' + c.holeCount;
+
+    html += `<div class="course-row" onclick="toggleDetail('cd${ci}')">`;
+    html += `<span class="cdot ${dotCls}"></span>`;
+    html += `<span class="cname">${c.name}</span>`;
+    html += `<span class="cprog">${prog}</span>`;
+    html += `<span class="cavg">${avg}avg</span>`;
+    html += `<span class="cmax ${maxCls}">max:${max}${cheats ? ' ⚠' + cheats : ''}</span>`;
+    html += `</div>`;
+
+    // Detail (hidden by default, shows on click) — only show 5+ shot holes
+    html += `<div class="course-detail" id="cd${ci}">`;
+    const notable = holes.filter(h => h.shots >= 3);
+    if (notable.length === 0 && holes.length > 0) {
+      html += `<div class="hole-row" style="color:#6a6">All holes: 1-2 shots ✓</div>`;
+    }
+    for (const h of notable) {
+      const cls = h.cheated ? 'h-bad' : h.shots >= 10 ? 'h-bad' : h.shots >= 5 ? 'h-warn' : '';
+      const bar = `<span class="dist-bar" style="width:${Math.min(h.shots * 8, 80)}px;background:${h.shots >= 10 ? '#f66' : h.shots >= 5 ? '#c84' : '#6a6'}"></span>`;
+      html += `<div class="hole-row ${cls}">H${h.hole} ${h.shots}${h.cheated ? ' CHEAT' : ''} (${h.arch}) ${bar}</div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Problems section
+  if (problems.length > 0 && sortMode === 'shots') {
+    const sorted = problems.slice().sort((a, b) => b.shots - a.shots);
+    html += '<div class="problems"><div class="rh">PROBLEM HOLES (5+ shots)</div>';
+    for (const h of sorted) {
+      html += `<div class="prob-item">${h.world}/${h.course} H${h.hole} — ${h.cheated ? h.shots + ' CHEAT' : h.shots} (${h.arch})</div>`;
+    }
+    html += '</div>';
+  }
+
+  area.innerHTML = html;
+}
+
+function toggleDetail(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('open');
+}
+
+function openReport() {
+  const w = window.open('', '_blank');
+  if (!w) { alert('Popup blocked — allow popups for this page'); return; }
+
+  // Sort all holes by shots descending
+  const sorted = holeLog.slice().sort((a, b) => b.shots - a.shots);
+
+  // Course summaries
+  const byCourse = {};
+  for (const h of holeLog) {
+    const key = h.world + ' / ' + h.course;
+    if (!byCourse[key]) byCourse[key] = [];
+    byCourse[key].push(h);
+  }
+
+  const courseSummaries = Object.entries(byCourse).map(([name, holes]) => {
+    const avg = (holes.reduce((s,h) => s+h.shots, 0) / holes.length).toFixed(2);
+    const max = Math.max(...holes.map(h => h.shots));
+    const cheats = holes.filter(h => h.cheated).length;
+    const over10 = holes.filter(h => h.shots >= 10).length;
+    return { name, count: holes.length, avg, max, cheats, over10 };
+  }).sort((a, b) => b.max - a.max);
+
+  // Archetype breakdown
+  const byArch = {};
+  for (const h of holeLog) {
+    if (!byArch[h.arch]) byArch[h.arch] = { count: 0, totalShots: 0, max: 0, cheats: 0, over5: 0, over10: 0 };
+    const a = byArch[h.arch];
+    a.count++;
+    a.totalShots += h.shots;
+    if (h.shots > a.max) a.max = h.shots;
+    if (h.cheated) a.cheats++;
+    if (h.shots >= 5) a.over5++;
+    if (h.shots >= 10) a.over10++;
+  }
+  const archSummaries = Object.entries(byArch).map(([name, a]) => ({
+    name, ...a, avg: (a.totalShots / a.count).toFixed(2)
+  })).sort((a, b) => b.max - a.max);
+
+  let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Playtest Report</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#1a1510; color:#ccc; font:12px/1.5 'Courier New',monospace; padding:20px 30px; }
+  h1 { color:#e8a030; font-size:18px; margin-bottom:4px; }
+  h2 { color:#e8a030; font-size:14px; margin:20px 0 8px; border-bottom:1px solid #333; padding-bottom:4px; }
+  .summary { color:#888; margin-bottom:16px; }
+  .summary span { color:#ddd; }
+  .summary .bad { color:#f88; }
+  table { border-collapse:collapse; width:100%; margin-bottom:16px; }
+  th { text-align:left; color:#888; font-size:10px; text-transform:uppercase; padding:4px 8px; border-bottom:1px solid #333; cursor:pointer; }
+  th:hover { color:#fff; }
+  td { padding:3px 8px; border-bottom:1px solid #1e1e1e; font-size:11px; }
+  tr:hover { background:rgba(255,255,255,0.03); }
+  .bad { color:#f88; }
+  .warn { color:#fc8; }
+  .ok { color:#6a6; }
+  .cheat { color:#f66; font-weight:bold; }
+  .bar { display:inline-block; height:8px; border-radius:2px; vertical-align:middle; }
+  .filter-row { margin-bottom:12px; }
+  .filter-row button { padding:3px 8px; background:#222; border:1px solid #444; color:#999; font:10px monospace; cursor:pointer; border-radius:3px; margin-right:3px; }
+  .filter-row button.active { border-color:#e8a030; color:#e8a030; }
+</style></head><body>`;
+
+  const jsonData = JSON.stringify(sorted);
+
+  html += `<h1>PLAYTEST REPORT</h1>`;
+  html += `<div class="summary">`;
+  html += `Holes: <span>${holeLog.length}</span> | `;
+  html += `Avg: <span>${(_totalShots / holeLog.length).toFixed(2)}</span> | `;
+  html += `Max: <span class="bad">${_maxShots}</span> | `;
+  html += `Over 10: <span class="bad">${_over10}</span> | `;
+  html += `Cheated: <span class="bad">${cheatedHoles}</span>`;
+  html += `</div>`;
+  html += `<div style="margin-bottom:16px">`;
+  html += `<button id="copy-btn" style="padding:5px 12px;background:#222;border:1px solid #e8a030;color:#e8a030;font:11px monospace;cursor:pointer;border-radius:4px">Copy JSON to Clipboard</button>`;
+  html += `</div>`;
+  html += `<script>
+    const _json = ${JSON.stringify(jsonData)};
+    document.getElementById('copy-btn').onclick = function() {
+      navigator.clipboard.writeText(_json).then(() => {
+        this.textContent = 'Copied!';
+        this.style.borderColor = '#6a6';
+        this.style.color = '#6a6';
+        setTimeout(() => { this.textContent = 'Copy JSON to Clipboard'; this.style.borderColor = '#e8a030'; this.style.color = '#e8a030'; }, 2000);
+      });
+    };
+  <\/script>`;
+
+  // Archetype breakdown
+  html += `<h2>BY ARCHETYPE</h2>`;
+  html += `<table><tr><th>Archetype</th><th>Count</th><th>Avg</th><th>Max</th><th>5+</th><th>10+</th><th>Cheats</th></tr>`;
+  for (const a of archSummaries) {
+    const maxCls = a.max >= 25 ? 'cheat' : a.max >= 10 ? 'bad' : a.max >= 5 ? 'warn' : 'ok';
+    html += `<tr><td>${a.name}</td><td>${a.count}</td><td>${a.avg}</td>`;
+    html += `<td class="${maxCls}">${a.max}</td><td>${a.over5}</td><td>${a.over10}</td>`;
+    html += `<td>${a.cheats || ''}</td></tr>`;
+  }
+  html += `</table>`;
+
+  // Course breakdown
+  html += `<h2>BY COURSE</h2>`;
+  html += `<table><tr><th>Course</th><th>Holes</th><th>Avg</th><th>Max</th><th>10+</th><th>Cheats</th></tr>`;
+  for (const c of courseSummaries) {
+    const maxCls = c.max >= 25 ? 'cheat' : c.max >= 10 ? 'bad' : c.max >= 5 ? 'warn' : 'ok';
+    html += `<tr><td>${c.name}</td><td>${c.count}</td><td>${c.avg}</td>`;
+    html += `<td class="${maxCls}">${c.max}</td><td>${c.over10}</td>`;
+    html += `<td>${c.cheats || ''}</td></tr>`;
+  }
+  html += `</table>`;
+
+  // All problem holes (5+ shots)
+  const problems = sorted.filter(h => h.shots >= 3);
+  html += `<h2>PROBLEM HOLES (3+ shots) — ${problems.length} total</h2>`;
+  html += `<table id="holes-table"><tr><th>Shots</th><th>World</th><th>Course</th><th>Hole</th><th>Archetype</th><th></th></tr>`;
+  for (const h of problems) {
+    const cls = h.cheated ? 'cheat' : h.shots >= 10 ? 'bad' : h.shots >= 5 ? 'warn' : '';
+    const barW = Math.min(h.shots * 6, 150);
+    const barColor = h.shots >= 25 ? '#f44' : h.shots >= 10 ? '#f66' : h.shots >= 5 ? '#c84' : '#6a6';
+    html += `<tr class="${cls}">`;
+    html += `<td>${h.shots}${h.cheated ? ' CHEAT' : ''}</td>`;
+    html += `<td>${h.world}</td><td>${h.course}</td><td>${h.hole}</td>`;
+    html += `<td>${h.arch}</td>`;
+    html += `<td><span class="bar" style="width:${barW}px;background:${barColor}"></span></td>`;
+    html += `</tr>`;
+  }
+  html += `</table>`;
+
+  html += `</body></html>`;
+  w.document.write(html);
+  w.document.close();
+}
+
+function mainLoop() {
+  if (ptPaused) {
+    draw();
+    requestAnimationFrame(mainLoop);
+    return;
+  }
+
+  if (courseIdx >= courseQueue.length) {
+    // All done — final render
+    draw();
+    updateStats();
+    renderReport();
+    return;
+  }
+
+  if (!courseStarted) {
+    if (!startNextCourse()) {
+      draw();
+      return;
+    }
+  }
+
+  const c = courseQueue[courseIdx];
+  _ballLogFrame++;
+  _perfFrameStart = performance.now();
+
+  // Run physics + AI at selected speed, but cap per-frame time to keep UI responsive
+  const steps = aiEnabled ? ptSpeed : 1;
+  const holesBefore = holeLog.length;
+  const frameBudget = 50; // ms max per frame to stay responsive
+  for (let i = 0; i < steps; i++) {
+    aiUpdate();
+    update();
+
+    // Check time budget every 8 steps to avoid blocking UI
+    if (i % 8 === 7 && performance.now() - _perfFrameStart > frameBudget) break;
+
+    // Track hole completions
+    if (currentHole !== lastTrackedHole) {
+      if (lastTrackedHole >= 0 && lastTrackedHole < holes.length) {
+        const shots = totalStrokes - holeStartStrokes;
+        if (shots > 0 || lastTrackedHole > 0) {
+          _trackHole({
+            world: c.worldName, course: c.name, hole: lastTrackedHole + 1,
+            shots: Math.max(shots, 0), arch: holes[lastTrackedHole]?.archetype || 'hand_defined',
+            cheated: false,
+          });
+        }
+      }
+      lastTrackedHole = currentHole;
+      holeStartStrokes = totalStrokes;
+      _cheatedThisHole = false; // reset cheat guard for new hole
+    }
+
+    // Cheat detection: if current hole has taken 25+ shots, force complete
+    if (aiHoleStrokes >= CHEAT_THRESHOLD && state === STATE_AIM && ball.atRest && !_cheatedThisHole) {
+      _cheatedThisHole = true;
+
+      // Record the cheated hole (use _trackHole for consistent stats)
+      _trackHole({
+        world: c.worldName, course: c.name, hole: currentHole + 1,
+        shots: aiHoleStrokes, arch: holes[currentHole]?.archetype || '?',
+        cheated: true,
+      });
+      cheatedHoles++;
+
+      // Mark this hole as already tracked so normal tracking skips it
+      lastTrackedHole = currentHole;
+      holeStartStrokes = totalStrokes;
+
+      // Force ball into cup
+      const hole = holes[currentHole];
+      if (hole) {
+        ball.x = hole.cupX;
+        ball.y = hole.cupY + 5;
+        ball.vx = 0; ball.vy = 0;
+        ball.atRest = false; ball.onGround = false;
+        state = STATE_FLIGHT;
+      }
+    }
+
+    // Course complete?
+    if (state === STATE_COMPLETE) {
+      // Record last hole if not already
+      if (lastTrackedHole >= 0 && lastTrackedHole < holes.length) {
+        const shots = totalStrokes - holeStartStrokes;
+        if (shots > 0) {
+          _trackHole({
+            world: c.worldName, course: c.name, hole: lastTrackedHole + 1,
+            shots, arch: holes[lastTrackedHole]?.archetype || 'hand_defined',
+            cheated: false,
+          });
+        }
+      }
+
+      aiEnabled = false;
+      courseIdx++;
+      courseStarted = false;
+      break;
+    }
+  }
+
+  _perfFrameMs = performance.now() - _perfFrameStart;
+
+  // Holes/sec tracking (update every second)
+  const holesThisFrame = holeLog.length - holesBefore;
+  _perfHolesCount += holesThisFrame;
+  const now = performance.now();
+  if (now - _perfLastHps >= 1000) {
+    _perfHps = _perfHolesCount / ((now - _perfLastHps) / 1000);
+    _perfHolesCount = 0;
+    _perfLastHps = now;
+  }
+
+  // Throttle rendering — draw every 3rd frame at high speed to save CPU
+  if (!window._frameCount) window._frameCount = 0;
+  window._frameCount++;
+  const drawEvery = ptSpeed >= 16 ? 3 : 1;
+  if (window._frameCount % drawEvery === 0) {
+    draw();
+    updateStats();
+  }
+
+  // Only render report when all courses done — manual render via sort buttons anytime
+  if (courseIdx >= courseQueue.length) {
+    draw();
+    updateStats();
+    renderReport();
+  }
+
+  requestAnimationFrame(mainLoop);
+}
+
+// Init
+MODE.init();
+document.getElementById('sv-ctotal').textContent = totalCourses;
+document.getElementById('sv-htotal').textContent = totalHoles;
+startNextCourse();
+mainLoop();
+</script>
+</body>
+</html>

@@ -42,68 +42,74 @@
     background: rgba(255,255,255,0.15); margin: 0 6px;
   }
 
-  /* ── Floating hole navigator — top left ── */
-  #hole-navigator {
-    position: fixed; top: 16px; left: 16px; z-index: 90;
-    pointer-events: auto;
-    font: 12px 'Departure Mono', monospace; color: #eee;
-    transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  #hole-nav-bar {
-    display: flex; align-items: center; gap: 6px;
-    background: rgba(30,25,20,0.75); backdrop-filter: blur(12px);
-    border-radius: 20px; padding: 8px 16px;
-    border: 1.5px solid rgba(255,255,255,0.1);
-    cursor: pointer; user-select: none;
+  /* ── Top Navigation Bar — breadcrumb style ── */
+  #top-nav-bar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 90;
+    display: flex; align-items: center; gap: 0;
+    height: 48px; padding: 0 16px;
+    background: rgba(28, 24, 18, 0.82); backdrop-filter: blur(14px);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
     box-shadow: 0 2px 16px rgba(0,0,0,0.3);
-    transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+    font: 12px 'Departure Mono', monospace; color: #eee;
+    pointer-events: auto; user-select: none;
+    transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1), background 0.35s;
   }
-  #hole-nav-bar:hover { background: rgba(30,25,20,0.88); border-color: rgba(255,255,255,0.15); box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
-  #hole-nav-bar .nav-arrow {
-    background: none; border: none; color: #e8a030; font-size: 14px;
-    cursor: pointer; padding: 4px 8px; border-radius: 6px;
-    font-family: 'Departure Mono', monospace;
-    transition: background 0.15s, transform 0.1s;
+  .nav-segment { position: relative; display: flex; align-items: center; }
+  .nav-crumb {
+    display: flex; align-items: center; gap: 5px;
+    background: none; border: none; color: #ddd;
+    font: 12px 'Departure Mono', monospace;
+    padding: 6px 10px; border-radius: 8px;
+    cursor: pointer; transition: background 0.15s, color 0.15s;
   }
-  #hole-nav-bar .nav-arrow:hover { background: rgba(232,160,48,0.2); }
-  #hole-nav-bar .nav-arrow:active { transform: scale(0.9); }
-  #hole-nav-label {
-    font-size: 12px; color: #ddd; min-width: 90px; text-align: center;
-    font-weight: bold; cursor: pointer; letter-spacing: 0.5px;
-  }
+  .nav-crumb:hover { background: rgba(255,255,255,0.08); color: #fff; }
+  .nav-crumb:active, .nav-crumb.open { background: rgba(232, 160, 48, 0.15); color: #e8a030; }
+  .crumb-label { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .crumb-chevron { font-size: 8px; color: #666; transition: transform 0.2s; }
+  .nav-crumb.open .crumb-chevron { transform: rotate(180deg); color: #e8a030; }
+  .crumb-sep { color: #555; font-size: 10px; margin: 0 2px; }
 
-  /* Expanded hole list dropdown */
-  #hole-list-dropdown {
-    display: none; position: absolute; top: 100%; left: 0; margin-top: 8px;
-    background: rgba(30,25,20,0.92); backdrop-filter: blur(16px);
-    border-radius: 14px; border: 1.5px solid rgba(255,255,255,0.1);
+  /* Nav dropdown — shared by world, course, hole, mini-settings */
+  .nav-dropdown {
+    display: none; position: absolute; top: 100%; left: 0;
+    margin-top: 6px;
+    background: rgba(30, 25, 20, 0.94); backdrop-filter: blur(16px);
+    border-radius: 12px; border: 1.5px solid rgba(255,255,255,0.1);
     box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.2);
     min-width: 200px; max-height: 60vh; overflow-y: auto;
-    padding: 6px 0;
+    padding: 4px 0; z-index: 300;
     animation: slideDown 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  /* Custom scrollbar for dropdown */
-  #hole-list-dropdown::-webkit-scrollbar { width: 6px; }
-  #hole-list-dropdown::-webkit-scrollbar-track { background: transparent; margin: 8px 0; }
-  #hole-list-dropdown::-webkit-scrollbar-thumb {
-    background: rgba(232,160,48,0.3); border-radius: 3px;
-  }
-  #hole-list-dropdown::-webkit-scrollbar-thumb:hover { background: rgba(232,160,48,0.5); }
-  #hole-list-dropdown.open { display: block; }
+  .nav-dropdown.open { display: block; }
+  .nav-dropdown::-webkit-scrollbar { width: 6px; }
+  .nav-dropdown::-webkit-scrollbar-track { background: transparent; }
+  .nav-dropdown::-webkit-scrollbar-thumb { background: rgba(232,160,48,0.3); border-radius: 3px; }
+  .nav-dropdown::-webkit-scrollbar-thumb:hover { background: rgba(232,160,48,0.5); }
   @keyframes slideDown {
     from { opacity: 0; transform: translateY(-8px); }
     to { opacity: 1; transform: translateY(0); }
   }
-  #hole-list {
-    display: flex; flex-direction: column; gap: 1px;
+
+  /* Dropdown items for world and course */
+  .nav-drop-item {
+    padding: 8px 14px; cursor: pointer; font-size: 11px;
+    color: #bbb; border-left: 3px solid transparent;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
   }
+  .nav-drop-item:hover { background: rgba(255,255,255,0.07); color: #fff; }
+  .nav-drop-item.active {
+    border-left-color: #e8a030; color: #e8a030;
+    background: rgba(232,160,48,0.1); font-weight: bold;
+  }
+
+  /* Hole list items in dropdown */
   .hole-item {
     padding: 8px 14px 8px 12px; cursor: pointer; font-size: 11px;
-    display: grid; grid-template-columns: 24px 1fr;
-    align-items: baseline;
+    display: flex; align-items: baseline; gap: 6px;
     border-left: 3px solid transparent;
     transition: background 0.15s, border-color 0.15s;
   }
+  .hole-item .hole-num { min-width: 20px; }
   .hole-item:hover { background: rgba(255,255,255,0.07); }
   .hole-item.active { border-left-color: #e8a030; background: rgba(232,160,48,0.12); }
   .hole-item .hole-num { font-size: 10px; color: #555; font-variant-numeric: tabular-nums; }
@@ -122,68 +128,69 @@
     display: none; padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.06);
   }
 
-  /* ── Floating gear button — top right ── */
-  #gear-btn {
-    position: fixed; top: 16px; right: 16px; z-index: 90;
-    pointer-events: auto;
-    background: rgba(30,25,20,0.75); backdrop-filter: blur(12px);
-    border: 1.5px solid rgba(255,255,255,0.1); border-radius: 50%; width: 42px; height: 42px;
-    color: #bbb; font-size: 20px; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 2px 16px rgba(0,0,0,0.3);
-    transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.2s, opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-    font-family: 'Departure Mono', monospace;
+  /* Dropdown action row (+ New, delete, etc.) */
+  .nav-drop-action {
+    padding: 8px 14px; cursor: pointer; font-size: 10px;
+    color: #e8a030; border-top: 1px solid rgba(255,255,255,0.06);
+    transition: background 0.15s, color 0.15s;
+    display: flex; align-items: center; gap: 6px;
   }
-  #gear-btn:hover { background: rgba(30,25,20,0.9); color: #e8a030; border-color: rgba(232,160,48,0.3); transform: rotate(30deg); }
+  .nav-drop-action:hover { background: rgba(232,160,48,0.15); color: #fff; }
+  .nav-drop-action.danger { color: #c55; }
+  .nav-drop-action.danger:hover { background: rgba(200,60,60,0.2); color: #f88; }
 
-  /* ── Settings overlay — from gear button ── */
-  #settings-overlay {
-    position: fixed; top: 68px; right: 16px; z-index: 200;
-    background: rgba(28,24,18,0.92); backdrop-filter: blur(20px);
-    border-radius: 16px; border: 1.5px solid rgba(255,255,255,0.1);
-    box-shadow: 0 12px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.15);
-    padding: 20px 24px; min-width: 300px;
-    font: 12px 'Departure Mono', monospace; color: #ddd;
-    /* CSS-driven open/close with opacity+transform */
-    opacity: 0; transform: translateY(-10px) scale(0.97);
-    pointer-events: none;
-    transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Delete button inline with dropdown items */
+  .nav-drop-item { display: flex; align-items: center; }
+  .nav-drop-item .drop-del, .hole-item .drop-del {
+    margin-left: auto; padding: 2px 6px; font-size: 9px;
+    color: #555; background: none; border: none; border-radius: 4px;
+    cursor: pointer; font-family: 'Departure Mono', monospace;
+    opacity: 0; transition: opacity 0.15s, color 0.15s, background 0.15s;
+    flex-shrink: 0;
   }
-  #settings-overlay.open {
-    opacity: 1; transform: translateY(0) scale(1);
-    pointer-events: auto;
-  }
-  .settings-header {
-    display: flex; align-items: center; justify-content: space-between;
-    margin: -4px -4px 12px; padding-bottom: 12px;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
-  }
-  .settings-header-title {
-    font-size: 13px; font-weight: bold; color: #e8a030; letter-spacing: 1px;
-  }
-  .settings-close-btn {
-    background: none; border: none; color: #666; font-size: 16px;
-    cursor: pointer; padding: 4px 8px; border-radius: 6px;
+  .nav-drop-item:hover .drop-del, .hole-item:hover .drop-del { opacity: 1; }
+  .drop-del:hover { color: #f88 !important; background: rgba(200,60,60,0.25) !important; }
+
+  /* Nav arrows (prev/next hole) */
+  #top-nav-bar .nav-arrow {
+    background: none; border: none; color: #e8a030; font-size: 14px;
+    cursor: pointer; padding: 4px 6px; border-radius: 6px;
     font-family: 'Departure Mono', monospace;
-    transition: color 0.15s, background 0.15s;
+    transition: background 0.15s, transform 0.1s;
   }
-  .settings-close-btn:hover { color: #e8a030; background: rgba(255,255,255,0.06); }
-  .settings-section-title {
-    font-size: 8px; letter-spacing: 1.5px; text-transform: uppercase;
-    color: rgba(232,160,48,0.45); margin: 14px 0 6px; padding-bottom: 4px;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
+  #top-nav-bar .nav-arrow:hover { background: rgba(232,160,48,0.2); }
+  #top-nav-bar .nav-arrow:active { transform: scale(0.9); }
+
+  /* Right side of nav bar */
+  .nav-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+  /* Mini gear button inside bar */
+  #gear-btn-mini {
+    background: none; border: none; color: #777; font-size: 18px;
+    cursor: pointer; padding: 4px 8px; border-radius: 8px;
+    font-family: 'Departure Mono', monospace;
+    transition: color 0.2s, background 0.15s, transform 0.2s;
   }
-  .settings-section-title:first-of-type { margin-top: 0; }
-  .settings-row {
-    display: flex; align-items: center; gap: 10px;
-    padding: 8px 0;
+  #gear-btn-mini:hover { color: #e8a030; background: rgba(255,255,255,0.06); transform: rotate(30deg); }
+  #gear-btn-mini.open { color: #e8a030; }
+
+  /* Mini settings popover */
+  #mini-settings {
+    position: fixed; top: 52px; right: 16px; left: auto;
+    min-width: 280px; padding: 12px 16px;
+    font: 11px 'Departure Mono', monospace; color: #ddd;
   }
-  .settings-row + .settings-row { border-top: 1px solid rgba(255,255,255,0.03); }
+  .mini-settings-section {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 0;
+  }
+  .mini-settings-section + .mini-settings-section {
+    border-top: 1px solid rgba(255,255,255,0.04);
+  }
   .settings-label {
     color: #e8a030; font-size: 9px; letter-spacing: 0.5px;
-    text-transform: uppercase; min-width: 60px;
+    text-transform: uppercase; min-width: 52px;
   }
-  .settings-row .ed-btn { margin-left: auto; }
 
   /* ── Bottom floating toolbar — tool icons ── */
   #bottom-toolbar {
@@ -323,8 +330,11 @@
   }
   .lib-save-btn:hover { background: rgba(232,160,48,0.18); border-color: rgba(232,160,48,0.5); border-style: solid; }
 
-  /* ── Play mode: gracefully fade away editor chrome except Edit/Play ── */
-  body.play-mode #gear-btn,
+  /* ── Play mode: gracefully fade away editor chrome except hole nav + mode pill ── */
+  body.play-mode #seg-world,
+  body.play-mode #seg-course,
+  body.play-mode .crumb-sep,
+  body.play-mode #gear-btn-mini,
   body.play-mode #bottom-toolbar,
   body.play-mode #mode-badge {
     opacity: 0; pointer-events: none;
@@ -333,10 +343,9 @@
   body.play-mode #bottom-toolbar {
     transform: translateX(-50%) translateY(30px);
   }
-  body.play-mode #gear-btn {
-    transform: translateX(20px);
+  body.play-mode #top-nav-bar {
+    background: rgba(28, 24, 18, 0.5); border-bottom-color: transparent;
   }
-  /* In Play mode: keep entire nav bar visible including hole info */
 </style>
 </head>
 <body>
@@ -345,55 +354,61 @@
 <!-- V2B: Floating mode badge — below pill -->
 <div id="mode-badge"></div>
 
-<!-- V2B: Unified top-left bar: hole navigator + Edit/Play -->
-<div id="hole-navigator">
-  <div id="hole-nav-bar">
-    <button class="nav-arrow" onclick="event.stopPropagation(); goToHole(currentHole - 1)">&#9664;</button>
-    <span id="hole-nav-label" onclick="toggleHoleListDropdown()">Hole 1/9</span>
-    <button class="nav-arrow" onclick="event.stopPropagation(); goToHole(currentHole + 1)">&#9654;</button>
+<!-- Top Navigation Bar: World › Course › Hole breadcrumb -->
+<div id="top-nav-bar">
+  <div class="nav-segment" id="seg-world">
+    <button class="nav-crumb" id="crumb-world" onclick="toggleNavDropdown('world')">
+      <span class="crumb-label">World</span>
+      <span class="crumb-chevron">&#9662;</span>
+    </button>
+    <div class="nav-dropdown" id="dropdown-world"></div>
+  </div>
+
+  <span class="crumb-sep">&#9656;</span>
+
+  <div class="nav-segment" id="seg-course">
+    <button class="nav-crumb" id="crumb-course" onclick="toggleNavDropdown('course')">
+      <span class="crumb-label">Course</span>
+      <span class="crumb-chevron">&#9662;</span>
+    </button>
+    <div class="nav-dropdown" id="dropdown-course"></div>
+  </div>
+
+  <span class="crumb-sep">&#9656;</span>
+
+  <div class="nav-segment" id="seg-hole">
+    <button class="nav-arrow" onclick="goToHole(currentHole - 1)">&#9664;</button>
+    <button class="nav-crumb" id="crumb-hole" onclick="toggleNavDropdown('hole')">
+      <span class="crumb-label">Hole 1/9</span>
+      <span class="crumb-chevron">&#9662;</span>
+    </button>
+    <button class="nav-arrow" onclick="goToHole(currentHole + 1)">&#9654;</button>
+    <div class="nav-dropdown" id="dropdown-hole"></div>
+  </div>
+
+  <div class="nav-right">
+    <button id="gear-btn-mini" onclick="toggleNavDropdown('settings')">&#9881;</button>
     <span class="nav-divider"></span>
     <div id="mode-pill">
       <button class="mode-btn active" id="btn-edit" onclick="switchMode('edit')">EDIT</button>
       <button class="mode-btn" id="btn-play" onclick="switchMode('play')">PLAY</button>
     </div>
   </div>
-  <!-- Expandable hole list -->
-  <div id="hole-list-dropdown">
-    <div id="hole-name-bar" style="display:none; padding:6px 10px; border-bottom:1px solid rgba(255,255,255,0.06);">
-      <input class="ed-input" id="hole-name-input" type="text" placeholder="Hole name..."
-             style="width:100%; font-size:11px; padding:4px 8px;" onchange="onHoleNameChange(this.value)" />
-    </div>
-    <div id="hole-list"></div>
-  </div>
 </div>
 
-<!-- V2B: Floating gear button — top right -->
-<button id="gear-btn" onclick="toggleSettingsOverlay()">&#9881;</button>
-
-<!-- V2B: Settings overlay (course/world/hole config) -->
-<div id="settings-overlay">
-  <div class="settings-header">
-    <span class="settings-header-title">Hole Editor</span>
-    <button class="settings-close-btn" onclick="toggleSettingsOverlay()">&#10005;</button>
-  </div>
-
-  <!-- PRIMARY: Current hole editing -->
-  <div class="settings-section-title">Current Hole</div>
-  <div class="settings-row">
-    <span class="settings-label">HOLE</span>
-    <span id="settings-hole-indicator" style="font-size:12px; color:#e8a030; font-weight:bold; min-width:60px"></span>
-  </div>
-  <div class="settings-row">
+<!-- Mini settings popover (gear icon) -->
+<div class="nav-dropdown" id="mini-settings">
+  <div class="mini-settings-section">
     <span class="settings-label">TYPE</span>
     <div style="position:relative; display:inline-block;" id="type-toggle-wrapper">
       <button class="ed-btn" id="btn-toggle-type" onclick="onToggleTypeClick()"></button>
-      <div id="custom-dropdown" style="display:none; position:absolute; top:100%; left:0; z-index:300; background:rgba(26,22,18,0.96); border:1px solid rgba(255,255,255,0.12); border-radius:8px; min-width:170px; box-shadow:0 8px 24px rgba(0,0,0,0.5); padding:4px 0;">
+      <div id="custom-dropdown" style="display:none; position:absolute; top:100%; left:0; z-index:400; background:rgba(26,22,18,0.96); border:1px solid rgba(255,255,255,0.12); border-radius:8px; min-width:170px; box-shadow:0 8px 24px rgba(0,0,0,0.5); padding:4px 0;">
         <div class="dropdown-item" onclick="makeCustomNew()">New Custom</div>
         <div class="dropdown-item" onclick="openLibraryPicker()">From Library...</div>
       </div>
     </div>
   </div>
-  <div class="settings-row" id="preset-row" style="display:none">
+  <div class="mini-settings-section" id="preset-row" style="display:none">
     <span class="settings-label">PRESET</span>
     <div id="preset-bar" class="visible">
       <button class="ed-btn sm" onclick="cyclePreset(-1)">&#9664;</button>
@@ -401,37 +416,14 @@
       <button class="ed-btn sm" onclick="cyclePreset(1)">&#9654;</button>
     </div>
   </div>
-
-  <!-- SECONDARY: Course settings -->
-  <div class="settings-section-title">Course</div>
-  <div class="settings-row">
-    <span class="settings-label">COURSE</span>
-    <select class="ed-select" id="course-picker" onchange="onCoursePick()" style="min-width:80px"></select>
-    <button class="ed-btn sm" onclick="createNewCourse()" title="New course">+</button>
-    <button class="ed-btn sm danger" onclick="deleteCourse()" title="Delete course">&#10005;</button>
-  </div>
-  <div class="settings-row">
+  <div class="mini-settings-section">
     <span class="settings-label">NAME</span>
-    <input class="ed-input" id="course-name" type="text" value="" style="width:120px" onchange="onMetadataChange()" title="Display name" />
+    <input class="ed-input" id="course-name" type="text" value="" style="width:140px" onchange="onMetadataChange()" title="Course display name" />
   </div>
-  <div class="settings-row">
-    <span class="settings-label">HOLES</span>
-    <button class="ed-btn sm" onclick="adjustHoleCount(-1)">&#9664;</button>
-    <span id="hole-count-label" style="font-size:11px; color:#999; min-width:36px; text-align:center">10</span>
-    <button class="ed-btn sm" onclick="adjustHoleCount(1)">&#9654;</button>
-  </div>
-
-  <!-- TERTIARY: World + Library -->
-  <div class="settings-section-title">World</div>
-  <div class="settings-row">
-    <span class="settings-label">WORLD</span>
-    <select class="ed-select" id="world-picker" onchange="onWorldPick()" style="min-width:100px"></select>
-  </div>
-  <div class="settings-section-title">Library</div>
-  <div class="settings-row">
-    <span class="settings-label">LIB</span>
-    <button class="ed-btn sm" onclick="toggleLibraryPanel(true)">Open Library</button>
-    <button class="ed-btn sm danger" id="btn-clear" onclick="clearCustomHoles()">Clear All</button>
+  <div class="mini-settings-section">
+    <button class="ed-btn sm" onclick="toggleLibraryPanel(true); closeAllNavDropdowns();">Library</button>
+    <button class="ed-btn sm" onclick="saveCustomHoles(); closeAllNavDropdowns();">Save</button>
+    <button class="ed-btn sm danger" id="btn-clear" onclick="clearCustomHoles(); closeAllNavDropdowns();">Reset Course</button>
   </div>
 </div>
 
@@ -491,6 +483,8 @@
 <script src="src/worlds/grasslands.js"></script>
 <script src="src/worlds/classic-collection.js"></script>
 <script src="src/worlds/dramatic-depths.js"></script>
+<script src="src/worlds/frozen-wastes.js"></script>
+<script src="src/worlds/mudlands.js"></script>
 <script src="src/reference-holes.js"></script>
 <script src="src/level-design.js"></script>
 <script src="src/generators/midgame.js"></script>
@@ -510,6 +504,7 @@ let editorHoleCount = 9;
 
 // Track which holes are hand-designed (vs procedural)
 let customHoleIndices = new Set();
+let _cachedCustomHoles = null; // cached saved hole data for re-applying after restoreCup
 let currentPresetIndex = 0;
 
 // Hole Library — persistent named hole collection
@@ -744,61 +739,239 @@ function getCourseHoleCount(course) {
   return 9;
 }
 
-function populateWorldPicker() {
-  const picker = document.getElementById('world-picker');
-  picker.innerHTML = '';
-  for (const [wId, world] of Object.entries(WORLDS)) {
-    const opt = document.createElement('option');
-    opt.value = wId;
-    opt.textContent = world.name;
-    if (world === currentWorld) opt.selected = true;
-    picker.appendChild(opt);
+// ── Nav bar helpers ─────────────────────────────────────────
+function getWorldId() {
+  for (const [id, w] of Object.entries(WORLDS)) {
+    if (w === currentWorld) return id;
   }
+  return Object.keys(WORLDS)[0];
+}
+
+function getCourseId() {
+  if (!currentWorld) return null;
+  for (const [id, c] of Object.entries(currentWorld.courses)) {
+    if (c === currentCourse) return id;
+  }
+  return Object.keys(currentWorld.courses)[0];
+}
+
+let activeNavDropdown = null; // 'world' | 'course' | 'hole' | 'settings' | null
+
+function toggleNavDropdown(which) {
+  const ddId = which === 'settings' ? 'mini-settings' : 'dropdown-' + which;
+  const crumbId = which === 'settings' ? 'gear-btn-mini' : 'crumb-' + which;
+  const dd = document.getElementById(ddId);
+  const crumb = document.getElementById(crumbId);
+
+  if (activeNavDropdown === which) {
+    closeAllNavDropdowns();
+    return;
+  }
+
+  closeAllNavDropdowns();
+
+  // Rebuild contents on open
+  if (which === 'world') populateWorldPicker();
+  else if (which === 'course') populateCoursePicker();
+  else if (which === 'hole') buildHoleList();
+
+  dd.classList.add('open');
+  if (crumb) crumb.classList.add('open');
+  activeNavDropdown = which;
+}
+
+function closeAllNavDropdowns() {
+  ['dropdown-world', 'dropdown-course', 'dropdown-hole', 'mini-settings'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('open');
+  });
+  ['crumb-world', 'crumb-course', 'crumb-hole', 'gear-btn-mini'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('open');
+  });
+  activeNavDropdown = null;
+}
+
+function updateNavLabels() {
+  const wLabel = document.querySelector('#crumb-world .crumb-label');
+  if (wLabel && currentWorld) wLabel.textContent = currentWorld.name;
+  const cLabel = document.querySelector('#crumb-course .crumb-label');
+  if (cLabel && currentCourse) cLabel.textContent = currentCourse.name;
+  const hLabel = document.querySelector('#crumb-hole .crumb-label');
+  if (hLabel) hLabel.textContent = `Hole ${currentHole + 1}/${editorHoleCount}`;
+}
+
+function populateWorldPicker() {
+  const dd = document.getElementById('dropdown-world');
+  dd.innerHTML = '';
+  const worldEntries = Object.entries(WORLDS);
+  for (const [wId, world] of worldEntries) {
+    const div = document.createElement('div');
+    div.className = 'nav-drop-item' + (world === currentWorld ? ' active' : '');
+
+    const label = document.createElement('span');
+    label.textContent = world.name;
+    label.style.cssText = 'flex:1; cursor:pointer;';
+    label.onclick = () => {
+      currentWorld = WORLDS[wId];
+      const courseIds = Object.keys(currentWorld.courses);
+      if (courseIds.length > 0) switchCourse(wId, courseIds[0]);
+      closeAllNavDropdowns();
+    };
+    div.appendChild(label);
+
+    // Delete button (only for custom worlds, and only if >1 world)
+    if (world._custom && worldEntries.length > 1) {
+      const del = document.createElement('button');
+      del.className = 'drop-del';
+      del.textContent = '✕';
+      del.title = 'Delete world';
+      del.onclick = (e) => {
+        e.stopPropagation();
+        if (!confirm('Delete world "' + world.name + '" and all its courses?')) return;
+        delete WORLDS[wId];
+        saveCustomCoursesRegistry();
+        const remaining = Object.entries(WORLDS);
+        if (remaining.length > 0) {
+          const [firstWId] = remaining[0];
+          const firstCId = Object.keys(WORLDS[firstWId].courses)[0];
+          switchCourse(firstWId, firstCId);
+        }
+        closeAllNavDropdowns();
+      };
+      div.appendChild(del);
+    }
+
+    dd.appendChild(div);
+  }
+
+  // "+ New World" action at bottom
+  const addAction = document.createElement('div');
+  addAction.className = 'nav-drop-action';
+  addAction.textContent = '+ New World';
+  addAction.onclick = () => {
+    createNewWorld();
+    closeAllNavDropdowns();
+  };
+  dd.appendChild(addAction);
+
+  // Update breadcrumb label
+  const wLabel = document.querySelector('#crumb-world .crumb-label');
+  if (wLabel && currentWorld) wLabel.textContent = currentWorld.name;
 }
 
 function populateCoursePicker() {
-  const picker = document.getElementById('course-picker');
-  picker.innerHTML = '';
+  const dd = document.getElementById('dropdown-course');
+  dd.innerHTML = '';
   if (!currentWorld) return;
-  for (const [cId, course] of Object.entries(currentWorld.courses)) {
-    const opt = document.createElement('option');
-    opt.value = cId;
-    opt.textContent = course.name;
-    if (course === currentCourse) opt.selected = true;
-    picker.appendChild(opt);
+  const wId = getWorldId();
+  const courseEntries = Object.entries(currentWorld.courses);
+  for (const [cId, course] of courseEntries) {
+    const div = document.createElement('div');
+    div.className = 'nav-drop-item' + (course === currentCourse ? ' active' : '');
+
+    const label = document.createElement('span');
+    label.textContent = course.name;
+    label.onclick = () => {
+      switchCourse(wId, cId);
+      closeAllNavDropdowns();
+    };
+    label.style.cssText = 'flex:1; cursor:pointer;';
+    div.appendChild(label);
+
+    // Delete button (only if more than 1 course)
+    if (courseEntries.length > 1) {
+      const del = document.createElement('button');
+      del.className = 'drop-del';
+      del.textContent = '✕';
+      del.title = 'Delete course';
+      del.onclick = (e) => {
+        e.stopPropagation();
+        if (!confirm('Delete "' + (course.name || cId) + '"?')) return;
+        const key = 'dg-course-' + wId + '-' + cId;
+        localStorage.removeItem(key);
+        delete currentWorld.courses[cId];
+        saveCustomCoursesRegistry();
+        const remaining = Object.keys(currentWorld.courses);
+        switchCourse(wId, remaining[0]);
+        closeAllNavDropdowns();
+      };
+      div.appendChild(del);
+    }
+
+    dd.appendChild(div);
   }
+
+  // "+ New Course" action at bottom
+  const addAction = document.createElement('div');
+  addAction.className = 'nav-drop-action';
+  addAction.textContent = '+ New Course';
+  addAction.onclick = () => {
+    createNewCourse();
+    closeAllNavDropdowns();
+  };
+  dd.appendChild(addAction);
+
+  // Update breadcrumb label
+  const cLabel = document.querySelector('#crumb-course .crumb-label');
+  if (cLabel && currentCourse) cLabel.textContent = currentCourse.name;
 }
 
 function populateMetadataFields() {
   populateWorldPicker();
   populateCoursePicker();
+  updateNavLabels();
   const saved = loadCourseData();
   document.getElementById('course-name').value = saved?.courseName || currentCourse?.name || '';
 }
 
-function onWorldPick() {
-  const worldId = document.getElementById('world-picker').value;
-  currentWorld = WORLDS[worldId];
-  // Switch to first course in this world
-  const courseIds = Object.keys(currentWorld.courses);
-  if (courseIds.length > 0) {
-    switchCourse(worldId, courseIds[0]);
-  }
-}
-
-function onCoursePick() {
-  const worldId = document.getElementById('world-picker').value;
-  const courseId = document.getElementById('course-picker').value;
-  switchCourse(worldId, courseId);
-}
+// Legacy — no longer needed with breadcrumb nav, but keep stubs
+function onWorldPick() {}
+function onCoursePick() {}
 
 function onMetadataChange() {
   // Auto-save when metadata fields change
   saveCustomHoles();
 }
 
+// Sky color palette for new worlds (cycle through these)
+const WORLD_SKY_COLORS = ['#d5ad72', '#7a8ba0', '#6b8c5a', '#9b7a8c', '#8c7050', '#5a7a8c', '#a08060'];
+
+function createNewWorld() {
+  // Generate unique world ID
+  let num = Object.keys(WORLDS).length + 1;
+  let worldId = `world-${num}`;
+  while (WORLDS[worldId]) { num++; worldId = `world-${num}`; }
+
+  const skyColor = WORLD_SKY_COLORS[(num - 1) % WORLD_SKY_COLORS.length];
+
+  WORLDS[worldId] = {
+    name: `World ${num}`,
+    system: 'Custom',
+    sky: skyColor,
+    materials: ['sand', 'rock', 'grass', 'mud', 'ice'],
+    defaultMaterial: 'sand',
+    assets: [],
+    courses: {},
+    _custom: true,
+  };
+
+  // Every world needs at least one course
+  WORLDS[worldId].courses['course-1'] = {
+    name: 'Course 1',
+    materials: ['sand'],
+    archetypes: ['flat_run', 'gentle_slope', 'gentle_hill', 'downhill', 'uphill', 'rolling_hills'],
+    difficultyRange: [0.0, 0.5],
+    holeCount: 5,
+    _custom: true,
+  };
+
+  saveCustomCoursesRegistry();
+  switchCourse(worldId, 'course-1');
+}
+
 function createNewCourse() {
-  const worldId = document.getElementById('world-picker').value;
+  const worldId = getWorldId();
   const world = WORLDS[worldId];
   if (!world) return;
 
@@ -830,8 +1003,8 @@ function createNewCourse() {
 }
 
 function deleteCourse() {
-  const worldId = document.getElementById('world-picker').value;
-  const courseId = document.getElementById('course-picker').value;
+  const worldId = getWorldId();
+  const courseId = getCourseId();
   const world = WORLDS[worldId];
   if (!world) return;
 
@@ -971,16 +1144,62 @@ function switchCourse(worldId, courseId) {
 
   // Generate holes and go to first
   ensureHolesAhead(editorHoleCount - 1);
+
+  // Re-apply saved vertex edits on top of generated terrain
+  if (saved && saved.holes) {
+    _cachedCustomHoles = saved.holes;
+    applySavedHoleEdits(saved.holes);
+  } else {
+    _cachedCustomHoles = null;
+  }
+
   currentHole = 0;
   setHoleCamera(holes[0]);
   resetBallToTee();
   deselectAll();
+
+  // Persist active course and hole for reload
+  localStorage.setItem('dg-active-course', JSON.stringify({ worldId, courseId }));
+  localStorage.setItem('dg-active-hole', '0');
 
   // Update UI
   populateMetadataFields();
   updateMaterialPicker();
   buildHoleList();
   updateHoleCountLabel();
+}
+
+// Re-apply saved vertex data on top of already-generated holes.
+// This handles the case where holes are generated from handDefinedSource
+// but the user has edited vertices in the editor and saved them.
+function applySavedHoleEdits(savedHoles) {
+  for (const [key, def] of Object.entries(savedHoles)) {
+    const idx = Number(key);
+    const hole = holes[idx];
+    if (!hole || !def.verts) continue;
+
+    const teeX = hole.teeX;
+    const startX = teeX + 40;
+    const nextHole = idx < holes.length - 1 ? holes[idx + 1] : null;
+    const cupRightEdge = (hole.cupRightX || hole.cupX + 20) + 22;
+    const endX = nextHole ? Math.max(nextHole.teeX, cupRightEdge + 50) : hole.cupX + 300;
+
+    // Remove ALL vertices in this hole's range (including cup vertices —
+    // saved data contains the full hole state including any cup edits)
+    vertices = vertices.filter(v => v.x <= startX || v.x >= endX);
+
+    // Insert saved vertices
+    const newVerts = def.verts.map(v => {
+      const vert = { x: startX + v.dx, y: v.y };
+      if (v.mat) vert.mat = v.mat;
+      return vert;
+    });
+
+    // Find insertion point (first vertex past startX)
+    let insertIdx = vertices.findIndex(v => v.x > startX);
+    if (insertIdx === -1) insertIdx = vertices.length;
+    vertices.splice(insertIdx, 0, ...newVerts);
+  }
 }
 
 function loadCourseData() {
@@ -1015,6 +1234,68 @@ function adjustHoleCount(dir) {
   buildHoleList();
 }
 
+function deleteHoleAt(idx) {
+  if (editorHoleCount <= 1) return; // can't delete the only hole
+  if (idx < 0 || idx >= editorHoleCount) return;
+
+  const isCustom = customHoleIndices.has(idx);
+  if (isCustom) {
+    if (!confirm(`Hole ${idx + 1} is hand-designed. Delete it?`)) return;
+  }
+
+  pushUndo();
+
+  // Remove the hole's terrain vertices
+  const hole = holes[idx];
+  if (hole) {
+    const prevHole = idx > 0 ? holes[idx - 1] : null;
+    const nextHole = idx < holes.length - 1 ? holes[idx + 1] : null;
+    const startX = prevHole ? prevHole.cupX + 50 : hole.teeX - 50;
+    const endX = nextHole ? nextHole.teeX : hole.cupX + 300;
+    vertices = vertices.filter(v => v.x < startX || v.x > endX);
+  }
+
+  // Remove objects belonging to this hole, shift others down
+  objects = objects.filter(o => o.holeIndex !== idx);
+  for (const o of objects) {
+    if (o.holeIndex > idx) o.holeIndex--;
+  }
+
+  // Shift custom hole indices down
+  const newCustom = new Set();
+  const newMeta = {};
+  for (const ci of customHoleIndices) {
+    if (ci === idx) continue; // skip deleted
+    const shifted = ci > idx ? ci - 1 : ci;
+    newCustom.add(shifted);
+    if (customHoleMeta[ci]) newMeta[shifted] = customHoleMeta[ci];
+  }
+  customHoleIndices = newCustom;
+  customHoleMeta = newMeta;
+
+  // Remove from holes array and regenerate from that point
+  holes.splice(idx, 1);
+  editorHoleCount--;
+  if (currentCourse) currentCourse.holeCount = editorHoleCount;
+
+  // Navigate to safe hole
+  if (currentHole >= editorHoleCount) currentHole = editorHoleCount - 1;
+  else if (currentHole > idx) currentHole--;
+
+  // Regenerate remaining holes from the deletion point
+  const savedLen = holes.length;
+  holes.length = idx;
+  for (let i = idx; i < savedLen; i++) {
+    generateHoleTerrain(i);
+    holes[i].flagVisible = true;
+  }
+
+  setHoleCamera(holes[currentHole]);
+  resetBallToTee();
+  deselectAll();
+  buildHoleList();
+}
+
 function updateHoleCountLabel() {
   const label = document.getElementById('hole-count-label');
   if (label) label.textContent = `${editorHoleCount}h`;
@@ -1044,7 +1325,17 @@ async function editorInit() {
   if (!localStorage.getItem('dg-seed')) {
     localStorage.setItem('dg-seed', String(DEFAULT_GAME_SEED));
   }
-  startCourse('desert-world-1', 'desert-course-1');
+  // Restore last-used world/course, or fall back to defaults
+  let _initWorldId = 'desert-world-1';
+  let _initCourseId = 'desert-course-1';
+  try {
+    const saved = JSON.parse(localStorage.getItem('dg-active-course'));
+    if (saved && WORLDS[saved.worldId] && WORLDS[saved.worldId].courses[saved.courseId]) {
+      _initWorldId = saved.worldId;
+      _initCourseId = saved.courseId;
+    }
+  } catch(e) {}
+  startCourse(_initWorldId, _initCourseId);
 
   // Patch camera transform for editor zoom & pan
   const _origApplyCamera = MODE.applyCameraTransform.bind(MODE);
@@ -1063,7 +1354,9 @@ async function editorInit() {
   // Patch drawSky to fill larger area when zoomed out
   const _origDrawSky = MODE.drawSky.bind(MODE);
   MODE.drawSky = function() {
-    // Check for art image first (works in both edit and play mode)
+    // Panorama mode: use the game's built-in panorama renderer
+    if (typeof drawArtPanorama === 'function' && drawArtPanorama()) return;
+    // Legacy per-hole art image
     if (typeof getArtImage === 'function') {
       const artImg = getArtImage();
       if (artImg) {
@@ -1157,6 +1450,25 @@ async function editorInit() {
   }
   if (editorHoleCount < 1) editorHoleCount = getCourseHoleCount(currentCourse);
 
+  // Ensure all holes exist, then re-apply any saved vertex edits
+  ensureHolesAhead(editorHoleCount - 1);
+  if (saved && saved.holes) {
+    _cachedCustomHoles = saved.holes;
+    applySavedHoleEdits(saved.holes);
+  } else {
+    _cachedCustomHoles = null;
+  }
+
+  // Restore last-used hole index
+  try {
+    const savedHoleIdx = parseInt(localStorage.getItem('dg-active-hole'), 10);
+    if (!isNaN(savedHoleIdx) && savedHoleIdx >= 0 && savedHoleIdx < editorHoleCount) {
+      currentHole = savedHoleIdx;
+      setHoleCamera(holes[currentHole]);
+      resetBallToTee();
+    }
+  } catch(e) {}
+
   // Immediately switch to edit mode
   state = STATE_EDIT;
   showTitle = false;
@@ -1168,15 +1480,23 @@ async function editorInit() {
   updateModeBadge();
   updatePropsPanel();
 
-  // Close custom dropdown when clicking outside
+  // Close dropdowns when clicking outside
   document.addEventListener('click', function(e) {
+    // Close custom type dropdown
     const wrapper = document.getElementById('type-toggle-wrapper');
-    const dd = document.getElementById('custom-dropdown');
-    if (dd && dd.style.display !== 'none' && wrapper && !wrapper.contains(e.target)) {
-      dd.style.display = 'none';
+    const cdd = document.getElementById('custom-dropdown');
+    if (cdd && cdd.style.display !== 'none' && wrapper && !wrapper.contains(e.target)) {
+      cdd.style.display = 'none';
     }
 
-    // V2B: Settings and hole list are now sticky toggles — no click-outside-to-close
+    // Close nav dropdowns when clicking outside the top bar and mini-settings
+    if (activeNavDropdown) {
+      const topBar = document.getElementById('top-nav-bar');
+      const miniSettings = document.getElementById('mini-settings');
+      if (topBar && !topBar.contains(e.target) && (!miniSettings || !miniSettings.contains(e.target))) {
+        closeAllNavDropdowns();
+      }
+    }
   });
 }
 
@@ -1222,13 +1542,8 @@ function switchMode(mode) {
   // V2B: Hide bottom toolbar in play mode
   document.getElementById('bottom-toolbar').classList.toggle('hidden', mode === 'play');
 
-  // V2B: Close settings overlay when switching modes
-  document.getElementById('settings-overlay').classList.remove('open');
-
-  // V2B: Close hole list dropdown
-  const holeDropdown = document.getElementById('hole-list-dropdown');
-  holeDropdown.classList.remove('open');
-  holeDropdown.style.display = 'none';
+  // Close all nav dropdowns when switching modes
+  closeAllNavDropdowns();
 
   updateModeBadge();
 }
@@ -1248,22 +1563,9 @@ function updateModeBadge() {
 }
 
 // ── V2B: Floating Panel Toggles ──────────────────────────
-function toggleHoleListDropdown() {
-  const dd = document.getElementById('hole-list-dropdown');
-  const isOpen = dd.classList.contains('open');
-  if (isOpen) {
-    dd.classList.remove('open');
-    dd.style.display = 'none';
-  } else {
-    dd.classList.add('open');
-    dd.style.display = 'block';
-  }
-}
-
-function toggleSettingsOverlay() {
-  const overlay = document.getElementById('settings-overlay');
-  overlay.classList.toggle('open');
-}
+// Legacy stubs — replaced by toggleNavDropdown()
+function toggleHoleListDropdown() { toggleNavDropdown('hole'); }
+function toggleSettingsOverlay() { toggleNavDropdown('settings'); }
 
 function deselectAll() {
   ed.selectedVert = -1;
@@ -1443,6 +1745,12 @@ function goToHole(idx) {
     restoreCup(holes[i]);
   }
 
+  // Re-apply saved vertex edits for custom holes — restoreCup may have
+  // regenerated cup vertices that the user edited/deleted
+  if (_cachedCustomHoles) {
+    applySavedHoleEdits(_cachedCustomHoles);
+  }
+
   // Then flatten cups for all holes BEFORE the current one
   // (their tee areas need to be flat since they're "completed")
   for (let i = 0; i < idx; i++) {
@@ -1457,12 +1765,10 @@ function goToHole(idx) {
   _lastTrackedHole = currentHole;
   buildHoleList();
 
-  // V2B: Close hole list dropdown after navigation
-  const holeDropdown = document.getElementById('hole-list-dropdown');
-  if (holeDropdown) {
-    holeDropdown.classList.remove('open');
-    holeDropdown.style.display = 'none';
-  }
+  // Persist current hole for reload
+  localStorage.setItem('dg-active-hole', String(currentHole));
+
+  closeAllNavDropdowns();
 }
 
 function buildHoleList() {
@@ -1471,8 +1777,8 @@ function buildHoleList() {
 }
 
 function updateHoleNavLabel() {
-  // V2B: Update the floating hole navigator label
-  const label = document.getElementById('hole-nav-label');
+  // Update the hole breadcrumb label
+  const label = document.querySelector('#crumb-hole .crumb-label');
   if (label) {
     label.textContent = `Hole ${currentHole + 1}/${editorHoleCount}`;
   }
@@ -1483,10 +1789,31 @@ function syncHoleNavWidth() {
 }
 
 function updateHoleList() {
-  const list = document.getElementById('hole-list');
+  const list = document.getElementById('dropdown-hole');
+  if (!list) return;
   list.innerHTML = '';
 
   ensureHolesAhead(editorHoleCount - 1);
+
+  // Add hole name input at top of dropdown (for custom holes)
+  const isCurrentCustom = customHoleIndices.has(currentHole);
+  if (isCurrentCustom) {
+    const nameBar = document.createElement('div');
+    nameBar.id = 'hole-name-bar';
+    nameBar.style.display = 'block';
+    nameBar.style.padding = '6px 10px';
+    nameBar.style.borderBottom = '1px solid rgba(255,255,255,0.06)';
+    const nameInput = document.createElement('input');
+    nameInput.className = 'ed-input';
+    nameInput.id = 'hole-name-input';
+    nameInput.type = 'text';
+    nameInput.placeholder = 'Hole name...';
+    nameInput.style.cssText = 'width:100%; font-size:11px; padding:4px 8px;';
+    nameInput.value = (customHoleMeta[currentHole] && customHoleMeta[currentHole].name) || '';
+    nameInput.onchange = function() { onHoleNameChange(this.value); };
+    nameBar.appendChild(nameInput);
+    list.appendChild(nameBar);
+  }
 
   for (let i = 0; i < editorHoleCount; i++) {
     const div = document.createElement('div');
@@ -1495,17 +1822,61 @@ function updateHoleList() {
     const hole = holes[i];
     const arch = hole?.archetype || '';
     const diff = typeof getDifficulty === 'function' ? getDifficulty(i).toFixed(2) : '';
+
+    // Hole number
+    const numSpan = document.createElement('span');
+    numSpan.className = 'hole-num';
+    numSpan.textContent = i + 1;
+    div.appendChild(numSpan);
+
+    // Hole info
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'hole-info';
+    infoDiv.style.flex = '1';
     if (isCustom) {
       const meta = customHoleMeta[i];
       const holeName = meta && meta.name ? meta.name : '';
       const truncName = holeName.length > 16 ? holeName.slice(0, 15) + '\u2026' : holeName;
-      div.innerHTML = `<span class="hole-num">${i + 1}</span><div class="hole-info"><span class="hole-name">${truncName || 'custom'}</span><span class="type">${diff}</span></div>`;
+      infoDiv.innerHTML = `<span class="hole-name">${truncName || 'custom'}</span><span class="type">${diff}</span>`;
     } else {
-      div.innerHTML = `<span class="hole-num">${i + 1}</span><div class="hole-info"><span class="type">${arch || 'auto'} ${diff}</span></div>`;
+      infoDiv.innerHTML = `<span class="type">${arch || 'auto'} ${diff}</span>`;
     }
-    div.onclick = () => goToHole(i);
+    div.appendChild(infoDiv);
+
+    // Click info area to navigate
+    const holeIdx = i;
+    numSpan.onclick = () => goToHole(holeIdx);
+    infoDiv.onclick = () => goToHole(holeIdx);
+
+    // Delete button per hole (only if >1 hole)
+    if (editorHoleCount > 1) {
+      const del = document.createElement('button');
+      del.className = 'drop-del';
+      del.textContent = '✕';
+      del.title = 'Delete hole ' + (i + 1);
+      del.onclick = (e) => {
+        e.stopPropagation();
+        deleteHoleAt(holeIdx);
+        updateHoleList();
+        updateHoleNavLabel();
+      };
+      div.appendChild(del);
+    }
+
     list.appendChild(div);
   }
+
+  // "+ Add Hole" action at bottom
+  const addAction = document.createElement('div');
+  addAction.className = 'nav-drop-action';
+  addAction.textContent = '+ Add Hole';
+  addAction.onclick = (e) => {
+    e.stopPropagation();
+    adjustHoleCount(1);
+    updateHoleList();
+    updateHoleNavLabel();
+  };
+  list.appendChild(addAction);
 
   updateToggleButton();
   updateHoleCountLabel();
@@ -1514,27 +1885,13 @@ function updateHoleList() {
 function updateToggleButton() {
   const btn = document.getElementById('btn-toggle-type');
   const presetRow = document.getElementById('preset-row');
-  const nameInput = document.getElementById('hole-name-input');
-  const nameBar = document.getElementById('hole-name-bar');
   const isCustom = customHoleIndices.has(currentHole);
   btn.textContent = isCustom ? 'Set Auto' : 'Set Custom';
   btn.className = 'ed-btn' + (isCustom ? ' active' : '');
   // Show/hide the preset row based on custom state
   if (presetRow) presetRow.style.display = isCustom ? '' : 'none';
-  // Show/hide name input in sidebar
-  if (isCustom) {
-    nameBar.style.display = '';
-    nameInput.value = (customHoleMeta[currentHole] && customHoleMeta[currentHole].name) || '';
-  } else {
-    nameBar.style.display = 'none';
-  }
-  // Update hole indicator in settings panel
-  const indicator = document.getElementById('settings-hole-indicator');
-  if (indicator) {
-    const typeLabel = isCustom ? 'custom' : 'auto';
-    indicator.textContent = `${currentHole + 1} / ${editorHoleCount}  (${typeLabel})`;
-  }
-  // Always close dropdown when updating
+  // Hole name input is now inside dropdown-hole (dynamically created), so no need to update here
+  // Always close type dropdown when updating
   document.getElementById('custom-dropdown').style.display = 'none';
 }
 
@@ -1599,7 +1956,20 @@ function regenerateCurrentHole() {
 }
 
 // ── Undo ──────────────────────────────────────────────────
+// Auto-promote the current hole to "custom" if it's still auto.
+// This ensures any terrain edits get saved — only custom holes are serialized.
+function autoPromoteHole() {
+  if (!customHoleIndices.has(currentHole)) {
+    customHoleIndices.add(currentHole);
+    if (!customHoleMeta[currentHole]) {
+      customHoleMeta[currentHole] = {};
+    }
+    buildHoleList(); // refresh UI to show ✎ indicator
+  }
+}
+
 function pushUndo() {
+  autoPromoteHole();
   const hole = holes[currentHole];
   if (!hole) return;
 
@@ -2667,17 +3037,10 @@ document.addEventListener('keydown', (e) => {
       setHoleCamera(holes[currentHole]);
       break;
     case 'escape': {
-      // V2B: Close floating overlays first
-      const settingsOvl = document.getElementById('settings-overlay');
-      const holeDd = document.getElementById('hole-list-dropdown');
+      // Close any open nav dropdowns first
       let closedSomething = false;
-      if (settingsOvl && settingsOvl.classList.contains('open')) {
-        settingsOvl.classList.remove('open');
-        closedSomething = true;
-      }
-      if (holeDd && holeDd.classList.contains('open')) {
-        holeDd.classList.remove('open');
-        holeDd.style.display = 'none';
+      if (activeNavDropdown) {
+        closeAllNavDropdowns();
         closedSomething = true;
       }
       if (!closedSomething) {
@@ -2738,10 +3101,10 @@ function drawEditorObjects() {
     if (editMode) {
     // Collision overlay — press C to toggle
     if (ed.showCollision) {
-      ctx.fillStyle = 'rgba(255, 50, 50, 0.3)';
+      ctx.fillStyle = 'rgba(255, 50, 50, 0.15)';
       ctx.fill();
-      ctx.strokeStyle = 'rgba(255, 50, 50, 0.8)';
-      ctx.lineWidth = 1.5 * invZ;
+      ctx.strokeStyle = 'rgba(255, 50, 50, 0.6)';
+      ctx.lineWidth = 0.75 * invZ;
       ctx.stroke();
     }
 
@@ -2989,16 +3352,19 @@ function serializeHole(holeIdx) {
   const startX = teeX + 40;
   const cupX = hole.cupX;
 
-  // Collect cup vertex X bounds so we can exclude them
-  const cupLeftBound = hole.cupLeftX - 21; // flatMargin(20) + 1
-  const cupRightBound = hole.cupRightX + 21;
+  // Determine full hole range: from tee+40 to well past the cup
+  // Must extend past cupRightBound to capture post-cup terrain vertices
+  const nextHole = holeIdx < holes.length - 1 ? holes[holeIdx + 1] : null;
+  const cupRightEdge = (hole.cupRightX || cupX + 20) + 22;
+  const endX = nextHole ? Math.max(nextHole.teeX, cupRightEdge + 50) : cupX + 300;
 
-  // Find terrain vertices between tee and cup, excluding cup vertices and background
+  // Find ALL terrain vertices in this hole's range (tee+40 to endX).
+  // Includes cup-area and post-cup vertices so edits to any vertex persist.
   const midVerts = [];
   for (let i = 0; i < vertices.length; i++) {
     const v = vertices[i];
     if (v.x <= startX) continue;            // before playable area
-    if (v.x >= cupLeftBound) break;         // at or past cup zone
+    if (v.x >= endX) break;                 // past this hole's territory
     const entry = { dx: Math.round(v.x - startX), y: Math.round(v.y) };
     if (v.mat && v.mat !== 'sand') entry.mat = v.mat;
     midVerts.push(entry);
@@ -3052,8 +3418,9 @@ function serializeAllCustomHoles() {
 
 function saveCustomHoles() {
   const holeData = serializeAllCustomHoles();
-  const wId = document.getElementById('world-picker')?.value || 'desert-world-1';
-  const cId = document.getElementById('course-picker')?.value || 'desert-course-1';
+  _cachedCustomHoles = holeData; // cache for re-applying after restoreCup
+  const wId = getWorldId() || 'desert-world-1';
+  const cId = getCourseId() || 'desert-course-1';
 
   // Build course data object
   const courseData = {

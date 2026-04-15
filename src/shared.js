@@ -73,11 +73,8 @@ const MATERIALS = {
 };
 
 function getMaterialAt(worldX) {
-  for (let i = 0; i < vertices.length - 1; i++) {
-    if (worldX >= vertices[i].x && worldX <= vertices[i + 1].x) {
-      return vertices[i].mat || DEFAULT_MAT;
-    }
-  }
+  const i = _bsearchVertex(worldX);
+  if (i >= 0 && i < vertices.length - 1) return vertices[i].mat || DEFAULT_MAT;
   return DEFAULT_MAT;
 }
 
@@ -154,20 +151,32 @@ function randRange(lo, hi) { return lo + Math.random() * (hi - lo); }
 // Helper: add slight random jitter to a Y value
 function jitter(y, amount) { return clampY(y + (Math.random() - 0.5) * amount); }
 
+// Binary search: find index i such that vertices[i].x <= worldX <= vertices[i+1].x
+// Vertices are sorted by x (terrain extends left-to-right).
+// Returns -1 if worldX is outside all segments.
+function _bsearchVertex(worldX) {
+  const n = vertices.length;
+  if (n < 2) return -1;
+  if (worldX <= vertices[0].x) return 0;
+  if (worldX >= vertices[n - 1].x) return n - 2;
+  let lo = 0, hi = n - 2;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (worldX < vertices[mid].x) { hi = mid - 1; }
+    else if (worldX > vertices[mid + 1].x) { lo = mid + 1; }
+    else { return mid; }
+  }
+  return lo; // closest segment
+}
+
 function terrainYAt(worldX) {
-  for (let i = 0; i < vertices.length - 1; i++) {
-    const a = vertices[i], b = vertices[i + 1];
-    if (worldX >= a.x && worldX <= b.x) {
-      const t = (worldX - a.x) / (b.x - a.x);
-      return a.y + t * (b.y - a.y);
-    }
-  }
-  if (vertices.length >= 2) {
-    const a = vertices[vertices.length - 2], b = vertices[vertices.length - 1];
-    const t = (worldX - a.x) / (b.x - a.x);
-    return a.y + t * (b.y - a.y);
-  }
-  return H * 0.6;
+  const i = _bsearchVertex(worldX);
+  if (i < 0) return H * 0.6;
+  const a = vertices[i], b = vertices[i + 1];
+  const dx = b.x - a.x;
+  if (dx < 0.001) return a.y;
+  const t = (worldX - a.x) / dx;
+  return a.y + t * (b.y - a.y);
 }
 
 // Convert mouse/touch screen coords to game coords

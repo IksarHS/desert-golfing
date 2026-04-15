@@ -58,6 +58,113 @@
     <a href="#" onclick="signOut();return false" style="color:rgba(255,255,255,0.3);font-size:9px;text-decoration:none;margin-left:4px;">sign out</a>
   </div>
 </div>
+
+<!-- Autoplay controls — bottom-left -->
+<div id="autoplay-panel" style="position:fixed;bottom:12px;left:12px;z-index:9999;font-family:'Departure Mono',monospace;display:flex;align-items:center;gap:6px;">
+  <button id="ap-toggle" class="off" onclick="toggleAutoplay()" style="
+    padding:4px 10px;border-radius:4px;font:12px 'Departure Mono',monospace;
+    cursor:pointer;border:1px solid rgba(255,255,255,0.15);letter-spacing:0.5px;
+    background:rgba(255,255,255,0.06);color:#777;transition:all 0.15s;
+  ">OFF</button>
+  <div style="display:flex;gap:2px;">
+    <button class="ap-speed active" data-speed="1" onclick="setAutoplaySpeed(1)" style="padding:3px 6px;border-radius:3px;font:10px 'Departure Mono',monospace;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#777;">1x</button>
+    <button class="ap-speed" data-speed="2" onclick="setAutoplaySpeed(2)" style="padding:3px 6px;border-radius:3px;font:10px 'Departure Mono',monospace;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#777;">2x</button>
+    <button class="ap-speed" data-speed="4" onclick="setAutoplaySpeed(4)" style="padding:3px 6px;border-radius:3px;font:10px 'Departure Mono',monospace;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#777;">4x</button>
+    <button class="ap-speed" data-speed="8" onclick="setAutoplaySpeed(8)" style="padding:3px 6px;border-radius:3px;font:10px 'Departure Mono',monospace;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#777;">8x</button>
+  </div>
+</div>
+<style>
+  #ap-toggle.on { background:rgba(100,200,120,0.2);border-color:rgba(100,200,120,0.5);color:#8e8; }
+  .ap-speed.active { border-color:rgba(100,200,120,0.5);color:#fff;background:rgba(100,200,120,0.15); }
+  .ap-speed:hover, #ap-toggle:hover { background:rgba(255,255,255,0.1); }
+  #autoplay-panel button { outline:none; }
+</style>
+<script>
+  // Prevent autoplay panel clicks from triggering game aim
+  document.getElementById('autoplay-panel').addEventListener('mousedown', function(e) { e.stopPropagation(); });
+  document.getElementById('autoplay-panel').addEventListener('touchstart', function(e) { e.stopPropagation(); });
+</script>
+
+<!-- Menu button — bottom-right -->
+<button id="menu-btn" onclick="toggleMenu()" style="
+  position:fixed;bottom:12px;right:12px;z-index:9999;
+  padding:4px 10px;border-radius:4px;font:12px 'Departure Mono',monospace;
+  cursor:pointer;border:1px solid rgba(255,255,255,0.15);
+  background:rgba(255,255,255,0.06);color:#999;outline:none;
+">☰ Map</button>
+
+<!-- Collection / Discovery overlay -->
+<div id="menu-overlay" style="display:none;position:fixed;inset:0;z-index:10000;">
+  <div id="menu-content"></div>
+  <button onclick="toggleMenu()" style="
+    position:absolute;top:16px;right:16px;background:none;border:none;
+    color:#777;font:20px 'Departure Mono',monospace;cursor:pointer;
+  ">✕</button>
+</div>
+<style>
+  #menu-overlay {
+    background:rgba(18,14,10,0.92);backdrop-filter:blur(12px);
+    font-family:'Departure Mono',monospace;color:#ddd;
+    overflow-y:auto;opacity:0;transition:opacity 0.25s;
+  }
+  #menu-overlay.open { opacity:1; }
+  #menu-content { max-width:700px;margin:0 auto;padding:40px 24px 60px; }
+  .menu-stats {
+    font-size:12px;color:#888;margin-bottom:24px;padding-bottom:12px;
+    border-bottom:1px solid rgba(255,255,255,0.06);
+  }
+  .stat-sep { color:#444;margin:0 6px; }
+  .menu-system { margin-bottom:28px; }
+  .menu-system-header {
+    font-size:10px;letter-spacing:1.5px;text-transform:uppercase;
+    color:rgba(232,160,48,0.5);margin-bottom:8px;
+  }
+  .menu-world { margin-bottom:16px; }
+  .menu-world-header { margin-bottom:6px; }
+  .world-name { font-size:16px;color:#e8a030;font-weight:bold; }
+  .menu-courses { display:flex;flex-direction:column;gap:4px; }
+  .menu-course {
+    display:flex;align-items:center;gap:12px;padding:10px 14px;
+    border-radius:8px;background:rgba(255,255,255,0.03);
+    border:1px solid rgba(255,255,255,0.04);
+    transition:background 0.15s;
+  }
+  .menu-course:hover { background:rgba(255,255,255,0.06); }
+  .menu-course.current { border-color:rgba(232,160,48,0.3);background:rgba(232,160,48,0.08); }
+  .menu-course.locked { opacity:0.4; }
+  .menu-course.completed .course-name { color:#8c8; }
+  .course-info { flex:1; }
+  .course-name { font-size:13px;color:#ddd;display:block; }
+  .course-meta { font-size:10px;color:#666;display:block;margin-top:2px; }
+  .course-btn {
+    padding:5px 14px;border-radius:6px;font:11px 'Departure Mono',monospace;
+    cursor:pointer;border:1px solid rgba(232,160,48,0.4);
+    background:rgba(232,160,48,0.15);color:#e8a030;
+    transition:all 0.15s;outline:none;
+  }
+  .course-btn:hover { background:rgba(232,160,48,0.3); }
+  .course-btn.replay { border-color:rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#aaa; }
+  .course-btn.replay:hover { background:rgba(255,255,255,0.1);color:#fff; }
+  .course-lock { font-size:14px;opacity:0.3; }
+  .lb-panel {
+    width:100%;margin-top:8px;padding:8px 12px;
+    background:rgba(0,0,0,0.2);border-radius:6px;
+    border:1px solid rgba(255,255,255,0.04);
+  }
+  .lb-header { font-size:10px;color:#e8a030;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px; }
+  .lb-row { display:flex;align-items:center;gap:8px;padding:3px 0;font-size:11px;color:#999; }
+  .lb-row.me { color:#e8a030; }
+  .lb-rank { color:#555;min-width:20px; }
+  .lb-name { flex:1; }
+  .lb-score { font-weight:bold;color:#ddd; }
+  .lb-row.me .lb-score { color:#e8a030; }
+</style>
+<script>
+  document.getElementById('menu-overlay').addEventListener('mousedown', function(e) { e.stopPropagation(); });
+  document.getElementById('menu-overlay').addEventListener('touchstart', function(e) { e.stopPropagation(); });
+  document.getElementById('menu-btn').addEventListener('mousedown', function(e) { e.stopPropagation(); });
+</script>
+
 <script>
   // Prevent auth form inputs from propagating keys to the game (e.g. backtick for debug)
   document.getElementById('auth-form').addEventListener('keydown', function(e) {
@@ -84,6 +191,8 @@
 <script src="src/worlds/grasslands.js"></script>
 <script src="src/worlds/classic-collection.js"></script>
 <script src="src/worlds/dramatic-depths.js"></script>
+<script src="src/worlds/frozen-wastes.js"></script>
+<script src="src/worlds/mudlands.js"></script>
 <script src="src/reference-holes.js"></script>
 <script src="src/level-design.js"></script>
 <script src="src/generators/midgame.js"></script>
@@ -92,6 +201,9 @@
 <script src="src/art.js"></script>
 <script src="src/gameplay.js"></script>
 <script src="src/debug.js"></script>
+<script src="src/leaderboard.js"></script>
+<script src="src/autoplay.js"></script>
+<script src="src/menu.js"></script>
 <script src="src/main.js"></script>
 </body>
 </html>

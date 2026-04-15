@@ -263,10 +263,19 @@ function recordCourseComplete(worldId, courseId, strokes) {
   const key = worldId + '/' + courseId;
   const existing = playerData.completed[key];
   if (!existing) {
-    playerData.completed[key] = { best: strokes, attempts: 1 };
+    playerData.completed[key] = { best: strokes, attempts: 1, history: [] };
   } else {
     existing.attempts++;
     if (strokes < existing.best) existing.best = strokes;
+    if (!existing.history) existing.history = [];
+  }
+  // Add to score history (cap at 50 entries)
+  playerData.completed[key].history.push({
+    strokes: strokes,
+    date: new Date().toISOString(),
+  });
+  if (playerData.completed[key].history.length > 50) {
+    playerData.completed[key].history = playerData.completed[key].history.slice(-50);
   }
   playerData.totalStrokes += strokes;
   savePlayerData();

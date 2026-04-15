@@ -39,7 +39,7 @@ WORLDS['dramatic-depths-1'].courses['the-descent'] = {
     'deep_plunge', 'shelf_drop_shelf', 'cliff_valley_climb',
   ],
   difficultyRange: [0.4, 1.0],
-  holeCount: 10,
+  holeCount: 500,
   cupElevation: _dramaticCupElevation,
   // Custom noise function that bypasses clampY for dramatic terrain
   noiseFunction: function(verts, startX, startY, difficulty) {
@@ -75,7 +75,7 @@ WORLDS['dramatic-depths-1'].courses['abyssal-caves'] = {
     'water_canyon', 'chasm_bridge', 'cliff_tower',
   ],
   difficultyRange: [0.5, 1.2],
-  holeCount: 10,
+  holeCount: 500,
   cupElevation: _dramaticCupElevation,
   noiseFunction: function(verts, startX, startY, difficulty) {
     const noiseAmp = 2 + difficulty * 3;
@@ -109,7 +109,7 @@ WORLDS['dramatic-depths-1'].courses['vertical-gauntlet'] = {
     'rect_shelf_valley_climb', 'staircase_plunge', 'double_cliff',
   ],
   difficultyRange: [0.6, 1.2],
-  holeCount: 10,
+  holeCount: 500,
   cupElevation: _dramaticCupElevation,
   noiseFunction: function(verts, startX, startY, difficulty) {
     const noiseAmp = 2 + difficulty * 3;
@@ -143,9 +143,22 @@ WORLDS['dramatic-depths-1'].courses['the-labyrinth'] = {
     'overhang_cave', 'cave_passage',
   ],
   difficultyRange: [0.4, 1.0],
-  holeCount: 10,
+  holeCount: 500,
   cupElevation: _dramaticCupElevation,
   noiseFunction: function(verts) {
     return verts;
   },
+};
+
+// Course: "The Abyss" — extreme depth with all dramatic archetypes
+WORLDS['dramatic-depths-1'].courses['the-abyss'] = {
+  name: 'The Abyss',
+  materials: ['rock', 'sand', 'mud'],
+  archetypes: [
+    'deep_plunge', 'cliff_valley_climb', 'dramatic_ridge', 'shelf_drop_shelf',
+    'staircase_plunge', 'double_cliff', 'shelf_cliff_valley',
+  ],
+  difficultyRange: [0.5, 1.3],
+  holeCount: 500,
+  cupElevation: _dramaticCupElevation,
 };

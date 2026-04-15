@@ -63,15 +63,5 @@ WORLDS['classic-collection'].courses['classic-6400'] = {
   handDefinedSource: 'REFERENCE_HOLES_6400',
 };
 
-// Course: "Art Test" — 1 hole with AI-generated terrain art
-WORLDS['classic-collection'].courses['art-test'] = {
-  name: 'Art Test',
-  materials: ['sand'],
-  archetypes: null,
-  difficultyRange: [0.0, 0.5],
-  holeCount: 1,
-  handDefinedSource: 'ART_COURSE_HOLES',
-  artImages: {
-    0: 'experiments/art/art-holes/hole-1.png',
-  },
-};
+// Art Test course removed — art-first pipeline needs more work
+// (multi-layer parallax, auto collision extraction, etc.)

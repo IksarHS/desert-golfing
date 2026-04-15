@@ -1,14 +1,28 @@
 // ── Input System ──────────────────────────────────────────
 canvas.addEventListener('mousedown', (e) => {
-  // Handle "Next Course/World" button click on completion screen
-  if (state === STATE_COMPLETE && _completeBtn) {
+  // Handle completion screen button clicks
+  if (state === STATE_COMPLETE) {
     const rect = canvas.getBoundingClientRect();
     const cx = (e.clientX - rect.left) * (W / rect.width);
     const cy = (e.clientY - rect.top) * (H / rect.height);
-    const b = _completeBtn;
-    if (cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h) {
-      startCourse(b.next.worldId, b.next.courseId);
-      return;
+
+    // "Next Course/World" button
+    if (_completeBtn) {
+      const b = _completeBtn;
+      if (cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h) {
+        startCourse(b.next.worldId, b.next.courseId);
+        return;
+      }
+    }
+    // "Replay Course" button
+    if (typeof _replayBtn !== 'undefined' && _replayBtn) {
+      const b = _replayBtn;
+      if (cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h) {
+        const wId = typeof _currentWorldId !== 'undefined' ? _currentWorldId : 'desert-world-1';
+        const cId = Object.keys(currentWorld.courses).find(k => currentWorld.courses[k] === currentCourse) || 'desert-course-1';
+        startCourse(wId, cId);
+        return;
+      }
     }
   }
   if (state !== STATE_AIM) return;
@@ -122,6 +136,8 @@ function updatePhysics() {
 
   // Friction applied once per frame (outside substeps)
   if (ball.onGround) {
+    ball.flightFrames = 0; // reset flight timer when on ground
+
     // Get material at ball position for material-specific physics
     const matName = (ball.lastCollidedMat) || getMaterialAt(ball.x);
     const mat = MATERIALS[matName] || MATERIALS[DEFAULT_MAT];
@@ -180,12 +196,27 @@ function updatePhysics() {
         ball.atRest = true;
         ball.onGround = true;
         ball.stuckFrames = 0;
+        ball.flightFrames = 0;
         _logBall('stuck-rest');
-        // Save position when ball comes to rest
         if (typeof saveGameSnapshot === 'function') saveGameSnapshot();
       }
     } else {
       ball.stuckFrames = 0;
+    }
+
+    // Prolonged-flight failsafe: if ball has been airborne for 10+ seconds
+    // (600 frames), it's caught in a perpetual bounce loop. Force rest.
+    // Real golf balls don't bounce for 10 seconds.
+    ball.flightFrames = (ball.flightFrames || 0) + 1;
+    if (ball.flightFrames > 600) {
+      ball.y = terrainYAt(ball.x) - BALL_RADIUS;
+      ball.vx = 0;
+      ball.vy = 0;
+      ball.atRest = true;
+      ball.onGround = true;
+      ball.flightFrames = 0;
+      _logBall('flight-timeout-rest');
+      if (typeof saveGameSnapshot === 'function') saveGameSnapshot();
     }
   }
 }

@@ -314,8 +314,8 @@ function drawCollisionLines() {
   const endX = camera.x + W + 50;
 
   // Terrain collision line (red)
-  ctx.strokeStyle = 'rgba(255, 40, 40, 0.8)';
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(255, 40, 40, 0.7)';
+  ctx.lineWidth = 0.75;
   ctx.beginPath();
   let started = false;
   for (let i = 0; i < vertices.length; i++) {
@@ -336,7 +336,7 @@ function drawCollisionLines() {
     if (vertices[i].x < startX - 100) continue;
     if (vertices[i].x > endX + 100) break;
     ctx.beginPath();
-    ctx.arc(vertices[i].x, vertices[i].y, 3, 0, Math.PI * 2);
+    ctx.arc(vertices[i].x, vertices[i].y, 2, 0, Math.PI * 2);
     ctx.fill();
   }
 

@@ -1,17 +1,64 @@
 // ── Game Loop ──────────────────────────────────────────────
 let _gameLoopRunning = false;
+let _backgroundInterval = null;
 
 function gameLoop() {
   _ballLogFrame++;
-  update();
+  // If autoplay is active, run AI + extra physics steps for speed
+  if (typeof aiEnabled !== 'undefined' && aiEnabled) {
+    const steps = typeof aiSpeed !== 'undefined' ? aiSpeed : 1;
+    for (let i = 0; i < steps; i++) {
+      if (typeof aiUpdate === 'function') aiUpdate();
+      update();
+    }
+  } else {
+    update();
+  }
   draw();
-  requestAnimationFrame(gameLoop);
+  window._gameLoopRAF = requestAnimationFrame(gameLoop);
 }
+
+// When tab is hidden, RAF is suspended. Use setInterval as fallback
+// so autoplay keeps running in the background (important for idle mode).
+// Chrome throttles setInterval to ~1s for hidden tabs, so we run many
+// steps per tick to compensate.
+function _startBackgroundLoop() {
+  if (_backgroundInterval) return;
+  _backgroundInterval = setInterval(() => {
+    if (typeof aiEnabled === 'undefined' || !aiEnabled) return;
+    _ballLogFrame++;
+    // Run ~60 steps per tick to compensate for 1s throttling
+    const stepsPerTick = 60 * (typeof aiSpeed !== 'undefined' ? aiSpeed : 1);
+    for (let i = 0; i < stepsPerTick; i++) {
+      if (typeof aiUpdate === 'function') aiUpdate();
+      update();
+    }
+  }, 100); // Request 100ms, Chrome may throttle to 1s
+}
+
+function _stopBackgroundLoop() {
+  if (_backgroundInterval) {
+    clearInterval(_backgroundInterval);
+    _backgroundInterval = null;
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && _gameLoopRunning) {
+    _startBackgroundLoop();
+  } else {
+    _stopBackgroundLoop();
+  }
+});
 
 function ensureGameLoop() {
   if (_gameLoopRunning) return;
   _gameLoopRunning = true;
-  gameLoop();
+  // If tab is already hidden (e.g. opened in background), start background loop
+  if (document.visibilityState === 'hidden') {
+    _startBackgroundLoop();
+  }
+  gameLoop(); // RAF will fire once tab becomes visible
 }
 
 // ── Shared Seed ────────────────────────────────────────────

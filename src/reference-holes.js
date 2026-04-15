@@ -1249,28 +1249,5 @@ var REFERENCE_HOLES_6400 = [
 ];
 
 
-var ART_COURSE_HOLES = [
-  { teeY: 330, dist: 860, cupY: 358,
-    verts: [
-      { dx: 0, y: 330 },
-      { dx: 60, y: 320 },
-      { dx: 120, y: 308 },
-      { dx: 180, y: 290 },
-      { dx: 240, y: 268 },
-      { dx: 300, y: 245 },
-      { dx: 340, y: 230 },
-      { dx: 370, y: 222 },
-      { dx: 400, y: 238 },
-      { dx: 440, y: 252 },
-      { dx: 500, y: 283 },
-      { dx: 560, y: 303 },
-      { dx: 620, y: 318 },
-      { dx: 680, y: 330 },
-      { dx: 740, y: 340 },
-      { dx: 800, y: 350 },
-      { dx: 860, y: 358 },
-      { dx: 920, y: 364 },
-      { dx: 958, y: 368 }
-    ]
-  },
-];
+// ART_COURSE_HOLES removed — art-first pipeline shelved for now
+var ART_COURSE_HOLES = [];
