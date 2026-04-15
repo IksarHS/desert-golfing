@@ -75,7 +75,7 @@ function simulateShot(vx, vy) {
   ball.slowFrames = 0;
   ball.stuckFrames = 0;
   ball.flightFrames = 0;
-  ball.spinRate = -Math.sign(vx) * (Math.sqrt(vx*vx + vy*vy) / MAX_POWER) * 0.4;
+  ball.spinRate = 0;  // Match player behavior — no forced spin
   state = STATE_FLIGHT;
 
   let scored = false;
@@ -300,7 +300,7 @@ function aiUpdate() {
           ball.lastCollidedMat = null;
           ball.lastCollisionSource = 'terrain';
         }
-        ball.spinRate = -Math.sign(ball.vx) * (aiShot.power / MAX_POWER) * 0.4;
+        ball.spinRate = 0;  // Match player behavior — no forced spin
         state = STATE_FLIGHT;
         strokes++;
         aiHoleStrokes++;
